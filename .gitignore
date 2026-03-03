@@ -1,0 +1,71 @@
+# 忽略 Trae IDE 生成的文件
+.trae/
+
+# 忽略虚拟环境目录
+.venv/
+env/
+ENV/
+
+# 忽略 Python 编译的字节码文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 忽略日志文件
+logs/
+*.log
+logfile.txt
+
+# 忽略配置文件
+.env
+.env.local
+.env.*.local
+
+# 忽略 IDE 和编辑器文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 忽略操作系统文件
+.DS_Store
+Thumbs.db
+
+# 忽略测试报告和覆盖率数据
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+.pytest_cache/
+
+# 忽略构建和打包文件
+build/
+dist/
+*.egg-info/
+*.whl
+
+# 忽略临时文件
+*.tmp
+*.temp
+.cache/
+
+# 忽略数据库文件
+*.db
+*.sqlite3
+
+# 忽略前端构建文件
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# 忽略 Docker 相关文件（如果需要）
+# .dockerignore
+# docker-compose.override.yml
+
+# 忽略其他可能的敏感文件
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12

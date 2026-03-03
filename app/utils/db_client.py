@@ -1,0 +1,66 @@
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+import sqlite3
+from typing import List, Dict, Any
+
+Base = declarative_base()
+
+class DBClient:
+    def __init__(self, db_type: str, connection_string: str):
+        self.db_type = db_type
+        self.connection_string = connection_string
+        self.engine = None
+        self.Session = None
+        
+    def connect(self):
+        if self.db_type == 'sqlite':
+            self.engine = create_engine(self.connection_string)
+        elif self.db_type == 'mysql':
+            # 预留MySQL支持
+            pass
+        else:
+            raise ValueError(f"Unsupported database type: {self.db_type}")
+        self.Session = sessionmaker(bind=self.engine)
+        return self.engine
+    
+    def get_tables(self) -> List[str]:
+        if not self.engine:
+            self.connect()
+        inspector = inspect(self.engine)
+        return inspector.get_table_names()
+    
+    def get_table_columns(self, table_name: str) -> List[Dict[str, Any]]:
+        if not self.engine:
+            self.connect()
+        inspector = inspect(self.engine)
+        columns = inspector.get_columns(table_name)
+        return columns
+    
+    def get_primary_keys(self, table_name: str) -> List[str]:
+        if not self.engine:
+            self.connect()
+        inspector = inspect(self.engine)
+        pk_constraint = inspector.get_pk_constraint(table_name)
+        return pk_constraint.get('constrained_columns', [])
+    
+    def execute_query(self, query: str, params: Dict = None) -> List[Dict]:
+        if self.db_type == 'sqlite':
+            conn = sqlite3.connect(self.connection_string.replace('sqlite:///', ''))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            rows = cursor.fetchall()
+            result = [dict(row) for row in rows]
+            conn.close()
+            return result
+        else:
+            # 其他数据库类型的实现
+            pass
+    
+    def close(self):
+        if self.engine:
+            self.engine.dispose()
