@@ -16,6 +16,10 @@ def event_callback(event):
 
 data_sensing_engine.register_event_callback(event_callback)
 
+# 启动引擎
+data_sensing_engine.start()
+drive_engine.start()
+
 app = FastAPI(
     title="Data Driven Project",
     description="数据驱动项目系统",
@@ -55,10 +59,6 @@ def read_root():
     return {"message": "Welcome to Data Driven Project", "version": settings.APP_VERSION}
 
 if __name__ == "__main__":
-    # 启动引擎
-    data_sensing_engine.start()
-    drive_engine.start()
-    
     logger.info("启动Data Driven Project服务")
     logger.debug(f"服务配置: DEBUG={settings.DEBUG}, PORT={settings.PORT}")
     uvicorn.run(

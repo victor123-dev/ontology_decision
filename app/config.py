@@ -27,10 +27,9 @@ class Settings(BaseSettings):
     MILVUS_USER: Optional[str] = None
     MILVUS_PASSWORD: Optional[str] = None
     
-    # SQLite配置
-    DB_TYPE: str = "sqlite"
-    DB_CONNECTION_STRING: str = "sqlite:///data/database.db"
-    
+    # SQLite数据库配置
+    DATABASE_URL: str = "sqlite:///data.db"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.models.data_source import DataSource
 from app.utils.db_client import DBClient, Base, create_engine, sessionmaker
+from app.config import settings
 
 router = APIRouter()
 
 # 数据库会话依赖
 def get_db():
-    engine = create_engine("sqlite:///data.db")
+    engine = create_engine(settings.DATABASE_URL)
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = SessionLocal()

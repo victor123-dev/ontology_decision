@@ -23,6 +23,8 @@ class Agent(Base):
     
     # 多对多关系
     capabilities = relationship("Capability", secondary=agent_capability_association, backref="agents")
+    # 一对多关系：任务
+    tasks = relationship("Task", back_populates="assigned_agent")
 
 class Capability(Base):
     __tablename__ = "capabilities"

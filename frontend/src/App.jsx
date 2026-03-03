@@ -75,7 +75,6 @@ function App() {
         <Layout>
           <Header
             style={{
-              padding: 0,
               background: colorBgContainer,
               display: 'flex',
               alignItems: 'center',

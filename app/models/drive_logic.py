@@ -24,7 +24,7 @@ class DriveLogic(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False)  # first_order, script
-    config = Column(JSON, nullable=False)  # 配置参数
+    config = Column(JSON, nullable=False, default={})  # 可选的预处理配置
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -38,8 +38,14 @@ class Task(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    type = Column(String(100), nullable=False)
-    config = Column(JSON)
+    capability_type = Column(String(100), nullable=False)  # 能力类型，用于匹配Agent
+    config = Column(JSON)  # 任务配置参数
     description = Column(Text)
+    status = Column(String(50), default="pending")  # pending, assigned, completed, failed
+    assigned_agent_id = Column(Integer, ForeignKey('agents.id'), nullable=True)
+    result = Column(JSON)  # 任务执行结果
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # 关联Agent
+    assigned_agent = relationship("Agent", back_populates="tasks")

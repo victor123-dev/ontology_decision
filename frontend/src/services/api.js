@@ -50,6 +50,8 @@ export const driveLogicApi = {
   delete: (id) => api.delete(`/drive-logics/${id}`),
   createTask: (data) => api.post('/tasks', data),
   getAllTasks: () => api.get('/tasks'),
+  updateTask: (id, data) => api.put(`/tasks/${id}`, data),
+  deleteTask: (id) => api.delete(`/tasks/${id}`),
 };
 
 // Agent管理
