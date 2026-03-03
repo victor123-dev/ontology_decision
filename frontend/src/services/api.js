@@ -68,6 +68,8 @@ export const agentApi = {
 export const testDataApi = {
   get: (dataSourceId, tableName, limit = 50) => api.get(`/test-data/${dataSourceId}/${tableName}?limit=${limit}`),
   insert: (dataSourceId, tableName, data) => api.post(`/test-data/${dataSourceId}/${tableName}`, data),
+  delete: (dataSourceId, tableName, data) => api.delete(`/test-data/${dataSourceId}/${tableName}`, { data }),
+  update: (dataSourceId, tableName, data) => api.put(`/test-data/${dataSourceId}/${tableName}`, data),
 };
 
 // 驱动日志管理

@@ -12,6 +12,7 @@ function TestData() {
   const [selectedDataSource, setSelectedDataSource] = useState(null)
   const [selectedTable, setSelectedTable] = useState(null)
   const [modalVisible, setModalVisible] = useState(false)
+  const [editingRecord, setEditingRecord] = useState(null)
   const [form] = Form.useForm()
 
   useEffect(() => {
@@ -41,7 +42,18 @@ function TestData() {
 
   const handleTableChange = async (value) => {
     setSelectedTable(value)
-    fetchTestData()
+    // 直接传入 value 而不是依赖 selectedTable 状态
+    if (selectedDataSource && value) {
+      setLoading(true)
+      try {
+        const response = await testDataApi.get(selectedDataSource, value)
+        setTestData(response.data.data)
+      } catch (error) {
+        message.error('获取测试数据失败')
+      } finally {
+        setLoading(false)
+      }
+    }
   }
 
   const fetchTestData = async () => {
@@ -60,6 +72,13 @@ function TestData() {
 
   const handleAddData = () => {
     form.resetFields()
+    setEditingRecord(null)
+    setModalVisible(true)
+  }
+
+  const handleEditData = (record) => {
+    form.setFieldsValue(record)
+    setEditingRecord(record)
     setModalVisible(true)
   }
 
@@ -70,9 +89,31 @@ function TestData() {
     }
     
     try {
-      await testDataApi.insert(selectedDataSource, selectedTable, values)
-      message.success('数据添加成功')
+      if (editingRecord) {
+        // 编辑模式
+        await testDataApi.update(selectedDataSource, selectedTable, values)
+        message.success('数据更新成功')
+      } else {
+        // 新增模式
+        await testDataApi.insert(selectedDataSource, selectedTable, values)
+        message.success('数据添加成功')
+      }
       setModalVisible(false)
+      fetchTestData()
+    } catch (error) {
+      message.error('操作失败')
+    }
+  }
+
+  const handleDelete = async (record) => {
+    if (!selectedDataSource || !selectedTable) {
+      message.error('请先选择数据源和表')
+      return
+    }
+    
+    try {
+      await testDataApi.delete(selectedDataSource, selectedTable, record)
+      message.success('数据删除成功')
       fetchTestData()
     } catch (error) {
       message.error('操作失败')
@@ -127,17 +168,33 @@ function TestData() {
             dataSource={testData} 
             rowKey={(record, index) => index} 
             loading={loading}
-            columns={testData.length > 0 ? Object.keys(testData[0]).map(key => ({
-              title: key,
-              dataIndex: key,
-              key: key
-            })) : []}
+            columns={testData.length > 0 ? [
+              ...Object.keys(testData[0]).map(key => ({
+                title: key,
+                dataIndex: key,
+                key: key
+              })),
+              {
+                title: '操作',
+                key: 'action',
+                render: (_, record) => (
+                  <div>
+                    <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEditData(record)}>
+                      编辑
+                    </Button>
+                    <Button danger size="small" onClick={() => handleDelete(record)}>
+                      删除
+                    </Button>
+                  </div>
+                )
+              }
+            ] : []}
           />
         </>
       )}
 
       <Modal
-        title={`添加 ${selectedTable} 数据`}
+        title={editingRecord ? `编辑 ${selectedTable} 数据` : `添加 ${selectedTable} 数据`}
         open={modalVisible}
         onOk={form.submit}
         onCancel={() => setModalVisible(false)}
