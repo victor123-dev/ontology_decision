@@ -4,6 +4,7 @@ from typing import List
 from app.models.data_sensing import DataSensingConfig
 from app.utils.db_client import Base, create_engine, sessionmaker
 from app.config import settings
+from app.engines.data_sensing_engine import data_sensing_engine
 
 router = APIRouter()
 
@@ -30,6 +31,15 @@ def create_data_sensing_config(config: dict, db: Session = Depends(get_db)):
     db.add(db_config)
     db.commit()
     db.refresh(db_config)
+    
+    # 通知引擎添加调度任务
+    try:
+        data_sensing_engine.add_config(db_config)
+    except Exception as e:
+        # 记录错误但不影响API返回
+        import logging
+        logging.getLogger(__name__).error(f"添加调度任务失败: {e}")
+    
     return db_config
 
 @router.get("/data-sensing-configs")
@@ -54,6 +64,15 @@ def update_data_sensing_config(config_id: int, config: dict, db: Session = Depen
     
     db.commit()
     db.refresh(db_config)
+    
+    # 通知引擎更新调度任务
+    try:
+        data_sensing_engine.update_config(db_config)
+    except Exception as e:
+        # 记录错误但不影响API返回
+        import logging
+        logging.getLogger(__name__).error(f"更新调度任务失败: {e}")
+    
     return db_config
 
 @router.delete("/data-sensing-configs/{config_id}")
@@ -64,4 +83,13 @@ def delete_data_sensing_config(config_id: int, db: Session = Depends(get_db)):
     
     db.delete(db_config)
     db.commit()
+    
+    # 通知引擎移除调度任务
+    try:
+        data_sensing_engine.remove_config(config_id)
+    except Exception as e:
+        # 记录错误但不影响API返回
+        import logging
+        logging.getLogger(__name__).error(f"移除调度任务失败: {e}")
+    
     return {"message": "DataSensingConfig deleted successfully"}

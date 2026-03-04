@@ -5,6 +5,9 @@ import hashlib
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from cachetools import TTLCache
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from concurrent.futures import ThreadPoolExecutor
 from app.models.data_sensing import DataSensingConfig
 from app.models.business_model import BusinessModel
 from app.models.data_source import DataSource
@@ -17,12 +20,17 @@ logger = get_logger(__name__)
 
 
 class DataSensingEngine:
-    """数据感知引擎 - 使用缓存管理状态"""
+    """数据感知引擎 - 使用APScheduler排程系统"""
     
     def __init__(self):
         self.is_running = False
-        self.threads = []
         self.event_callbacks = []
+        
+        # APScheduler调度器
+        self.scheduler = BackgroundScheduler()
+        
+        # 线程池 - 用于执行检查任务
+        self.executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="sensing_")
         
         # 使用 TTLCache 管理数据变化状态
         # 最大100个配置，状态有效期1小时（3600秒）
@@ -36,41 +44,54 @@ class DataSensingEngine:
         # 最大50个表，缓存有效期30秒
         self.query_cache = TTLCache(maxsize=50, ttl=30)
         
+        # 配置任务映射 - 记录config_id对应的job_id
+        self.config_jobs: Dict[int, str] = {}
+        
         # 统计信息
         self.stats = {
             'events_triggered': 0,
+            'tasks_executed': 0,
+            'tasks_failed': 0,
             'cache_hits': 0,
             'cache_misses': 0,
             'db_queries': 0
         }
+        
+        # 锁 - 用于线程安全地管理任务
+        self._lock = threading.Lock()
     
     def start(self):
         """启动数据感知引擎"""
         self.is_running = True
         
-        # 启动监控线程
-        monitor_thread = threading.Thread(target=self._monitor_configs)
-        monitor_thread.daemon = True
-        monitor_thread.start()
-        self.threads.append(monitor_thread)
+        # 启动调度器
+        self.scheduler.start()
+        
+        # 加载所有配置并创建调度任务
+        self._load_all_configs()
         
         # 启动统计信息打印线程（每5分钟打印一次）
         stats_thread = threading.Thread(target=self._print_stats_periodically)
         stats_thread.daemon = True
         stats_thread.start()
-        self.threads.append(stats_thread)
         
         logger.info("数据感知引擎启动")
-        logger.info(f"缓存配置: 数据状态缓存(100条目, 1小时), 阈值状态缓存(100条目, 24小时), 查询缓存(50条目, 30秒)")
+        logger.info(f"调度器已启动，线程池大小: 10")
     
     def stop(self):
         """停止数据感知引擎"""
         self.is_running = False
-        for thread in self.threads:
-            thread.join()
+        
+        # 关闭调度器
+        if self.scheduler.running:
+            self.scheduler.shutdown(wait=True)
+        
+        # 关闭线程池
+        self.executor.shutdown(wait=True)
+        
         logger.info("数据感知引擎停止")
         self._print_stats()
-
+    
     def _log(self, level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None):
         """记录驱动日志"""
         try:
@@ -117,8 +138,11 @@ class DataSensingEngine:
         logger.info("数据感知引擎统计信息")
         logger.info("=" * 60)
         logger.info(f"事件触发次数: {self.stats['events_triggered']}")
+        logger.info(f"任务执行次数: {self.stats['tasks_executed']}")
+        logger.info(f"任务失败次数: {self.stats['tasks_failed']}")
         logger.info(f"数据库查询次数: {self.stats['db_queries']}")
         logger.info(f"缓存命中率: {cache_hit_rate:.1f}% ({self.stats['cache_hits']}/{total_cache_ops})")
+        logger.info(f"调度任务数: {len(self.config_jobs)}")
         logger.info(f"数据状态缓存: {len(self.data_states)}/{self.data_states.maxsize} 条目")
         logger.info(f"阈值状态缓存: {len(self.threshold_states)}/{self.threshold_states.maxsize} 条目")
         logger.info(f"查询缓存: {len(self.query_cache)}/{self.query_cache.maxsize} 条目")
@@ -157,41 +181,109 @@ class DataSensingEngine:
         """设置查询缓存"""
         self.query_cache[cache_key] = data
     
-    def _monitor_configs(self):
-        """监控数据感知配置"""
-        while self.is_running:
+    def _load_all_configs(self):
+        """加载所有配置并创建调度任务"""
+        try:
+            db = self._get_db_session()
             try:
-                db = self._get_db_session()
-                try:
-                    configs = db.query(DataSensingConfig).all()
-                    
-                    for config in configs:
-                        check_interval = config.config.get('check_interval', 5)
-                        config_id = config.id
-                        
-                        # 检查是否需要执行
-                        last_check = 0
-                        if config_id in self.data_states:
-                            last_check = self.data_states[config_id].get('last_check_time', 0)
-                        
-                        current_time = time.time()
-                        
-                        if current_time - last_check >= check_interval:
-                            if config.type == 'data_change':
-                                self._monitor_data_change(config, db)
-                            elif config.type == 'threshold':
-                                self._monitor_threshold(config, db)
-                            
-                            # 更新最后检查时间
-                            if config_id not in self.data_states:
-                                self.data_states[config_id] = {}
-                            self.data_states[config_id]['last_check_time'] = current_time
-                finally:
-                    db.close()
-            except Exception as e:
-                logger.error(f"监控配置出错: {str(e)}")
+                configs = db.query(DataSensingConfig).all()
+                for config in configs:
+                    self._add_config_job(config)
+                logger.info(f"已加载 {len(configs)} 个数据感知配置")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"加载配置失败: {str(e)}")
+    
+    def _add_config_job(self, config: DataSensingConfig):
+        """为配置添加调度任务"""
+        with self._lock:
+            config_id = config.id
             
-            time.sleep(1)
+            # 如果已存在任务，先移除
+            if config_id in self.config_jobs:
+                self._remove_config_job(config_id)
+            
+            check_interval = config.config.get('check_interval', 5)
+            
+            # 创建触发器
+            trigger = IntervalTrigger(seconds=check_interval)
+            
+            # 添加任务
+            job = self.scheduler.add_job(
+                func=self._execute_config_check,
+                trigger=trigger,
+                args=[config_id],
+                id=f"config_{config_id}",
+                replace_existing=True,
+                max_instances=1,  # 同一配置同时只能执行一个实例
+                misfire_grace_time=check_interval  # 错过执行后的宽限时间
+            )
+            
+            self.config_jobs[config_id] = job.id
+            logger.debug(f"已为配置 '{config.name}' (ID: {config_id}) 创建调度任务，间隔: {check_interval}秒")
+    
+    def _remove_config_job(self, config_id: int):
+        """移除配置的调度任务"""
+        with self._lock:
+            if config_id in self.config_jobs:
+                job_id = self.config_jobs[config_id]
+                try:
+                    self.scheduler.remove_job(job_id)
+                except Exception as e:
+                    logger.warning(f"移除任务失败: {e}")
+                del self.config_jobs[config_id]
+                logger.debug(f"已移除配置 {config_id} 的调度任务")
+    
+    def _execute_config_check(self, config_id: int):
+        """执行配置检查（在线程池中运行）"""
+        self.executor.submit(self._check_config_wrapper, config_id)
+    
+    def _check_config_wrapper(self, config_id: int):
+        """包装配置检查，添加错误处理"""
+        try:
+            self.stats['tasks_executed'] += 1
+            
+            db = self._get_db_session()
+            try:
+                config = db.query(DataSensingConfig).filter(DataSensingConfig.id == config_id).first()
+                if not config:
+                    logger.warning(f"配置不存在: {config_id}")
+                    return
+                
+                if config.type == 'data_change':
+                    self._monitor_data_change(config, db)
+                elif config.type == 'threshold':
+                    self._monitor_threshold(config, db)
+                    
+            finally:
+                db.close()
+                
+        except Exception as e:
+            self.stats['tasks_failed'] += 1
+            logger.error(f"执行配置检查失败 (config_id: {config_id}): {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    def add_config(self, config: DataSensingConfig):
+        """添加新配置（动态添加调度任务）"""
+        self._add_config_job(config)
+        logger.info(f"动态添加配置 '{config.name}' (ID: {config.id}) 的调度任务")
+    
+    def update_config(self, config: DataSensingConfig):
+        """更新配置（重新创建调度任务）"""
+        self._add_config_job(config)
+        logger.info(f"更新配置 '{config.name}' (ID: {config.id}) 的调度任务")
+    
+    def remove_config(self, config_id: int):
+        """移除配置（删除调度任务）"""
+        self._remove_config_job(config_id)
+        # 清理相关缓存
+        if config_id in self.data_states:
+            del self.data_states[config_id]
+        if config_id in self.threshold_states:
+            del self.threshold_states[config_id]
+        logger.info(f"移除配置 {config_id} 的调度任务和相关缓存")
     
     def _monitor_data_change(self, config: DataSensingConfig, db):
         """监控数据变化"""
@@ -409,11 +501,18 @@ class DataSensingEngine:
                     if threshold_type == 'static':
                         threshold_value = config_dict.get('threshold_value')
                         if threshold_value is not None:
-                            threshold_val = float(threshold_value)
+                            try:
+                                threshold_val = float(threshold_value)
+                            except (ValueError, TypeError):
+                                logger.warning(f"阈值配置值无法转换为数字: {threshold_value}")
+                                continue
                     elif threshold_type == 'dynamic' and threshold_field:
                         threshold_value = row.get(threshold_field)
                         if threshold_value is not None:
-                            threshold_val = float(threshold_value)
+                            try:
+                                threshold_val = float(threshold_value)
+                            except (ValueError, TypeError):
+                                continue
                     
                     if threshold_val is None:
                         continue
