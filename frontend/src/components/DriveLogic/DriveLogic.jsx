@@ -169,7 +169,13 @@ function DriveLogic() {
 
   const handleEditTask = (record) => {
     setEditingTask(record)
-    taskForm.setFieldsValue(record)
+    // 深拷贝record对象
+    const formValues = { ...record }
+    // 将config对象转换为JSON字符串
+    if (record.config) {
+      formValues.config = JSON.stringify(record.config, null, 2)
+    }
+    taskForm.setFieldsValue(formValues)
     setTaskModalVisible(true)
   }
 

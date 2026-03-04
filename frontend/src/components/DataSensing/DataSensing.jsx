@@ -61,7 +61,7 @@ function DataSensing() {
       formValues.monitored_fields = record.config.monitored_fields || []
       formValues.check_interval = record.config.check_interval || 5
     } else if (record.type === 'threshold') {
-      formValues.monitored_field = record.config.monitored_fields?.[0] || ''
+      formValues.monitored_field = record.config.monitored_field || ''
       formValues.threshold_type = record.config.threshold_type || 'static'
       formValues.threshold_value = record.config.threshold_value
       formValues.threshold_field = record.config.threshold_field
@@ -127,7 +127,7 @@ function DataSensing() {
         }
       } else if (values.type === 'threshold') {
         configObj = {
-          monitored_fields: values.monitored_field ? [values.monitored_field] : [],
+          monitored_field: values.monitored_field || '',
           threshold_field: values.threshold_field,
           threshold_value: values.threshold_value,
           operator: values.operator || 'gt',

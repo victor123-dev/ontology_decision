@@ -12,6 +12,7 @@ function Agent() {
   const [capabilityModalVisible, setCapabilityModalVisible] = useState(false)
   const [assignModalVisible, setAssignModalVisible] = useState(false)
   const [editingAgent, setEditingAgent] = useState(null)
+  const [editingCapability, setEditingCapability] = useState(null)
   const [selectedAgent, setSelectedAgent] = useState(null)
   const [form] = Form.useForm()
   const [capabilityForm] = Form.useForm()
@@ -81,14 +82,36 @@ function Agent() {
   }
 
   const handleAddCapability = () => {
+    setEditingCapability(null)
     capabilityForm.resetFields()
     setCapabilityModalVisible(true)
   }
 
+  const handleEditCapability = (record) => {
+    setEditingCapability(record)
+    capabilityForm.setFieldsValue(record)
+    setCapabilityModalVisible(true)
+  }
+
+  const handleDeleteCapability = async (id) => {
+    try {
+      await agentApi.deleteCapability(id)
+      message.success('能力删除成功')
+      fetchCapabilities()
+    } catch (error) {
+      message.error('删除失败')
+    }
+  }
+
   const handleSubmitCapability = async (values) => {
     try {
-      await agentApi.createCapability(values)
-      message.success('能力创建成功')
+      if (editingCapability) {
+        await agentApi.updateCapability(editingCapability.id, values)
+        message.success('能力更新成功')
+      } else {
+        await agentApi.createCapability(values)
+        message.success('能力创建成功')
+      }
       setCapabilityModalVisible(false)
       fetchCapabilities()
     } catch (error) {
@@ -178,26 +201,40 @@ function Agent() {
       dataIndex: 'description',
       key: 'description',
     },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_, record) => (
+        <div>
+          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEditCapability(record)}>
+            编辑
+          </Button>
+          <Button danger size="small" onClick={() => handleDeleteCapability(record.id)}>
+            删除
+          </Button>
+        </div>
+      ),
+    },
   ]
 
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Agent管理</h2>
-        <div>
-          <Button type="primary" style={{ marginRight: 8 }} onClick={handleAdd}>
-            添加Agent
-          </Button>
-          <Button onClick={handleAddCapability}>
-            添加能力
-          </Button>
-        </div>
+        <Button type="primary" onClick={handleAdd}>
+          添加Agent
+        </Button>
       </div>
 
       <h3>Agent列表</h3>
       <Table columns={agentColumns} dataSource={agents} rowKey="id" loading={loading} style={{ marginBottom: 24 }} />
 
-      <h3>能力清单</h3>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3>能力清单</h3>
+        <Button type="primary" onClick={handleAddCapability}>
+          添加能力
+        </Button>
+      </div>
       <Table columns={capabilityColumns} dataSource={capabilities} rowKey="id" loading={loading} />
 
       {/* Agent模态框 */}
@@ -225,7 +262,7 @@ function Agent() {
 
       {/* 能力模态框 */}
       <Modal
-        title="添加能力"
+        title={editingCapability ? '编辑能力' : '添加能力'}
         open={capabilityModalVisible}
         onOk={capabilityForm.submit}
         onCancel={() => setCapabilityModalVisible(false)}

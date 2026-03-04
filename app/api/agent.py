@@ -80,6 +80,29 @@ def create_capability(capability: dict, db: Session = Depends(get_db)):
 def get_capabilities(db: Session = Depends(get_db)):
     return db.query(Capability).all()
 
+@router.put("/capabilities/{capability_id}")
+def update_capability(capability_id: int, capability: dict, db: Session = Depends(get_db)):
+    db_capability = db.query(Capability).filter(Capability.id == capability_id).first()
+    if not db_capability:
+        raise HTTPException(status_code=404, detail="Capability not found")
+    
+    for key, value in capability.items():
+        setattr(db_capability, key, value)
+    
+    db.commit()
+    db.refresh(db_capability)
+    return db_capability
+
+@router.delete("/capabilities/{capability_id}")
+def delete_capability(capability_id: int, db: Session = Depends(get_db)):
+    db_capability = db.query(Capability).filter(Capability.id == capability_id).first()
+    if not db_capability:
+        raise HTTPException(status_code=404, detail="Capability not found")
+    
+    db.delete(db_capability)
+    db.commit()
+    return {"message": "Capability deleted successfully"}
+
 @router.post("/agents/{agent_id}/capabilities/{capability_id}")
 def add_capability_to_agent(agent_id: int, capability_id: int, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()

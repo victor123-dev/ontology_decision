@@ -63,6 +63,8 @@ export const agentApi = {
   delete: (id) => api.delete(`/agents/${id}`),
   createCapability: (data) => api.post('/capabilities', data),
   getAllCapabilities: () => api.get('/capabilities'),
+  updateCapability: (id, data) => api.put(`/capabilities/${id}`, data),
+  deleteCapability: (id) => api.delete(`/capabilities/${id}`),
   addCapability: (agentId, capabilityId) => api.post(`/agents/${agentId}/capabilities/${capabilityId}`),
 };
 
