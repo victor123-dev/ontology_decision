@@ -428,12 +428,6 @@ function DriveLogic() {
                   {cap.name} ({cap.task_type})
                 </Option>
               ))}
-              <Option value="notification">通知 (notification)</Option>
-              <Option value="email">邮件 (email)</Option>
-              <Option value="sms">短信 (sms)</Option>
-              <Option value="webhook">Webhook (webhook)</Option>
-              <Option value="data_process">数据处理 (data_process)</Option>
-              <Option value="analysis">分析 (analysis)</Option>
             </Select>
           </Form.Item>
           
