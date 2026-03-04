@@ -8,6 +8,7 @@ from cachetools import TTLCache
 from app.models.data_sensing import DataSensingConfig
 from app.models.business_model import BusinessModel
 from app.models.data_source import DataSource
+from app.models.drive_log import DriveLog
 from app.utils.db_client import DBClient
 from app.utils.logger import get_logger
 from app.config import settings
@@ -69,6 +70,32 @@ class DataSensingEngine:
             thread.join()
         logger.info("数据感知引擎停止")
         self._print_stats()
+
+    def _log(self, level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None):
+        """记录驱动日志"""
+        try:
+            from sqlalchemy.orm import sessionmaker
+            from app.utils.db_client import create_engine
+            from app.config import settings
+            import uuid
+            
+            engine = create_engine(settings.DATABASE_URL)
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            db = SessionLocal()
+            try:
+                log = DriveLog(
+                    level=level,
+                    category=category,
+                    message=message,
+                    data=data,
+                    trace_id=trace_id or str(uuid.uuid4())
+                )
+                db.add(log)
+                db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"记录驱动日志失败: {str(e)}")
     
     def register_event_callback(self, callback):
         """注册事件回调函数"""
@@ -419,18 +446,22 @@ class DataSensingEngine:
                     self.threshold_states[config_id][record_key] = is_triggered
                 
                 if triggered_records:
+                    # 对于静态阈值，使用配置中的阈值；对于动态阈值，不传递全局阈值（因为每条记录的阈值可能不同）
+                    event_data = {
+                        "config_id": config.id,
+                        "config_name": config.name,
+                        "monitored_field": monitored_field,
+                        "threshold_type": threshold_type,
+                        "triggered_records": triggered_records,
+                        "triggered_count": len(triggered_records)
+                    }
+                    if threshold_type == 'static':
+                        event_data["threshold_value"] = config_dict.get('threshold_value')
+                    
                     self.trigger_event(
                         "threshold",
                         config.model_id,
-                        {
-                            "config_id": config.id,
-                            "config_name": config.name,
-                            "monitored_field": monitored_field,
-                            "threshold_type": threshold_type,
-                            "threshold_value": threshold_value,
-                            "triggered_records": triggered_records,
-                            "triggered_count": len(triggered_records)
-                        }
+                        event_data
                     )
                 
             finally:
@@ -441,13 +472,16 @@ class DataSensingEngine:
             import traceback
             logger.error(traceback.format_exc())
     
-    def trigger_event(self, event_type: str, model_id: str, data: Dict[str, Any]):
+    def trigger_event(self, event_type: str, model_id: int, data: Dict[str, Any]):
         """触发事件"""
+        import uuid
+        trace_id = str(uuid.uuid4())
         event = {
             "type": event_type,
             "model_id": model_id,
             "data": data,
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "trace_id": trace_id
         }
         
         self.stats['events_triggered'] += 1
@@ -459,6 +493,7 @@ class DataSensingEngine:
                 logger.error(f"事件回调出错: {str(e)}")
         
         logger.info(f"触发事件: {event_type}, 模型: {model_id}, 数据: {json.dumps(data, ensure_ascii=False, default=str)[:200]}")
+        self._log('info', 'data_sensing', f"触发事件: {event_type}, 模型: {model_id}", event, trace_id)
 
 
 # 全局引擎实例

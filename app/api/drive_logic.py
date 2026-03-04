@@ -137,8 +137,7 @@ def create_task(task: dict, db: Session = Depends(get_db)):
         name=task.get("name"),
         capability_type=task.get("capability_type"),
         config=task.get("config"),
-        description=task.get("description"),
-        status="pending"
+        description=task.get("description")
     )
     db.add(db_task)
     db.commit()

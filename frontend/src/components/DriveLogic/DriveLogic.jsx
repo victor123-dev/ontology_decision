@@ -7,15 +7,14 @@ const { Option } = Select
 function DriveLogic() {
   const [logics, setLogics] = useState([])
   const [tasks, setTasks] = useState([])
-  const [taskInstances, setTaskInstances] = useState([])
+
   const [sensingConfigs, setSensingConfigs] = useState([])
   const [agents, setAgents] = useState([])
   const [capabilities, setCapabilities] = useState([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [taskModalVisible, setTaskModalVisible] = useState(false)
-  const [taskInstancesVisible, setTaskInstancesVisible] = useState(false)
-  const [selectedTaskId, setSelectedTaskId] = useState(null)
+
   const [editingLogic, setEditingLogic] = useState(null)
   const [editingTask, setEditingTask] = useState(null)
   const [selectedType, setSelectedType] = useState('first_order')
@@ -51,16 +50,7 @@ function DriveLogic() {
     }
   }
 
-  const fetchTaskInstances = async (taskId) => {
-    try {
-      const response = await driveLogicApi.getTaskInstancesByTask(taskId)
-      setTaskInstances(response.data)
-      setSelectedTaskId(taskId)
-      setTaskInstancesVisible(true)
-    } catch (error) {
-      message.error('获取任务执行历史失败')
-    }
-  }
+
 
   const fetchSensingConfigs = async () => {
     try {
@@ -310,9 +300,6 @@ function DriveLogic() {
           <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEditTask(record)}>
             编辑
           </Button>
-          <Button size="small" style={{ marginRight: 8 }} onClick={() => fetchTaskInstances(record.id)}>
-            执行历史
-          </Button>
           <Button danger size="small" onClick={() => handleDeleteTask(record.id)}>
             删除
           </Button>
@@ -460,64 +447,7 @@ function DriveLogic() {
         </Form>
       </Modal>
 
-      {/* 任务执行历史模态框 */}
-      <Modal
-        title="任务执行历史"
-        open={taskInstancesVisible}
-        onCancel={() => setTaskInstancesVisible(false)}
-        width={800}
-      >
-        <Table 
-          columns={[
-            {
-              title: '执行ID',
-              dataIndex: 'id',
-              key: 'id',
-            },
-            {
-              title: '状态',
-              dataIndex: 'status',
-              key: 'status',
-              render: (status) => {
-                const color = status === 'completed' ? 'green' : status === 'failed' ? 'red' : 'orange'
-                return <Tag color={color}>{status}</Tag>
-              }
-            },
-            {
-              title: '分配Agent',
-              dataIndex: 'assigned_agent_name',
-              key: 'assigned_agent_name',
-              render: (name) => name || '-'
-            },
-            {
-              title: '执行开始',
-              dataIndex: 'started_at',
-              key: 'started_at',
-            },
-            {
-              title: '执行结束',
-              dataIndex: 'completed_at',
-              key: 'completed_at',
-              render: (time) => time || '-'
-            },
-            {
-              title: '执行结果',
-              dataIndex: 'result',
-              key: 'result',
-              render: (result) => {
-                if (!result) return '-'
-                try {
-                  return <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>{JSON.stringify(result, null, 2)}</pre>
-                } catch (e) {
-                  return String(result)
-                }
-              }
-            },
-          ]} 
-          dataSource={taskInstances} 
-          rowKey="id" 
-        />
-      </Modal>
+
     </div>
   )
 }

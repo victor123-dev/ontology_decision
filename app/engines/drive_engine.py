@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from cachetools import TTLCache
 from app.models.drive_logic import DriveLogic, Task, TaskInstance
+from app.models.drive_log import DriveLog
 from app.models.agent import Agent, Capability
 from app.models.data_sensing import DataSensingConfig
 from app.utils.db_client import Base, create_engine, sessionmaker
@@ -70,6 +71,26 @@ class DriveEngine:
         logger.info(f"错误数: {self.stats['errors']}")
         logger.info(f"逻辑缓存: {len(self.logic_cache)}/{self.logic_cache.maxsize} 条目")
         logger.info("=" * 60)
+
+    def _log(self, level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None):
+        """记录驱动日志"""
+        try:
+            import uuid
+            db = self._get_db_session()
+            try:
+                log = DriveLog(
+                    level=level,
+                    category=category,
+                    message=message,
+                    data=data,
+                    trace_id=trace_id or str(uuid.uuid4())
+                )
+                db.add(log)
+                db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"记录驱动日志失败: {str(e)}")
     
     def _refresh_logic_cache(self):
         """定期刷新逻辑缓存"""
@@ -106,7 +127,9 @@ class DriveEngine:
         with self.event_lock:
             self.event_queue.append(event)
         
+        trace_id = event.get('trace_id')
         logger.info(f"接收事件: {event['type']}, 模型: {event.get('model_id')}")
+        self._log('info', 'drive_logic', f"接收事件: {event['type']}", event, trace_id)
     
     def _process_events(self):
         """处理事件队列"""
@@ -139,11 +162,13 @@ class DriveEngine:
                         if not logic.events:
                             matched_logics.append(logic)
                 
+                trace_id = event.get('trace_id')
                 logger.info(f"事件 {event['type']} 匹配到 {len(matched_logics)} 条驱动逻辑")
                 self.stats['logics_matched'] += len(matched_logics)
+                self._log('info', 'drive_logic', f"事件 {event['type']} 匹配到 {len(matched_logics)} 条驱动逻辑", {'event_type': event['type'], 'matched_count': len(matched_logics)}, trace_id)
                 
                 for logic in matched_logics:
-                    self._execute_logic(logic, event, db)
+                    self._execute_logic(logic, event, db, trace_id)
                     
             finally:
                 db.close()
@@ -153,13 +178,14 @@ class DriveEngine:
             logger.error(f"处理事件出错: {str(e)}")
             logger.error(traceback.format_exc())
     
-    def _execute_logic(self, logic: DriveLogic, event: Dict[str, Any], db):
+    def _execute_logic(self, logic: DriveLogic, event: Dict[str, Any], db, trace_id: str = None):
         """执行驱动逻辑"""
         try:
             config = logic.config or {}
             logic_type = logic.type
             
             logger.info(f"执行驱动逻辑: {logic.name} (类型: {logic_type})")
+            self._log('info', 'drive_logic', f"执行驱动逻辑: {logic.name}", {'logic_name': logic.name, 'logic_type': logic_type}, trace_id)
             
             # 预处理（可选）
             processed_data = event.get('data', {})
@@ -201,11 +227,14 @@ class DriveEngine:
                 if tasks:
                     # 更新事件数据为处理后的数据
                     event['data'] = processed_data
-                    self._assign_tasks(tasks, event, db)
+                    self._assign_tasks(tasks, event, db, trace_id)
+                    self._log('info', 'drive_logic', f"驱动逻辑 {logic.name} 触发 {len(tasks)} 个任务", {'logic_name': logic.name, 'task_count': len(tasks)}, trace_id)
                 else:
                     logger.warning(f"驱动逻辑 {logic.name} 没有关联任务")
+                    self._log('warning', 'drive_logic', f"驱动逻辑 {logic.name} 没有关联任务", {'logic_name': logic.name}, trace_id)
             else:
                 logger.info(f"驱动逻辑 {logic.name} 条件不满足，跳过任务触发")
+                self._log('info', 'drive_logic', f"驱动逻辑 {logic.name} 条件不满足，跳过任务触发", {'logic_name': logic.name}, trace_id)
             
         except Exception as e:
             self.stats['errors'] += 1
@@ -233,7 +262,7 @@ class DriveEngine:
             logger.error(f"预处理脚本执行失败: {str(e)}")
             return event.get('data', {})
     
-    def _assign_tasks(self, tasks: List[Task], event: Dict[str, Any], db):
+    def _assign_tasks(self, tasks: List[Task], event: Dict[str, Any], db, trace_id: str = None):
         """分配任务给Agent"""
         try:
             # 获取所有可用的Agent及其能力
@@ -256,7 +285,8 @@ class DriveEngine:
                     status='assigned' if matched_agent else 'pending',
                     result={
                         'event': event,
-                        'assigned_at': datetime.now().isoformat()
+                        'assigned_at': datetime.now().isoformat(),
+                        'trace_id': trace_id
                     }
                 )
                 db.add(task_instance)
@@ -264,8 +294,10 @@ class DriveEngine:
                 if matched_agent:
                     logger.info(f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}")
                     self.stats['tasks_assigned'] += 1
+                    self._log('info', 'agent_task', f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}", {'task_name': task.name, 'agent_name': matched_agent.name}, trace_id)
                 else:
                     logger.warning(f"没有找到支持能力类型 '{task.capability_type}' 的Agent，任务 '{task.name}' 等待分配")
+                    self._log('warning', 'agent_task', f"没有找到支持能力类型 '{task.capability_type}' 的Agent，任务 '{task.name}' 等待分配", {'task_name': task.name, 'capability_type': task.capability_type}, trace_id)
                 
                 db.commit()
             

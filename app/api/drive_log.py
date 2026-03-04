@@ -24,7 +24,8 @@ def create_drive_log(log: dict, db: Session = Depends(get_db)):
         level=log.get("level"),
         category=log.get("category"),
         message=log.get("message"),
-        data=log.get("data")
+        data=log.get("data"),
+        trace_id=log.get("trace_id")
     )
     db.add(db_log)
     db.commit()
@@ -35,6 +36,7 @@ def create_drive_log(log: dict, db: Session = Depends(get_db)):
 def get_drive_logs(
     level: str = None,
     category: str = None,
+    search: str = None,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
@@ -44,6 +46,11 @@ def get_drive_logs(
         query = query.filter(DriveLog.level == level)
     if category:
         query = query.filter(DriveLog.category == category)
+    if search:
+        query = query.filter(
+            (DriveLog.message.ilike(f"%{search}%") | 
+             DriveLog.data.ilike(f"%{search}%"))
+        )
     
     return query.order_by(DriveLog.created_at.desc()).limit(limit).all()
 

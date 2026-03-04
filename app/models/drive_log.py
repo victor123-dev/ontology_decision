@@ -10,4 +10,5 @@ class DriveLog(Base):
     category = Column(String(100), nullable=False)  # data_sensing, drive_logic, agent_task
     message = Column(Text, nullable=False)
     data = Column(JSON)
+    trace_id = Column(String(100), index=True)  # 用于关联同一链路的日志
     created_at = Column(DateTime(timezone=True), server_default=func.now())
