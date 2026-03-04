@@ -328,17 +328,15 @@ class DataSensingEngine:
                 logger.warning(f"数据源不存在: {model.data_source_id}")
                 return
             
-            monitored_field = config.config.get('monitored_field')
-            threshold_type = config.config.get('threshold_type')
-            threshold_value = config.config.get('threshold_value')
+            config_dict = config.config
+            monitored_field = config_dict.get('monitored_field')
+            threshold_type = config_dict.get('threshold_type')
+            operator = config_dict.get('operator')
             primary_key = model.primary_key_id or 'id'
             
-            if not monitored_field or not threshold_type or threshold_value is None:
+            if not monitored_field or not threshold_type or not operator:
                 logger.warning(f"阈值配置不完整: {config.name}")
                 return
-            
-            # 构建查询缓存键
-            query_cache_key = f"{model.id}:{monitored_field}"
             
             client = DBClient(data_source.type, data_source.connection_string)
             client.connect()
@@ -346,16 +344,20 @@ class DataSensingEngine:
             try:
                 table_name = model.id
                 
-                # 检查查询缓存
+                query_fields = [primary_key, monitored_field]
+                threshold_field = config_dict.get('threshold_field')
+                if threshold_type == 'dynamic' and threshold_field:
+                    query_fields.append(threshold_field)
+                
+                query_cache_key = f"{model.id}:{','.join(query_fields)}"
+                
                 cached_data = self._get_cached_query(query_cache_key)
                 if cached_data is not None:
                     data = cached_data
                 else:
-                    query = f"SELECT {primary_key}, {monitored_field} FROM {table_name}"
+                    query = f"SELECT {', '.join(query_fields)} FROM {table_name}"
                     data = client.execute_query(query)
                     self.stats['db_queries'] += 1
-                    
-                    # 缓存查询结果
                     self._set_cached_query(query_cache_key, data)
                 
                 config_id = config.id
@@ -373,18 +375,34 @@ class DataSensingEngine:
                     
                     try:
                         value = float(value)
-                        threshold_val = float(threshold_value)
                     except (ValueError, TypeError):
                         continue
                     
+                    threshold_val = None
+                    if threshold_type == 'static':
+                        threshold_value = config_dict.get('threshold_value')
+                        if threshold_value is not None:
+                            threshold_val = float(threshold_value)
+                    elif threshold_type == 'dynamic' and threshold_field:
+                        threshold_value = row.get(threshold_field)
+                        if threshold_value is not None:
+                            threshold_val = float(threshold_value)
+                    
+                    if threshold_val is None:
+                        continue
+                    
                     is_triggered = False
-                    if threshold_type == 'greater' and value > threshold_val:
+                    if operator == 'gt' and value > threshold_val:
                         is_triggered = True
-                    elif threshold_type == 'less' and value < threshold_val:
+                    elif operator == 'lt' and value < threshold_val:
                         is_triggered = True
-                    elif threshold_type == 'equal' and value == threshold_val:
+                    elif operator == 'eq' and value == threshold_val:
                         is_triggered = True
-                    elif threshold_type == 'not_equal' and value != threshold_val:
+                    elif operator == 'neq' and value != threshold_val:
+                        is_triggered = True
+                    elif operator == 'gte' and value >= threshold_val:
+                        is_triggered = True
+                    elif operator == 'lte' and value <= threshold_val:
                         is_triggered = True
                     
                     was_triggered = self.threshold_states[config_id].get(record_key, False)

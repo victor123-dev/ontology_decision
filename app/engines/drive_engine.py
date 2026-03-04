@@ -5,7 +5,7 @@ import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from cachetools import TTLCache
-from app.models.drive_logic import DriveLogic, Task
+from app.models.drive_logic import DriveLogic, Task, TaskInstance
 from app.models.agent import Agent, Capability
 from app.models.data_sensing import DataSensingConfig
 from app.utils.db_client import Base, create_engine, sessionmaker
@@ -249,18 +249,22 @@ class DriveEngine:
                         matched_agent = agent
                         break
                 
-                # 分配任务
-                if matched_agent:
-                    task.assigned_agent = matched_agent
-                    task.status = 'assigned'
-                    task.result = {
+                # 创建任务实例
+                task_instance = TaskInstance(
+                    task_id=task.id,
+                    assigned_agent_id=matched_agent.id if matched_agent else None,
+                    status='assigned' if matched_agent else 'pending',
+                    result={
                         'event': event,
                         'assigned_at': datetime.now().isoformat()
                     }
+                )
+                db.add(task_instance)
+                
+                if matched_agent:
                     logger.info(f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}")
                     self.stats['tasks_assigned'] += 1
                 else:
-                    task.status = 'pending'
                     logger.warning(f"没有找到支持能力类型 '{task.capability_type}' 的Agent，任务 '{task.name}' 等待分配")
                 
                 db.commit()

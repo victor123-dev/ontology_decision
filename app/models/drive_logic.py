@@ -41,11 +41,27 @@ class Task(Base):
     capability_type = Column(String(100), nullable=False)  # 能力类型，用于匹配Agent
     config = Column(JSON)  # 任务配置参数
     description = Column(Text)
-    status = Column(String(50), default="pending")  # pending, assigned, completed, failed
     assigned_agent_id = Column(Integer, ForeignKey('agents.id'), nullable=True)
-    result = Column(JSON)  # 任务执行结果
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # 关联Agent
     assigned_agent = relationship("Agent", back_populates="tasks")
+    # 关联任务实例
+    instances = relationship("TaskInstance", back_populates="task")
+
+class TaskInstance(Base):
+    __tablename__ = "task_instances"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey('tasks.id'), nullable=False)
+    status = Column(String(50), default="pending")  # pending, assigned, completed, failed
+    result = Column(JSON)  # 任务执行结果
+    assigned_agent_id = Column(Integer, ForeignKey('agents.id'), nullable=True)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # 关联任务
+    task = relationship("Task", back_populates="instances")
+    # 关联Agent
+    assigned_agent = relationship("Agent")

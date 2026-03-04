@@ -10,10 +10,8 @@ function Agent() {
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [capabilityModalVisible, setCapabilityModalVisible] = useState(false)
-  const [assignModalVisible, setAssignModalVisible] = useState(false)
   const [editingAgent, setEditingAgent] = useState(null)
   const [editingCapability, setEditingCapability] = useState(null)
-  const [selectedAgent, setSelectedAgent] = useState(null)
   const [form] = Form.useForm()
   const [capabilityForm] = Form.useForm()
 
@@ -51,7 +49,12 @@ function Agent() {
 
   const handleEdit = (record) => {
     setEditingAgent(record)
-    form.setFieldsValue(record)
+    const formValues = { ...record }
+    // 将capabilities对象数组转换为ID数组
+    if (record.capabilities && record.capabilities.length > 0) {
+      formValues.capabilities = record.capabilities.map(cap => cap.id)
+    }
+    form.setFieldsValue(formValues)
     setModalVisible(true)
   }
 
@@ -67,11 +70,19 @@ function Agent() {
 
   const handleSubmit = async (values) => {
     try {
+      // 准备提交数据
+      const agentData = { ...values }
+      // 将capabilities ID数组重命名为capability_ids
+      if (values.capabilities) {
+        agentData.capability_ids = values.capabilities
+        delete agentData.capabilities
+      }
+      
       if (editingAgent) {
-        await agentApi.update(editingAgent.id, values)
+        await agentApi.update(editingAgent.id, agentData)
         message.success('更新成功')
       } else {
-        await agentApi.create(values)
+        await agentApi.create(agentData)
         message.success('创建成功')
       }
       setModalVisible(false)
@@ -119,22 +130,6 @@ function Agent() {
     }
   }
 
-  const handleAssignCapability = (agent) => {
-    setSelectedAgent(agent)
-    setAssignModalVisible(true)
-  }
-
-  const handleSubmitAssign = async (values) => {
-    try {
-      await agentApi.addCapability(selectedAgent.id, values.capabilityId)
-      message.success('能力分配成功')
-      setAssignModalVisible(false)
-      fetchAgents()
-    } catch (error) {
-      message.error('操作失败')
-    }
-  }
-
   const agentColumns = [
     {
       title: '名称',
@@ -173,9 +168,6 @@ function Agent() {
         <div>
           <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
-          </Button>
-          <Button size="small" style={{ marginRight: 8 }} onClick={() => handleAssignCapability(record)}>
-            分配能力
           </Button>
           <Button danger size="small" onClick={() => handleDelete(record.id)}>
             删除
@@ -257,6 +249,13 @@ function Agent() {
               <Option value="inactive">非活跃</Option>
             </Select>
           </Form.Item>
+          <Form.Item name="capabilities" label="能力" rules={[{ required: true, message: '请选择能力' }]}>
+            <Select mode="multiple" placeholder="选择Agent的能力">
+              {capabilities.map((cap) => (
+                <Option key={cap.id} value={cap.id}>{cap.name} ({cap.task_type})</Option>
+              ))}
+            </Select>
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -280,23 +279,7 @@ function Agent() {
         </Form>
       </Modal>
 
-      {/* 分配能力模态框 */}
-      <Modal
-        title={`为 ${selectedAgent?.name} 分配能力`}
-        open={assignModalVisible}
-        onOk={Form.useForm()[0].submit}
-        onCancel={() => setAssignModalVisible(false)}
-      >
-        <Form layout="vertical" onFinish={handleSubmitAssign}>
-          <Form.Item name="capabilityId" label="能力" rules={[{ required: true, message: '请选择能力' }]}>
-            <Select>
-              {capabilities.map((cap) => (
-                <Option key={cap.id} value={cap.id}>{cap.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
+
     </div>
   )
 }

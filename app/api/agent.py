@@ -25,6 +25,13 @@ def create_agent(agent: dict, db: Session = Depends(get_db)):
         description=agent.get("description"),
         status=agent.get("status", "active")
     )
+    
+    # 处理能力分配
+    capability_ids = agent.get("capability_ids")
+    if capability_ids:
+        capabilities = db.query(Capability).filter(Capability.id.in_(capability_ids)).all()
+        db_agent.capabilities = capabilities
+    
     db.add(db_agent)
     db.commit()
     db.refresh(db_agent)
@@ -32,7 +39,23 @@ def create_agent(agent: dict, db: Session = Depends(get_db)):
 
 @router.get("/agents")
 def get_agents(db: Session = Depends(get_db)):
-    return db.query(Agent).all()
+    agents = db.query(Agent).all()
+    result = []
+    for agent in agents:
+        agent_dict = {
+            "id": agent.id,
+            "name": agent.name,
+            "description": agent.description,
+            "status": agent.status,
+            "created_at": agent.created_at,
+            "updated_at": agent.updated_at,
+            "capabilities": [
+                {"id": cap.id, "name": cap.name, "task_type": cap.task_type}
+                for cap in agent.capabilities
+            ]
+        }
+        result.append(agent_dict)
+    return result
 
 @router.get("/agents/{agent_id}")
 def get_agent(agent_id: int, db: Session = Depends(get_db)):
@@ -47,6 +70,16 @@ def update_agent(agent_id: int, agent: dict, db: Session = Depends(get_db)):
     if not db_agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
+    # 处理能力分配
+    if "capability_ids" in agent:
+        capability_ids = agent.pop("capability_ids")
+        if capability_ids:
+            capabilities = db.query(Capability).filter(Capability.id.in_(capability_ids)).all()
+            db_agent.capabilities = capabilities
+        else:
+            db_agent.capabilities = []
+    
+    # 更新其他字段
     for key, value in agent.items():
         setattr(db_agent, key, value)
     
@@ -103,17 +136,4 @@ def delete_capability(capability_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Capability deleted successfully"}
 
-@router.post("/agents/{agent_id}/capabilities/{capability_id}")
-def add_capability_to_agent(agent_id: int, capability_id: int, db: Session = Depends(get_db)):
-    agent = db.query(Agent).filter(Agent.id == agent_id).first()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    
-    capability = db.query(Capability).filter(Capability.id == capability_id).first()
-    if not capability:
-        raise HTTPException(status_code=404, detail="Capability not found")
-    
-    agent.capabilities.append(capability)
-    db.commit()
-    db.refresh(agent)
-    return agent
+

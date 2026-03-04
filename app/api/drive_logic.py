@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from app.models.drive_logic import DriveLogic, Task
+from app.models.drive_logic import DriveLogic, Task, TaskInstance
 from app.models.data_sensing import DataSensingConfig
 from app.models.agent import Agent, Capability
 from app.utils.db_client import Base, create_engine, sessionmaker
@@ -156,14 +156,9 @@ def get_tasks(db: Session = Depends(get_db)):
             "capability_type": task.capability_type,
             "config": task.config,
             "description": task.description,
-            "status": task.status,
-            "assigned_agent_id": task.assigned_agent_id,
-            "result": task.result,
             "created_at": task.created_at,
             "updated_at": task.updated_at
         }
-        if task.assigned_agent:
-            task_dict["assigned_agent"] = {"id": task.assigned_agent.id, "name": task.assigned_agent.name}
         result.append(task_dict)
     return result
 
@@ -181,17 +176,6 @@ def update_task(task_id: int, task: dict, db: Session = Depends(get_db)):
         db_task.config = task["config"]
     if "description" in task:
         db_task.description = task["description"]
-    if "status" in task:
-        db_task.status = task["status"]
-    if "result" in task:
-        db_task.result = task["result"]
-    if "assigned_agent_id" in task:
-        if task["assigned_agent_id"]:
-            agent = db.query(Agent).filter(Agent.id == task["assigned_agent_id"]).first()
-            if agent:
-                db_task.assigned_agent = agent
-        else:
-            db_task.assigned_agent_id = None
     
     db.commit()
     db.refresh(db_task)
@@ -206,3 +190,59 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.delete(db_task)
     db.commit()
     return {"message": "Task deleted successfully"}
+
+# TaskInstance相关端点
+@router.get("/task-instances")
+def get_task_instances(db: Session = Depends(get_db)):
+    instances = db.query(TaskInstance).all()
+    result = []
+    for instance in instances:
+        instance_dict = {
+            "id": instance.id,
+            "task_id": instance.task_id,
+            "task_name": instance.task.name if instance.task else None,
+            "status": instance.status,
+            "result": instance.result,
+            "assigned_agent_id": instance.assigned_agent_id,
+            "assigned_agent_name": instance.assigned_agent.name if instance.assigned_agent else None,
+            "started_at": instance.started_at,
+            "completed_at": instance.completed_at
+        }
+        result.append(instance_dict)
+    return result
+
+@router.get("/task-instances/{instance_id}")
+def get_task_instance(instance_id: int, db: Session = Depends(get_db)):
+    instance = db.query(TaskInstance).filter(TaskInstance.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="TaskInstance not found")
+    
+    return {
+        "id": instance.id,
+        "task_id": instance.task_id,
+        "task_name": instance.task.name if instance.task else None,
+        "status": instance.status,
+        "result": instance.result,
+        "assigned_agent_id": instance.assigned_agent_id,
+        "assigned_agent_name": instance.assigned_agent.name if instance.assigned_agent else None,
+        "started_at": instance.started_at,
+        "completed_at": instance.completed_at
+    }
+
+@router.get("/tasks/{task_id}/instances")
+def get_task_instances_by_task(task_id: int, db: Session = Depends(get_db)):
+    instances = db.query(TaskInstance).filter(TaskInstance.task_id == task_id).all()
+    result = []
+    for instance in instances:
+        instance_dict = {
+            "id": instance.id,
+            "task_id": instance.task_id,
+            "status": instance.status,
+            "result": instance.result,
+            "assigned_agent_id": instance.assigned_agent_id,
+            "assigned_agent_name": instance.assigned_agent.name if instance.assigned_agent else None,
+            "started_at": instance.started_at,
+            "completed_at": instance.completed_at
+        }
+        result.append(instance_dict)
+    return result

@@ -52,6 +52,8 @@ export const driveLogicApi = {
   getAllTasks: () => api.get('/tasks'),
   updateTask: (id, data) => api.put(`/tasks/${id}`, data),
   deleteTask: (id) => api.delete(`/tasks/${id}`),
+  getAllTaskInstances: () => api.get('/task-instances'),
+  getTaskInstancesByTask: (taskId) => api.get(`/tasks/${taskId}/instances`),
 };
 
 // Agent管理
@@ -65,7 +67,6 @@ export const agentApi = {
   getAllCapabilities: () => api.get('/capabilities'),
   updateCapability: (id, data) => api.put(`/capabilities/${id}`, data),
   deleteCapability: (id) => api.delete(`/capabilities/${id}`),
-  addCapability: (agentId, capabilityId) => api.post(`/agents/${agentId}/capabilities/${capabilityId}`),
 };
 
 // 测试数据管理
