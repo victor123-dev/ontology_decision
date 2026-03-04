@@ -4,7 +4,7 @@ import json
 import hashlib
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from cachetools import TTLCache
+from diskcache import Cache
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from concurrent.futures import ThreadPoolExecutor
@@ -32,17 +32,20 @@ class DataSensingEngine:
         # 线程池 - 用于执行检查任务
         self.executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="sensing_")
         
-        # 使用 TTLCache 管理数据变化状态
-        # 最大100个配置，状态有效期1小时（3600秒）
-        self.data_states = TTLCache(maxsize=100, ttl=3600)
+        # 使用 DiskCache 管理数据变化状态
+        # 存储在 .cache 目录中，使用不同的子缓存
+        self.data_states = Cache('.cache/data_states')  # 数据变化状态
         
-        # 使用 TTLCache 管理阈值触发状态
-        # 最大100个配置，状态有效期24小时（86400秒）- 阈值状态需要更长时间保持
-        self.threshold_states = TTLCache(maxsize=100, ttl=86400)
+        # 使用 DiskCache 管理阈值触发状态
+        self.threshold_states = Cache('.cache/threshold_states')  # 阈值触发状态
         
-        # 使用 TTLCache 缓存查询结果，减少数据库压力
-        # 最大50个表，缓存有效期30秒
-        self.query_cache = TTLCache(maxsize=50, ttl=30)
+        # 使用 DiskCache 缓存查询结果，减少数据库压力
+        self.query_cache = Cache('.cache/query_cache')  # 查询结果缓存
+        
+        # 缓存过期时间设置（与原来的TTL保持一致）
+        self.DATA_STATE_TTL = 3600  # 数据变化状态：1小时
+        self.THRESHOLD_STATE_TTL = 86400  # 阈值触发状态：24小时
+        self.QUERY_CACHE_TTL = 30  # 查询结果缓存：30秒
         
         # 配置任务映射 - 记录config_id对应的job_id
         self.config_jobs: Dict[int, str] = {}
@@ -143,9 +146,9 @@ class DataSensingEngine:
         logger.info(f"数据库查询次数: {self.stats['db_queries']}")
         logger.info(f"缓存命中率: {cache_hit_rate:.1f}% ({self.stats['cache_hits']}/{total_cache_ops})")
         logger.info(f"调度任务数: {len(self.config_jobs)}")
-        logger.info(f"数据状态缓存: {len(self.data_states)}/{self.data_states.maxsize} 条目")
-        logger.info(f"阈值状态缓存: {len(self.threshold_states)}/{self.threshold_states.maxsize} 条目")
-        logger.info(f"查询缓存: {len(self.query_cache)}/{self.query_cache.maxsize} 条目")
+        logger.info(f"数据状态缓存: {len(self.data_states)} 条目")
+        logger.info(f"阈值状态缓存: {len(self.threshold_states)} 条目")
+        logger.info(f"查询缓存: {len(self.query_cache)} 条目")
         logger.info("=" * 60)
     
     def _get_db_session(self):
@@ -179,7 +182,7 @@ class DataSensingEngine:
     
     def _set_cached_query(self, cache_key: str, data: List[Dict]):
         """设置查询缓存"""
-        self.query_cache[cache_key] = data
+        self.query_cache.set(cache_key, data, expire=self.QUERY_CACHE_TTL)
     
     def _load_all_configs(self):
         """加载所有配置并创建调度任务"""
@@ -420,11 +423,12 @@ class DataSensingEngine:
                         )
                 
                 # 更新状态缓存
-                if config_id not in self.data_states:
-                    self.data_states[config_id] = {}
-                self.data_states[config_id]['records'] = current_records
-                self.data_states[config_id]['record_count'] = len(current_data)
-                self.data_states[config_id]['data_hash'] = self._compute_data_hash(current_data)
+                state_data = {
+                    'records': current_records,
+                    'record_count': len(current_data),
+                    'data_hash': self._compute_data_hash(current_data)
+                }
+                self.data_states.set(config_id, state_data, expire=self.DATA_STATE_TTL)
                 
             finally:
                 client.close()
@@ -481,7 +485,7 @@ class DataSensingEngine:
                 
                 config_id = config.id
                 if config_id not in self.threshold_states:
-                    self.threshold_states[config_id] = {}
+                    self.threshold_states.set(config_id, {}, expire=self.THRESHOLD_STATE_TTL)
                 
                 triggered_records = []
                 
@@ -542,7 +546,11 @@ class DataSensingEngine:
                             "threshold_type": threshold_type
                         })
                     
-                    self.threshold_states[config_id][record_key] = is_triggered
+                    # 获取当前阈值状态
+                    threshold_state = self.threshold_states.get(config_id, {})
+                    threshold_state[record_key] = is_triggered
+                    # 更新缓存并设置过期时间
+                    self.threshold_states.set(config_id, threshold_state, expire=self.THRESHOLD_STATE_TTL)
                 
                 if triggered_records:
                     # 对于静态阈值，使用配置中的阈值；对于动态阈值，不传递全局阈值（因为每条记录的阈值可能不同）
