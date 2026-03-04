@@ -123,15 +123,15 @@ function DataSensing() {
         configObj = {
           trigger_conditions: values.trigger_conditions || [],
           monitored_fields: values.monitored_fields || [],
-          check_interval: values.check_interval || 5
+          check_interval: values.check_interval ? Number(values.check_interval) : 5
         }
       } else if (values.type === 'threshold') {
         configObj = {
           monitored_field: values.monitored_field || '',
           threshold_field: values.threshold_field,
-          threshold_value: values.threshold_value,
+          threshold_value: values.threshold_value ? Number(values.threshold_value) : undefined,
           operator: values.operator || 'gt',
-          check_interval: values.check_interval || 5,
+          check_interval: values.check_interval ? Number(values.check_interval) : 5,
           threshold_type: values.threshold_type || 'static'
         }
       }
