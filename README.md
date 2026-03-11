@@ -107,7 +107,7 @@ cd PyProjcetTemplate
 APP_NAME=Python Project Template
 APP_VERSION=1.0.0
 DEBUG=True
-PORT=8080
+PORT=8081
 
 # 可选配置（取消注释以启用相应服务）
 # Neo4j配置
@@ -149,7 +149,7 @@ npm install
 
 ```bash
 # 启动后端服务
-uvicorn app.main:app --host 0.0.0.0 --reload --port 8080
+uvicorn app.main:app --host 0.0.0.0 --reload --port 8081
 ```
 
 **前端服务** (可选)
@@ -160,8 +160,8 @@ npm run dev
 ```
 
 服务将在以下地址可用：
-- 后端API: `http://localhost:8080`
-- Swagger文档: `http://localhost:8080/docs`
+- 后端API: `http://localhost:8081`
+- Swagger文档: `http://localhost:8081/docs`
 - 前端界面: `http://localhost:5173` (如果运行了前端)
 
 ## 📖 使用指南

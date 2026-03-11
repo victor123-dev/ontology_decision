@@ -173,14 +173,14 @@
 
 ### 1. 后端配置
 
-- 端口: 8080
+- 端口: 8081
 - 数据库: SQLite (data.db)
 - 日志: 控制台输出
 
 ### 2. 前端配置
 
 - 端口: 3000
-- API基础URL: http://localhost:8080/api/v1
+- API基础URL: http://localhost:8081/api/v1
 - 路由: React Router
 
 ## 七、部署说明
@@ -194,10 +194,10 @@ pip install -r requirements.txt
 2. 启动服务: 
 ```bash
 # 开发模式启动
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8081
 
 # 生产模式启动（建议使用gunicorn）
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8080
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8081
 ```
 
 ### 2. 前端部署

@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Python Project Template"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
-    PORT: int = 8080
+    PORT: int = 8081
     
     # Neo4j配置
     NEO4J_URI: Optional[str] = None
