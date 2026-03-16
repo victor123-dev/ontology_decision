@@ -199,8 +199,7 @@ class DriveEngine:
                     trigger_tasks = result[0]
                     processed_data = result[1]
                 else:
-                    # 兼容旧格式，只返回数据
-                    processed_data = result
+                    trigger_tasks = False
             elif logic_type == 'first_order' and config.get('pre_condition'):
                 # 处理一阶函数的前置条件
                 pre_condition = config.get('pre_condition')

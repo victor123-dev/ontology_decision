@@ -61,7 +61,7 @@ class DataSensingEngine:
         }
         
         # 锁 - 用于线程安全地管理任务
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
     
     def start(self):
         """启动数据感知引擎"""
