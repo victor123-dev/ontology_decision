@@ -6,7 +6,6 @@ import time
 import json
 import uuid
 from app.utils.logger import get_logger, get_request_logger
-from app.context_vars import thread_id_var
 
 logger = get_logger(__name__)
 request_logger = get_request_logger()
@@ -146,38 +145,3 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
             request_logger.debug(f"请求详情: {json.dumps(request_info, ensure_ascii=False)}")
             raise
-
-
-class RequestContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next) -> Response:
-        # 初始化token变量
-        thread_id_token = None
-        
-        try:
-            # 对于POST请求，尝试从请求体中获取thread_id
-            thread_id = None
-            
-            if request.method == "POST" and request.url.path.startswith("/api/v1/agent/chat"):
-                try:
-                    body = await request.body()
-                    if body:
-                        request_body = json.loads(body.decode("utf-8"))
-                        thread_id = request_body.get("thread_id")
-                except Exception as e:
-                    logger.debug(f"无法解析请求体获取thread_id: {str(e)}")
-            
-            # 生成或使用提供的thread_id
-            thread_id = thread_id or str(uuid.uuid4())
-            
-            # 设置上下文变量
-            thread_id_token = thread_id_var.set(thread_id)
-            
-            # 处理请求
-            response = await call_next(request)
-            
-            return response
-            
-        finally:
-            # 恢复上下文变量
-            if thread_id_token:
-                thread_id_var.reset(thread_id_token)

@@ -189,10 +189,11 @@ class DataSensingEngine:
         try:
             db = self._get_db_session()
             try:
-                configs = db.query(DataSensingConfig).all()
+                # 只加载生效的配置
+                configs = db.query(DataSensingConfig).filter(DataSensingConfig.status == True).all()
                 for config in configs:
                     self._add_config_job(config)
-                logger.info(f"已加载 {len(configs)} 个数据感知配置")
+                logger.info(f"已加载 {len(configs)} 个生效的数据感知配置")
             finally:
                 db.close()
         except Exception as e:
@@ -254,6 +255,11 @@ class DataSensingEngine:
                     logger.warning(f"配置不存在: {config_id}")
                     return
                 
+                # 检查配置是否生效
+                if not config.status:
+                    logger.debug(f"配置未生效，跳过执行: {config_id}")
+                    return
+                
                 if config.type == 'data_change':
                     self._monitor_data_change(config, db)
                 elif config.type == 'threshold':
@@ -270,13 +276,21 @@ class DataSensingEngine:
     
     def add_config(self, config: DataSensingConfig):
         """添加新配置（动态添加调度任务）"""
-        self._add_config_job(config)
-        logger.info(f"动态添加配置 '{config.name}' (ID: {config.id}) 的调度任务")
+        if config.status:
+            self._add_config_job(config)
+            logger.info(f"动态添加配置 '{config.name}' (ID: {config.id}) 的调度任务")
+        else:
+            logger.info(f"配置 '{config.name}' (ID: {config.id}) 未生效，跳过添加调度任务")
     
     def update_config(self, config: DataSensingConfig):
         """更新配置（重新创建调度任务）"""
-        self._add_config_job(config)
-        logger.info(f"更新配置 '{config.name}' (ID: {config.id}) 的调度任务")
+        if config.status:
+            self._add_config_job(config)
+            logger.info(f"更新配置 '{config.name}' (ID: {config.id}) 的调度任务")
+        else:
+            # 如果配置变为未生效，移除调度任务
+            self._remove_config_job(config.id)
+            logger.info(f"配置 '{config.name}' (ID: {config.id}) 未生效，移除调度任务")
     
     def remove_config(self, config_id: int):
         """移除配置（删除调度任务）"""

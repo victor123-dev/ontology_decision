@@ -26,7 +26,8 @@ def create_data_sensing_config(config: dict, db: Session = Depends(get_db)):
         type=config.get("type"),
         model_id=config.get("model_id"),
         config=config.get("config"),
-        description=config.get("description")
+        description=config.get("description"),
+        status=config.get("status", True)
     )
     db.add(db_config)
     db.commit()

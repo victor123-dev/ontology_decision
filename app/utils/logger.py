@@ -11,7 +11,7 @@ LOG_FORMAT = '%(asctime)s - %(levelname)s - %(thread)d - %(module)s - %(funcName
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 # 创建主日志记录器
-logger = logging.getLogger('neo4j-graph-service')
+logger = logging.getLogger('commander-demo')
 logger.setLevel(logging.DEBUG if settings.DEBUG else logging.INFO)
 
 # 避免重复添加处理器

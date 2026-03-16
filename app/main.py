@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from app.api import example, data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution
 from app.config import settings
-from app.middleware_config.middleware import RequestLoggingMiddleware, RequestContextMiddleware
+from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
 from app.engines.data_sensing_engine import data_sensing_engine
 from app.engines.drive_engine import drive_engine
@@ -39,8 +39,6 @@ app.add_middleware(
 
 # 添加请求日志记录中间件
 app.add_middleware(RequestLoggingMiddleware)
-# 添加请求上下文中间件
-app.add_middleware(RequestContextMiddleware)
 
 # 包含API路由
 app.include_router(example.router, prefix="/api/v1", tags=["Example"])

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Switch, message } from 'antd'
 import { dataSensingApi, businessModelApi } from '../../services/api'
 
 const { Option } = Select
@@ -52,7 +52,8 @@ function DataSensing() {
     
     // 处理配置数据，将 JSON 转换为表单字段
     const formValues = {
-      ...record
+      ...record,
+      status: record.status !== undefined ? record.status : true
     }
     
     // 根据类型设置相应的表单字段
@@ -176,6 +177,14 @@ function DataSensing() {
       render: (modelId) => {
         const model = businessModels.find(m => m.id === modelId)
         return model ? model.name : modelId
+      }
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => {
+        return status ? '生效' : '失效'
       }
     },
     {
@@ -305,6 +314,9 @@ function DataSensing() {
           
           <Form.Item name="description" label="描述">
             <Input.TextArea />
+          </Form.Item>
+          <Form.Item name="status" label="状态" initialValue={true} valuePropName="checked">
+            <Switch checkedChildren="生效" unCheckedChildren="失效" />
           </Form.Item>
         </Form>
       </Modal>
