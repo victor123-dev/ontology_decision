@@ -5,13 +5,17 @@ import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from cachetools import TTLCache
+from sqlalchemy.orm.session import query
 from app.models.drive_logic import DriveLogic, Task, TaskInstance
 from app.models.drive_log import DriveLog
 from app.models.agent import Agent, Capability
 from app.models.data_sensing import DataSensingConfig
+from app.models.data_source import DataSource
 from app.utils.db_client import Base, create_engine, sessionmaker
 from app.config import settings
 from app.utils.logger import get_logger
+from app.utils.data_source_manager import data_source_manager
+from app.utils.data_source_accessor import DataSourceAccessor
 import traceback
 
 logger = get_logger(__name__)
@@ -250,10 +254,14 @@ class DriveEngine:
                     'range': range, 'enumerate': enumerate, 'zip': zip,
                     'map': map, 'filter': filter, 'sorted': sorted,
                     'min': min, 'max': max, 'sum': sum, 'abs': abs, 'round': round,
+                    'Exception': Exception, 'ValueError': ValueError, 'TypeError': TypeError,
                 }
             }
             
-            local_vars = {'event': event.copy()}
+            local_vars = {
+                'event': event.copy(),
+                'data_source': DataSourceAccessor()
+            }
             exec(script_content, safe_globals, local_vars)
             
             return local_vars.get('result', event.get('data', {}))
