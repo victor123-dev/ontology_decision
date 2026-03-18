@@ -50,7 +50,7 @@ def get_agents(db: Session = Depends(get_db)):
             "created_at": agent.created_at,
             "updated_at": agent.updated_at,
             "capabilities": [
-                {"id": cap.id, "name": cap.name, "task_type": cap.task_type}
+                {"id": cap.id, "name": cap.name}
                 for cap in agent.capabilities
             ]
         }
@@ -101,7 +101,6 @@ def delete_agent(agent_id: int, db: Session = Depends(get_db)):
 def create_capability(capability: dict, db: Session = Depends(get_db)):
     db_capability = Capability(
         name=capability.get("name"),
-        task_type=capability.get("task_type"),
         description=capability.get("description")
     )
     db.add(db_capability)

@@ -62,7 +62,7 @@ def get_drive_logics(db: Session = Depends(get_db)):
             "config": logic.config,
             "description": logic.description,
             "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
-            "tasks": [{"id": t.id, "name": t.name, "capability_type": t.capability_type} for t in logic.tasks],
+            "tasks": [{"id": t.id, "name": t.name, "capability_id": t.capability_id} for t in logic.tasks],
             "created_at": logic.created_at,
             "updated_at": logic.updated_at
         })
@@ -81,7 +81,7 @@ def get_drive_logic(logic_id: int, db: Session = Depends(get_db)):
         "config": logic.config,
         "description": logic.description,
         "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
-        "tasks": [{"id": t.id, "name": t.name, "capability_type": t.capability_type} for t in logic.tasks],
+        "tasks": [{"id": t.id, "name": t.name, "capability_id": t.capability_id} for t in logic.tasks],
         "created_at": logic.created_at,
         "updated_at": logic.updated_at
     }
@@ -135,7 +135,7 @@ def delete_drive_logic(logic_id: int, db: Session = Depends(get_db)):
 def create_task(task: dict, db: Session = Depends(get_db)):
     db_task = Task(
         name=task.get("name"),
-        capability_type=task.get("capability_type"),
+        capability_id=task.get("capability_id"),
         config=task.get("config"),
         description=task.get("description")
     )
@@ -152,7 +152,7 @@ def get_tasks(db: Session = Depends(get_db)):
         task_dict = {
             "id": task.id,
             "name": task.name,
-            "capability_type": task.capability_type,
+            "capability_id": task.capability_id,
             "config": task.config,
             "description": task.description,
             "created_at": task.created_at,
@@ -169,8 +169,8 @@ def update_task(task_id: int, task: dict, db: Session = Depends(get_db)):
     
     if "name" in task:
         db_task.name = task["name"]
-    if "capability_type" in task:
-        db_task.capability_type = task["capability_type"]
+    if "capability_id" in task:
+        db_task.capability_id = task["capability_id"]
     if "config" in task:
         db_task.config = task["config"]
     if "description" in task:
@@ -186,6 +186,9 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
     
+    # 先删除关联的任务实例
+    db.query(TaskInstance).filter(TaskInstance.task_id == task_id).delete()
+    # 再删除任务
     db.delete(db_task)
     db.commit()
     return {"message": "Task deleted successfully"}

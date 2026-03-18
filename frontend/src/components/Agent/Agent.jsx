@@ -183,11 +183,7 @@ function Agent() {
       dataIndex: 'name',
       key: 'name',
     },
-    {
-      title: '任务类型',
-      dataIndex: 'task_type',
-      key: 'task_type',
-    },
+
     {
       title: '描述',
       dataIndex: 'description',
@@ -252,7 +248,7 @@ function Agent() {
           <Form.Item name="capabilities" label="能力" rules={[{ required: true, message: '请选择能力' }]}>
             <Select mode="multiple" placeholder="选择Agent的能力">
               {capabilities.map((cap) => (
-                <Option key={cap.id} value={cap.id}>{cap.name} ({cap.task_type})</Option>
+                <Option key={cap.id} value={cap.id}>{cap.name}</Option>
               ))}
             </Select>
           </Form.Item>
@@ -268,9 +264,6 @@ function Agent() {
       >
         <Form form={capabilityForm} layout="vertical" onFinish={handleSubmitCapability}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="task_type" label="任务类型" rules={[{ required: true, message: '请输入任务类型' }]}>
             <Input />
           </Form.Item>
           <Form.Item name="description" label="描述">

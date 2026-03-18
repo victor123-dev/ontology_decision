@@ -1,22 +1,17 @@
 import threading
 import time
-import json
-import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime
 from cachetools import TTLCache
-from sqlalchemy.orm.session import query
 from app.models.drive_logic import DriveLogic, Task, TaskInstance
 from app.models.drive_log import DriveLog
-from app.models.agent import Agent, Capability
-from app.models.data_sensing import DataSensingConfig
-from app.models.data_source import DataSource
+from app.models.agent import Agent
 from app.utils.db_client import Base, create_engine, sessionmaker
 from app.config import settings
 from app.utils.logger import get_logger
-from app.utils.data_source_manager import data_source_manager
 from app.utils.data_source_accessor import DataSourceAccessor
 from app.utils.function_registry import prepare_function_environment, extract_function_names
+from app.engines.agent_executor import agent_executor
 import traceback
 
 logger = get_logger(__name__)
@@ -285,10 +280,10 @@ class DriveEngine:
             for task in tasks:
                 matched_agent = None
                 
-                # 根据任务的能力类型匹配Agent
+                # 根据任务的能力ID匹配Agent
                 for agent in agents:
-                    agent_capability_types = [cap.task_type for cap in agent.capabilities]
-                    if task.capability_type in agent_capability_types:
+                    agent_capability_ids = [cap.id for cap in agent.capabilities]
+                    if task.capability_id in agent_capability_ids:
                         matched_agent = agent
                         break
                 
@@ -304,14 +299,18 @@ class DriveEngine:
                     }
                 )
                 db.add(task_instance)
+                db.flush()  # 获取task_instance.id
                 
                 if matched_agent:
                     logger.info(f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}")
                     self.stats['tasks_assigned'] += 1
                     self._log('info', 'agent_task', f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}", {'task_name': task.name, 'agent_name': matched_agent.name}, trace_id)
+                    
+                    # 触发Agent模拟执行 - 通过事件回调方式
+                    self._simulate_agent_execution(matched_agent, task, task_instance, event, db, trace_id)
                 else:
-                    logger.warning(f"没有找到支持能力类型 '{task.capability_type}' 的Agent，任务 '{task.name}' 等待分配")
-                    self._log('warning', 'agent_task', f"没有找到支持能力类型 '{task.capability_type}' 的Agent，任务 '{task.name}' 等待分配", {'task_name': task.name, 'capability_type': task.capability_type}, trace_id)
+                    logger.warning(f"没有找到支持能力ID '{task.capability_id}' 的Agent，任务 '{task.name}' 等待分配")
+                    self._log('warning', 'agent_task', f"没有找到支持能力ID '{task.capability_id}' 的Agent，任务 '{task.name}' 等待分配", {'task_name': task.name, 'capability_id': task.capability_id}, trace_id)
                 
                 db.commit()
             
@@ -319,6 +318,57 @@ class DriveEngine:
             self.stats['errors'] += 1
             logger.error(f"分配任务失败: {str(e)}")
             logger.error(traceback.format_exc())
+
+    def _simulate_agent_execution(self, agent: Agent, task: Task, task_instance: TaskInstance, event: Dict[str, Any], db, trace_id: str = None):
+        """模拟Agent执行任务 - 通过事件回调方式"""
+        try:
+            # 创建Agent执行事件
+            agent_event = {
+                'type': 'agent_execute',
+                'agent_id': agent.id,
+                'agent_name': agent.name,
+                'task_id': task.id,
+                'task_name': task.name,
+                'task_instance_id': task_instance.id,
+                'capability_id': task.capability_id,
+                'event': event,
+                'trace_id': trace_id,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            logger.info(f"触发Agent '{agent.name}' 执行任务 '{task.name}'")
+            self._log('info', 'agent_execution', f"触发Agent '{agent.name}' 执行任务 '{task.name}'", agent_event, trace_id)
+            
+            # 使用Agent执行器执行任务
+            execution_result = agent_executor.execute_agent_task(agent, task, event, trace_id)
+            
+            # 更新任务实例状态和结果（使用传入的数据库会话）
+            task_instance.status = 'completed' if execution_result.get('success', True) else 'failed'
+            task_instance.result = {
+                **task_instance.result,
+                'execution_result': execution_result,
+                'completed_at': datetime.now().isoformat()
+            }
+            task_instance.completed_at = datetime.now()
+            
+            status_text = '成功' if execution_result.get('success', True) else '失败'
+            logger.info(f"Agent '{agent.name}' 执行任务 '{task.name}' {status_text}")
+            self._log('info', 'agent_execution', f"Agent '{agent.name}' 执行任务 '{task.name}' {status_text}", 
+                     {'agent_name': agent.name, 'task_name': task.name, 'status': task_instance.status}, trace_id)
+                
+        except Exception as e:
+            logger.error(f"模拟Agent执行失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            # 更新任务实例为失败状态（使用传入的数据库会话）
+            task_instance.status = 'failed'
+            task_instance.result = {
+                **task_instance.result,
+                'error': str(e),
+                'completed_at': datetime.now().isoformat()
+            }
+            task_instance.completed_at = datetime.now()
+
+
 
 
 drive_engine = DriveEngine()

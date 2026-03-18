@@ -38,13 +38,15 @@ class Task(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    capability_type = Column(String(100), nullable=False)  # 能力类型，用于匹配Agent
+    capability_id = Column(Integer, ForeignKey('capabilities.id'), nullable=False)  # 能力ID，用于匹配Agent
     config = Column(JSON)  # 任务配置参数
     description = Column(Text)
     assigned_agent_id = Column(Integer, ForeignKey('agents.id'), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
+    # 关联能力
+    capability = relationship("Capability")
     # 关联Agent
     assigned_agent = relationship("Agent", back_populates="tasks")
     # 关联任务实例

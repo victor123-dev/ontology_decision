@@ -187,7 +187,7 @@ function DriveLogic() {
     try {
       const taskData = {
         name: values.name,
-        capability_type: values.capability_type,
+        capability_id: values.capability_id,
         config: values.config ? JSON.parse(values.config) : null,
         description: values.description
       }
@@ -282,10 +282,13 @@ function DriveLogic() {
       key: 'name',
     },
     {
-      title: '能力类型',
-      dataIndex: 'capability_type',
-      key: 'capability_type',
-      render: (type) => <Tag color="blue">{type}</Tag>
+      title: '能力',
+      dataIndex: 'capability_id',
+      key: 'capability_id',
+      render: (capabilityId) => {
+        const capability = capabilities.find(cap => cap.id === capabilityId);
+        return <Tag color="blue">{capability ? capability.name : capabilityId}</Tag>;
+      }
     },
     {
       title: '描述',
@@ -370,11 +373,14 @@ function DriveLogic() {
           
           <Form.Item name="task_ids" label="关联任务">
             <Select mode="multiple" placeholder="选择触发后要执行的任务">
-              {tasks.map(task => (
-                <Option key={task.id} value={task.id}>
-                  {task.name} (能力类型: {task.capability_type})
-                </Option>
-              ))}
+              {tasks.map(task => {
+                const capability = capabilities.find(cap => cap.id === task.capability_id);
+                return (
+                  <Option key={task.id} value={task.id}>
+                    {task.name} (能力: {capability ? capability.name : task.capability_id})
+                  </Option>
+                );
+              })}
             </Select>
           </Form.Item>
           
@@ -421,11 +427,11 @@ function DriveLogic() {
             <Input placeholder="例如：发送温度告警通知" />
           </Form.Item>
           
-          <Form.Item name="capability_type" label="能力类型" rules={[{ required: true, message: '请输入能力类型' }]}>
-            <Select placeholder="选择任务需要的能力类型">
+          <Form.Item name="capability_id" label="能力" rules={[{ required: true, message: '请选择能力' }]}>
+            <Select placeholder="选择任务需要的能力">
               {capabilities.map(cap => (
-                <Option key={cap.id} value={cap.task_type}>
-                  {cap.name} ({cap.task_type})
+                <Option key={cap.id} value={cap.id}>
+                  {cap.name}
                 </Option>
               ))}
             </Select>
