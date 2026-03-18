@@ -16,6 +16,7 @@ from app.config import settings
 from app.utils.logger import get_logger
 from app.utils.data_source_manager import data_source_manager
 from app.utils.data_source_accessor import DataSourceAccessor
+from app.utils.function_registry import prepare_function_environment, extract_function_names
 import traceback
 
 logger = get_logger(__name__)
@@ -205,22 +206,35 @@ class DriveEngine:
                 else:
                     trigger_tasks = False
             elif logic_type == 'first_order' and config.get('pre_condition'):
-                # 处理一阶函数的前置条件
+                # 处理一阶函数的前置条件 - 支持函数调用
                 pre_condition = config.get('pre_condition')
                 try:
-                    # 评估前置条件表达式
-                    # 创建一个包装类来支持点号语法访问字典
-                    class DictWrapper:
-                        def __init__(self, data):
-                            self.__dict__ = data
-                    
-                    local_vars = {
-                        'data': DictWrapper(processed_data),
-                        'event': DictWrapper(event)
-                    }
-                    trigger_tasks = eval(pre_condition, {}, local_vars)
+                    logger.debug(f"评估 First Order 条件: {pre_condition}")
+
+                    # 从表达式提取函数名并准备执行环境
+                    local_vars = prepare_function_environment(pre_condition, processed_data, event)
+
+                    # 记录提取到的函数
+                    func_names = extract_function_names(pre_condition)
+                    if func_names:
+                        logger.info(f"First Order 表达式使用函数: {func_names}")
+
+                    # 安全的全局环境
+                    safe_globals = {'__builtins__': {}}
+
+                    # 评估前置条件
+                    trigger_tasks = eval(pre_condition, safe_globals, local_vars)
+
+                    # 支持返回元组 (bool, dict) 形式
+                    if isinstance(trigger_tasks, tuple) and len(trigger_tasks) == 2:
+                        trigger_tasks, processed_data = trigger_tasks
+                        logger.debug(f"函数返回处理后的数据: {processed_data}")
+
+                    logger.info(f"First Order 条件评估结果: {trigger_tasks}")
+
                 except Exception as e:
                     logger.error(f"评估前置条件失败: {str(e)}")
+                    logger.error(traceback.format_exc())
                     trigger_tasks = False
             
             # 只有当条件满足时才触发任务
