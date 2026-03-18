@@ -291,9 +291,13 @@ function BusinessModel() {
                 >
                   <List.Item.Meta
                     title={field.name}
-                    description={`字段ID: ${field.field_id} | 数据类型: ${field.data_type}`}
+                    description={
+                      <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                        <div>字段ID: {field.field_id} | 数据类型: {field.data_type}</div>
+                        <div>{field.description}</div>
+                      </div>
+                    }
                   />
-                  <div>{field.description}</div>
                 </List.Item>
               )}
             />
