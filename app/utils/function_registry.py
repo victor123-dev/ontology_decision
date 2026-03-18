@@ -23,6 +23,10 @@ BUILT_IN_FUNCTIONS: Set[str] = {
     'and', 'or', 'not', 'in', 'is', 'if', 'else', 'for', 'while', 'return',
 }
 
+# 常见对象名称 - 这些对象的方法不应被视为需要加载的函数
+COMMON_OBJECTS: Set[str] = {
+    'data', 'event', 'context', 'params',
+}
 
 class FunctionRegistry:
     """函数注册表 - 单例模式"""
@@ -210,7 +214,7 @@ def extract_function_names(expression: str) -> List[str]:
             return None
 
         def _is_valid_function(self, name: str) -> bool:
-            """检查是否为有效的自定义函数（排除内置函数和方法）"""
+            """检查是否为有效的自定义函数（排除内置函数和关键字）"""
             # 排除内置函数和关键字
             if name in BUILT_IN_FUNCTIONS:
                 return False
@@ -219,15 +223,23 @@ def extract_function_names(expression: str) -> List[str]:
             if name.startswith('_'):
                 return False
 
-            # 排除明显是对象方法的调用（如 data.get, list.append）
+            # 排除是对象方法的调用（如 data.get, list.append）
             parts = name.split('.')
             if len(parts) == 1:
                 # 单一名称，检查是否在黑名单
                 return name not in BUILT_IN_FUNCTIONS
-
-            # 多段名称，如 module.func 或 obj.method
-            # 允许 module.submodule.func 形式
-            return True
+            else:
+                # 多段名称
+                # 检查是否为模块路径形式（如 module.func, module.submodule.func）
+                # 模块路径通常以小写字母开头，且不包含常见的对象名称
+                
+                # 排除常见的对象方法调用
+                # 这些是表达式中常用的对象，它们的方法不应该被视为需要加载的函数
+                if parts[0] in COMMON_OBJECTS:
+                    return False
+                
+                # 允许模块路径形式
+                return True
 
     visitor = FunctionVisitor()
     visitor.visit(tree)
