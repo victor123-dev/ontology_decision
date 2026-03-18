@@ -93,6 +93,18 @@ function DriveLog() {
     }
   }
 
+  const formatDateTime = (dateTimeString) => {
+    if (!dateTimeString) return ''
+    const date = new Date(dateTimeString)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  }
+
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -130,7 +142,7 @@ function DriveLog() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <Tag color={getLevelColor(group.level)}>{group.level.toUpperCase()}</Tag>
               <span style={{ flex: 1, fontWeight: 'bold' }}>{group.latest_message}</span>
-              <span>{group.latest_time}</span>
+              <span>{formatDateTime(group.latest_time)}</span>
             </div>
           ),
           children: (
@@ -139,7 +151,7 @@ function DriveLog() {
                 <div key={log.id} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f0f0f0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                     <Tag color={getCategoryText(log.category)}>{getCategoryText(log.category)}</Tag>
-                    <span style={{ fontSize: '12px', color: '#666' }}>{log.created_at}</span>
+                    <span style={{ fontSize: '12px', color: '#666' }}>{formatDateTime(log.created_at)}</span>
                   </div>
                   <div style={{ marginLeft: 12, marginBottom: 8 }}>
                     <strong>{log.message}</strong>
