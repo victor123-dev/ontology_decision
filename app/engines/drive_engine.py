@@ -192,9 +192,10 @@ class DriveEngine:
             logger.info(f"执行驱动逻辑: {logic.name} (类型: {logic_type})")
             self._log('info', 'drive_logic', f"执行驱动逻辑: {logic.name}", {'logic_name': logic.name, 'logic_type': logic_type}, trace_id)
             
-            # 预处理（可选）
-            processed_data = event.get('data', {})
-            trigger_tasks = True
+            # 预处理
+            # TODO DEMO这里只处理了第一个受影响的记录，一阶函数遇到批量数组应如何处理？循环？需思考
+            processed_data = event.get('data', {}).get('affected_records', {})[0].get('record', {})
+            trigger_tasks = False
             
             if logic_type == 'script' and config.get('script_content'):
                 result = self._run_preprocess_script(config.get('script_content'), event)
@@ -203,8 +204,6 @@ class DriveEngine:
                     # 脚本返回 (bool, dict) 形式
                     trigger_tasks = result[0]
                     processed_data = result[1]
-                else:
-                    trigger_tasks = False
             elif logic_type == 'first_order' and config.get('pre_condition'):
                 # 处理一阶函数的前置条件 - 支持函数调用
                 pre_condition = config.get('pre_condition')
@@ -225,17 +224,11 @@ class DriveEngine:
                     # 评估前置条件
                     trigger_tasks = eval(pre_condition, safe_globals, local_vars)
 
-                    # 支持返回元组 (bool, dict) 形式
-                    if isinstance(trigger_tasks, tuple) and len(trigger_tasks) == 2:
-                        trigger_tasks, processed_data = trigger_tasks
-                        logger.debug(f"函数返回处理后的数据: {processed_data}")
-
                     logger.info(f"First Order 条件评估结果: {trigger_tasks}")
 
                 except Exception as e:
                     logger.error(f"评估前置条件失败: {str(e)}")
                     logger.error(traceback.format_exc())
-                    trigger_tasks = False
             
             # 只有当条件满足时才触发任务
             if trigger_tasks:

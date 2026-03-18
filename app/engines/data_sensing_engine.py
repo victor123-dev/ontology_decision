@@ -333,12 +333,8 @@ class DataSensingEngine:
                 if cached_data is not None:
                     current_data = cached_data
                 else:
-                    # 执行查询
-                    if monitored_fields:
-                        fields_str = ', '.join([primary_key] + monitored_fields)
-                    else:
-                        fields_str = '*'
-                    
+                    # 执行查询 - 总是查询所有字段，确保记录完整
+                    fields_str = '*'
                     query = f"SELECT {fields_str} FROM {table_name}"
                     current_data = client.execute_query(query)
                     self.stats['db_queries'] += 1
