@@ -174,11 +174,13 @@ class DataSensingEngine:
     
     def _get_cached_query(self, cache_key: str) -> Optional[List[Dict]]:
         """获取缓存的查询结果"""
-        if cache_key in self.query_cache:
+        try:
+            result = self.query_cache[cache_key]
             self.stats['cache_hits'] += 1
-            return self.query_cache[cache_key]
-        self.stats['cache_misses'] += 1
-        return None
+            return result
+        except KeyError:
+            self.stats['cache_misses'] += 1
+            return None
     
     def _set_cached_query(self, cache_key: str, data: List[Dict]):
         """设置查询缓存"""
@@ -545,7 +547,8 @@ class DataSensingEngine:
                     elif operator == 'lte' and value <= threshold_val:
                         is_triggered = True
                     
-                    was_triggered = self.threshold_states[config_id].get(record_key, False)
+                    threshold_state = self.threshold_states.get(config_id, {})
+                    was_triggered = threshold_state.get(record_key, False)
                     
                     if is_triggered and not was_triggered:
                         triggered_records.append({

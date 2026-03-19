@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from app.models.agent import Agent
 from app.config import settings
@@ -6,7 +6,9 @@ from app.models.drive_logic import Task
 from app.utils.data_source_manager import data_source_manager
 from app.utils.logger import get_logger
 from app.utils.llm_translator import llm_translator
+from app.engines.task_manager import task_manager
 import json
+import random
 
 logger = get_logger(__name__)
 
@@ -20,6 +22,12 @@ class AgentExecutor:
             'success': 0,
             'failed': 0
         }
+    
+    def _get_system_db_session(self):
+        from app.utils.db_client import create_engine, sessionmaker
+        engine = create_engine("sqlite:///data.db")
+        Session = sessionmaker(bind=engine)
+        return Session()
     
     def execute_agent_task(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """
@@ -45,6 +53,8 @@ class AgentExecutor:
                 execution_result = self._execute_product_development(agent, task, event, trace_id)
             if agent_name == "询价Agent":
                 execution_result = self._execute_quote_agent(agent, task, event, trace_id)
+            if agent_name == "估价核算Agent	":
+                execution_result = self._execute_evaluation_agent(agent, task, event, trace_id)
             # 添加更多特定Agent的执行逻辑...
             
             if execution_result.get('success', True):
@@ -106,150 +116,197 @@ class AgentExecutor:
     
     def _execute_product_development(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """产品研发Agent执行逻辑"""
-        try:
-            demand_data = event.get('data', {})
-            demand_id = demand_data.get('id')
-            demand_no = demand_data.get('demand_no')
-            spec_requirement = demand_data.get('spec_requirement')
-            
-            # 1. 获取现有物料
-            materials = data_source_manager.execute_query(
-                data_source_name='commander_data_database',
-                query="SELECT * FROM md_material WHERE status = 'ACTIVE'"
-            )
-            
-            # 2. 调用大模型生成BOM
-            bom_result = self._generate_bom_with_llm(demand_data, materials)
-            
-            if not bom_result.get('success', False):
-                return {
-                    'success': False,
-                    'error': f'生成BOM失败: {bom_result.get("error", "未知错误")}',
-                    'executed_at': datetime.now().isoformat()
-                }
-            
-            bom_items = bom_result.get('bom_items', [])
-            new_materials = bom_result.get('new_materials', [])
-            
-            # 3. 创建新产品（初始状态DRAFT）
-            # 生成唯一的product_code
-            product_code = self._generate_unique_code('PROD', 'product', 'product_code')
-            
-            product_name = self._generate_product_name(spec_requirement)
-            
-            product_data = {
-                'product_code': product_code,
-                'product_name': product_name,
-                'specification': spec_requirement,
-                'product_type': 'CUSTOM',
-                'unit': '个',
-                'status': 'DRAFT',
-                'rnd_owner': '张三'
-            }
-            
-            success = data_source_manager.execute_insert(
-                data_source_name='commander_data_database',
-                table_name='product',
-                data=product_data
-            )
-            
-            if not success:
-                return {
-                    'success': False,
-                    'error': '创建产品失败',
-                    'executed_at': datetime.now().isoformat()
-                }
-            
-            # 获取新创建的产品ID
-            product_result = data_source_manager.execute_query(
-                data_source_name='commander_data_database',
-                query=f"SELECT id FROM product WHERE product_code = '{product_code}'"
-            )
-            if not product_result:
-                return {
-                    'success': False,
-                    'error': '获取产品ID失败',
-                    'executed_at': datetime.now().isoformat()
-                }
-            product_id = product_result[0]['id']
-            
-            # 4. 插入新物料/价格快照（如果有）并获取新物料ID
-            material_code_to_id = {}
-            for new_material in new_materials:
-                # 生成唯一的material_code
-                material_code = self._generate_unique_code('MAT', 'md_material', 'material_code')
-                new_material['material_code'] = material_code
-                
-                material_data = {
-                    'material_code': material_code,
-                    'material_name': new_material['material_name'],
-                    'specification': new_material['specification'],
-                    'unit': new_material['unit'],
-                    'base_price': round(new_material['base_price'], 2),
-                    'status': 'ACTIVE'
-                }
-                data_source_manager.execute_insert(
-                data_source_name='commander_data_database',
-                    table_name='md_material',
-                    data=material_data
-                )
-                
-                # 查询新插入的物料ID
-                material_result = data_source_manager.execute_query(
-                    data_source_name='commander_data_database',
-                    query=f"SELECT id FROM md_material WHERE material_code = '{material_code}'"
-                )
-                if material_result:
-                    material_code_to_id[material_code] = material_result[0]['id']
 
-                # 写入价格快照表
-                snapshot_data = {
-                    'material_id': material_result[0]['id'],
-                    'price': round(new_material['base_price'], 2),
-                    'valid_from': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'source_type': 'BASE',
-                    'source_id': material_result[0]['id']
+        demand_data = event.get('data', {})
+        demand_id = demand_data.get('id')
+        demand_no = demand_data.get('demand_no')
+        spec_requirement = demand_data.get('spec_requirement')
+
+        if task.name == "智能配方研发任务":
+            try:
+                # 1. 获取现有物料
+                materials = data_source_manager.execute_query(
+                    data_source_name='commander_data_database',
+                    query="SELECT * FROM md_material WHERE status = 'ACTIVE'"
+                )
+                
+                # 2. 调用大模型生成BOM
+                bom_result = self._generate_bom_with_llm(demand_data, materials)
+                
+                if not bom_result.get('success', False):
+                    return {
+                        'success': False,
+                        'error': f'生成BOM失败: {bom_result.get("error", "未知错误")}',
+                        'executed_at': datetime.now().isoformat()
+                    }
+                
+                bom_items = bom_result.get('bom_items', [])
+                new_materials = bom_result.get('new_materials', [])
+                
+                # 3. 创建新产品（初始状态DRAFT）
+                # 生成唯一的product_code
+                product_code = self._generate_unique_code('PROD', 'product', 'product_code')
+                
+                product_name = self._generate_product_name(spec_requirement)
+                
+                product_data = {
+                    'product_code': product_code,
+                    'product_name': product_name,
+                    'specification': spec_requirement,
+                    'product_type': 'CUSTOM',
+                    'unit': '个',
+                    'status': 'DRAFT',
+                    'rnd_owner': '张三'
                 }
                 
                 success = data_source_manager.execute_insert(
                     data_source_name='commander_data_database',
-                    table_name='price_snapshot',
-                    data=snapshot_data
+                    table_name='product',
+                    data=product_data
                 )
-            
-            # 5. 维护产品BOM明细
-            for item in bom_items:
-                # 如果是新物料，使用material_code获取ID
-                material_id = item['material_id']
-                if material_id is None and 'material_code' in item:
-                    material_id = material_code_to_id.get(item['material_code'])
                 
-                if material_id is not None:
-                    bom_data = {
-                        'product_id': product_id,
-                        'material_id': material_id,
-                        'unit_usage': item['unit_usage'],
-                        'loss_rate': item['loss_rate']
+                if not success:
+                    return {
+                        'success': False,
+                        'error': '创建产品失败',
+                        'executed_at': datetime.now().isoformat()
+                    }
+                
+                # 获取新创建的产品ID
+                product_result = data_source_manager.execute_query(
+                    data_source_name='commander_data_database',
+                    query=f"SELECT id FROM product WHERE product_code = '{product_code}'"
+                )
+                if not product_result:
+                    return {
+                        'success': False,
+                        'error': '获取产品ID失败',
+                        'executed_at': datetime.now().isoformat()
+                    }
+                product_id = product_result[0]['id']
+                
+                # 4. 插入新物料/价格快照（如果有）并获取新物料ID
+                material_code_to_id = {}
+                for new_material in new_materials:
+                    # 生成唯一的material_code
+                    material_code = self._generate_unique_code('MAT', 'md_material', 'material_code')
+                    new_material['material_code'] = material_code
+                    
+                    material_data = {
+                        'material_code': material_code,
+                        'material_name': new_material['material_name'],
+                        'specification': new_material['specification'],
+                        'unit': new_material['unit'],
+                        'base_price': round(new_material['base_price'], 2),
+                        'status': 'ACTIVE'
                     }
                     data_source_manager.execute_insert(
-                        data_source_name='commander_data_database',
-                        table_name='product_bom',
-                        data=bom_data
+                    data_source_name='commander_data_database',
+                        table_name='md_material',
+                        data=material_data
                     )
-            
-            # 6. 产品研发完成，状态更新为ACTIVE
-            product_update_data = {
-                'id': product_id,
-                'status': 'ACTIVE',
-                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            data_source_manager.execute_update(
-                data_source_name='commander_data_database',
-                table_name='product',
-                data=product_update_data
-            )
-            
-            # 7. 需求单关联产品
+                    
+                    # 查询新插入的物料ID
+                    material_result = data_source_manager.execute_query(
+                        data_source_name='commander_data_database',
+                        query=f"SELECT id FROM md_material WHERE material_code = '{material_code}'"
+                    )
+                    if material_result:
+                        material_code_to_id[material_code] = material_result[0]['id']
+
+                    # 写入价格快照表
+                    snapshot_data = {
+                        'material_id': material_result[0]['id'],
+                        'price': round(new_material['base_price'], 2),
+                        'valid_from': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'source_type': 'BASE',
+                        'source_id': material_result[0]['id']
+                    }
+                    
+                    success = data_source_manager.execute_insert(
+                        data_source_name='commander_data_database',
+                        table_name='price_snapshot',
+                        data=snapshot_data
+                    )
+                
+                # 5. 维护产品BOM明细
+                for item in bom_items:
+                    # 如果是新物料，使用material_code获取ID
+                    material_id = item['material_id']
+                    if material_id is None and 'material_code' in item:
+                        material_id = material_code_to_id.get(item['material_code'])
+                    
+                    if material_id is not None:
+                        bom_data = {
+                            'product_id': product_id,
+                            'material_id': material_id,
+                            'unit_usage': item['unit_usage'],
+                            'loss_rate': item['loss_rate']
+                        }
+                        data_source_manager.execute_insert(
+                            data_source_name='commander_data_database',
+                            table_name='product_bom',
+                            data=bom_data
+                        )
+                
+                # 6. 产品研发完成，状态更新为ACTIVE
+                product_update_data = {
+                    'id': product_id,
+                    'status': 'ACTIVE',
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+                data_source_manager.execute_update(
+                    data_source_name='commander_data_database',
+                    table_name='product',
+                    data=product_update_data
+                )
+                
+                # 7. 需求单关联产品
+                demand_update_data = {
+                    'id': demand_id,
+                    'product_id': product_id
+                }
+                data_source_manager.execute_update(
+                    data_source_name='commander_data_database',
+                    table_name='demand_order',
+                    data=demand_update_data
+                )
+                
+                return {
+                    'success': True,
+                    'message': f"产品研发完成: {demand_no}",
+                    'executed_at': datetime.now().isoformat(),
+                    'input_data': demand_data,
+                    'output_data': {
+                        'status': 'completed',
+                        'product_id': product_id,
+                        'product_code': product_code,
+                        'product_name': product_name,
+                        'bom_count': len(bom_items),
+                        'new_materials_count': len(new_materials),
+                        'updated_at': datetime.now().isoformat()
+                    }
+                }
+            except Exception as e:
+                logger.error(f"执行产品研发失败: {str(e)}")
+                return {
+                    'success': False,
+                    'error': str(e),
+                    'executed_at': datetime.now().isoformat()
+                }
+        elif task.name == "产品推荐任务":
+            # 需要基于spec_requirement找到匹配的product
+            product_info = self._find_matching_product(spec_requirement)
+            if not product_info:
+                return {
+                    'success': False,
+                    'error': f'未找到匹配规格要求的产品: {spec_requirement}',
+                    'executed_at': datetime.now().isoformat()
+                }
+            product_id = product_info.get('id')
+            product_code     = product_info.get('product_code')
+            product_name = product_info.get('product_name')
+            # 需求单关联产品
             demand_update_data = {
                 'id': demand_id,
                 'product_id': product_id
@@ -262,7 +319,7 @@ class AgentExecutor:
             
             return {
                 'success': True,
-                'message': f"产品研发完成: {demand_no}",
+                'message': f"产品推荐成功: {demand_no}",
                 'executed_at': datetime.now().isoformat(),
                 'input_data': demand_data,
                 'output_data': {
@@ -270,19 +327,16 @@ class AgentExecutor:
                     'product_id': product_id,
                     'product_code': product_code,
                     'product_name': product_name,
-                    'bom_count': len(bom_items),
-                    'new_materials_count': len(new_materials),
                     'updated_at': datetime.now().isoformat()
                 }
             }
-        except Exception as e:
-            logger.error(f"执行产品研发失败: {str(e)}")
+        else:
+            logger.error(f"产品研发Agent执行失败: {str(task.name)}")
             return {
                 'success': False,
-                'error': str(e),
+                'error': "未知的任务类型",
                 'executed_at': datetime.now().isoformat()
             }
-    
     def _generate_bom_with_llm(self, demand_data: Dict[str, Any], existing_materials: List[Dict[str, Any]]) -> Dict[str, Any]:
         """调用大模型生成BOM"""
         try:
@@ -573,6 +627,355 @@ class AgentExecutor:
             
         except Exception as e:
             logger.error(f"执行询价失败: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'executed_at': datetime.now().isoformat()
+            }
+    
+    def _find_matching_product(self, spec_requirement: str) -> Dict[str, Any]:
+        """
+        基于规格要求查找匹配的产品
+        """
+        try:
+            if spec_requirement is None:
+                return None
+                
+            # 解析规格要求
+            req_specs = set([spec.strip() for spec in spec_requirement.split('，') if spec.strip()])
+            if not req_specs:
+                return None
+            
+            # 构建带有过滤条件的查询
+            keywords = list(req_specs)
+            if keywords:
+                where_conditions = []
+                for keyword in keywords:
+                    where_conditions.append(f"specification LIKE '%{keyword}%'")
+                
+                where_clause = " WHERE " + " AND ".join(where_conditions)
+                query = f"SELECT * FROM product{where_clause} AND status = 'ACTIVE'"
+            else:
+                query = "SELECT * FROM product WHERE status = 'ACTIVE'"
+            
+            results = data_source_manager.execute_query(
+                data_source_name='commander_data_database',
+                query=query,
+                max_rows=1000
+            )
+            
+            if not results:
+                return None
+            
+            # 检查每个产品的规格是否覆盖要求
+            for result in results:
+                product_spec = result.get('specification', '')
+                if not product_spec:
+                    continue
+                
+                product_specs = set([spec.strip() for spec in product_spec.split('，') if spec.strip()])
+                
+                # 检查规格要求是否完全被产品规格覆盖
+                if req_specs.issubset(product_specs):
+                    return result
+            
+            return None
+        except Exception as e:
+            logger.error(f"查找匹配产品失败: {str(e)}")
+            return None
+    
+    def _check_material_price_fluctuation_with_date(self, material_id: int) -> bool:
+        """
+        检查物料价格波动，同时检查最新价格快照是否超过一天
+        """
+        try:
+            if material_id is None:
+                return True
+            
+            # 查询最新的三笔价格快照，包含valid_from日期
+            price_query = f"""
+            SELECT price, valid_from 
+            FROM price_snapshot 
+            WHERE material_id = {material_id} 
+            ORDER BY valid_from DESC 
+            LIMIT 3
+            """
+            
+            price_results = data_source_manager.execute_query(
+                data_source_name='commander_data_database',
+                query=price_query,
+                max_rows=3
+            )
+            
+            # 若查到小于三笔，返回true
+            if len(price_results) < 3:
+                return True
+            
+            # 获取价格阈值
+            threshold_query = """
+            SELECT threshold_percent 
+            FROM rule_price 
+            WHERE status = 'ACTIVE' 
+            LIMIT 1
+            """
+            
+            threshold_results = data_source_manager.execute_query(
+                data_source_name='commander_data_database',
+                query=threshold_query,
+                max_rows=1
+            )
+            
+            threshold_percent = 5.0
+            if threshold_results:
+                threshold_percent = threshold_results[0].get('threshold_percent', 5.0)
+            
+            # 提取价格并计算波动
+            prices = [result.get('price', 0) for result in price_results]
+            
+            # 计算价格间的波动
+            price_fluctuation_exceeds = False
+            for i in range(len(prices) - 1):
+                price1 = prices[i]
+                price2 = prices[i + 1]
+                
+                if price2 == 0:
+                    continue
+                    
+                fluctuation = abs((price1 - price2) / price2 * 100)
+                if fluctuation > threshold_percent:
+                    price_fluctuation_exceeds = True
+                    break
+            
+            # 检查最新价格快照是否超过一天
+            latest_valid_from = price_results[0].get('valid_from', '')
+            if latest_valid_from:
+                try:
+                    latest_date = datetime.strptime(latest_valid_from, '%Y-%m-%d %H:%M:%S')
+                    one_day_ago = datetime.now() - timedelta(days=1)
+                    price_snapshot_too_old = latest_date < one_day_ago
+                except:
+                    price_snapshot_too_old = True
+            else:
+                price_snapshot_too_old = True
+            
+            # 如果价格波动超过阈值且最新价格快照超过一天，则返回true
+            if price_fluctuation_exceeds and price_snapshot_too_old:
+                return True
+            
+            # 如果价格快照少于3笔，也返回true（已经在前面处理了）
+            return False
+            
+        except Exception as e:
+            logger.error(f"检查物料价格波动和日期失败: {str(e)}")
+            return True
+    
+    def _execute_evaluation_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+        """估价核算Agent执行逻辑"""
+        try:
+            demand_data = event.get('data', {})
+            
+            demand_order_id = demand_data.get('id')
+            product_id = demand_data.get('product_id')
+            
+            # 1. 获取BOM信息
+            bom_query = f"SELECT * FROM product_bom WHERE product_id = {product_id}"
+            bom_items = data_source_manager.execute_query(
+                data_source_name='commander_data_database',
+                query=bom_query
+            )
+            
+            if not bom_items:
+                return {
+                    'success': False,
+                    'error': f'产品 {product_id} 没有BOM信息',
+                    'executed_at': datetime.now().isoformat()
+                }
+            
+            # 2. 获取每个物料的最新价格快照，并检查是否需要询价
+            materials_needing_inquiry = []
+            total_material_cost = 0.0
+            
+            for bom_item in bom_items:
+                material_id = bom_item.get('material_id')
+                unit_usage = float(bom_item.get('unit_usage', 0))
+                loss_rate = float(bom_item.get('loss_rate', 0))
+                
+                # 查询该物料的最新价格快照
+                price_query = f"""
+                SELECT price, valid_from 
+                FROM price_snapshot 
+                WHERE material_id = {material_id} 
+                ORDER BY valid_from DESC 
+                LIMIT 1
+                """
+                
+                price_results = data_source_manager.execute_query(
+                    data_source_name='commander_data_database',
+                    query=price_query,
+                    max_rows=1
+                )
+                
+                current_price = 0.0
+                if price_results:
+                    current_price = float(price_results[0].get('price', 0))
+                
+                # 检查是否需要询价
+                need_inquiry = False
+                
+                # 查询最新的三笔价格快照数量
+                three_prices_query = f"""
+                SELECT COUNT(*) as count 
+                FROM price_snapshot 
+                WHERE material_id = {material_id}
+                """
+                count_result = data_source_manager.execute_query(
+                    data_source_name='commander_data_database',
+                    query=three_prices_query,
+                    max_rows=1
+                )
+                price_count = count_result[0].get('count', 0) if count_result else 0
+                
+                if price_count < 3:
+                    need_inquiry = True
+                else:
+                    # 检查价格波动和日期
+                    if self._check_material_price_fluctuation_with_date(material_id):
+                        need_inquiry = True
+                
+                if need_inquiry:
+                    materials_needing_inquiry.append({
+                        'material_id': material_id,
+                        'current_price': current_price
+                    })
+                
+                # 计算物料成本（即使需要询价，也先用当前价格计算）
+                effective_usage = unit_usage * (1 + loss_rate)
+                material_cost = effective_usage * current_price
+                total_material_cost += material_cost
+            
+            # 3. 如果有物料需要询价，同步执行询价任务并获取新价格
+            if materials_needing_inquiry:
+                logger.info(f"发现 {len(materials_needing_inquiry)} 个物料需要询价，开始同步询价...")
+                
+                # 获取询价任务
+                db = self._get_system_db_session()
+                try:
+                    quote_task = db.query(Task).filter(Task.name == "物料询价").first()
+                    if not quote_task:
+                        logger.warning("未找到询价任务，跳过询价")
+                    else:
+                        # 为每个需要询价的物料执行询价
+                        for material_info in materials_needing_inquiry:
+                            material_id = material_info['material_id']
+                            
+                            # 获取物料详细信息
+                            material_query = f"SELECT * FROM md_material WHERE id = {material_id}"
+                            material_result = data_source_manager.execute_query(
+                                data_source_name='commander_data_database',
+                                query=material_query,
+                                max_rows=1
+                            )
+                            
+                            if material_result:
+                                material_data = material_result[0]
+                                # 构造询价事件
+                                quote_event = {
+                                    "data": material_data
+                                }
+                                
+                                # 同步执行询价任务
+                                quote_result = task_manager.assign_and_wait_for_task(
+                                    quote_task, 
+                                    quote_event, 
+                                    trace_id, 
+                                    timeout=60  # 1分钟超时
+                                )
+                                
+                                if quote_result['success']:
+                                    # 获取新的报价
+                                    new_price = quote_result['result']['output_data']['reply_price']
+                                    logger.info(f"物料 {material_id} 询价成功，新价格: {new_price}")
+                                    
+                                    # 更新该物料的价格用于成本计算
+                                    # 找到对应的BOM项并更新价格
+                                    for bom_item in bom_items:
+                                        if bom_item.get('material_id') == material_id:
+                                            unit_usage = float(bom_item.get('unit_usage', 0))
+                                            loss_rate = float(bom_item.get('loss_rate', 0))
+                                            effective_usage = unit_usage * (1 + loss_rate)
+                                            # 从总成本中减去旧价格，加上新价格
+                                            old_material_cost = effective_usage * material_info['current_price']
+                                            new_material_cost = effective_usage * new_price
+                                            total_material_cost = total_material_cost - old_material_cost + new_material_cost
+                                            break
+                                else:
+                                    logger.warning(f"物料 {material_id} 询价失败: {quote_result.get('error', 'Unknown error')}")
+                finally:
+                    db.close()
+            
+            # 4. 计算总成本和建议报价
+            # 材料成本就是总成本（简化模型）
+            total_cost = total_material_cost
+            # 上浮20%利润
+            suggested_price = total_cost * 1.2
+            
+            # 5. 生成成本计算单号
+            calc_no = self._generate_unique_code('CALC', 'cost_calc', 'calc_no')
+            
+            # 6. 写入成本计算表
+            cost_calc_data = {
+                'calc_no': calc_no,
+                'demand_order_id': demand_order_id if demand_order_id else 0,
+                'product_id': product_id,
+                'status': 'ACTIVE',
+                'material_cost': round(total_material_cost, 2),
+                'total_cost': round(total_cost, 2),
+                'suggested_price': round(suggested_price, 2),
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            success = data_source_manager.execute_insert(
+                data_source_name='commander_data_database',
+                table_name='cost_calc',
+                data=cost_calc_data
+            )
+            
+            if not success:
+                return {
+                    'success': False,
+                    'error': '创建成本计算单失败',
+                    'executed_at': datetime.now().isoformat()
+                }
+            
+            # 7. 获取刚插入的成本计算单ID
+            calc_result = data_source_manager.execute_query(
+                data_source_name='commander_data_database',
+                query=f"SELECT id FROM cost_calc WHERE calc_no = '{calc_no}'"
+            )
+            
+            calc_id = calc_result[0]['id'] if calc_result else None
+            
+            return {
+                'success': True,
+                'message': f"估价核算完成: {calc_no}",
+                'executed_at': datetime.now().isoformat(),
+                'input_data': event_data,
+                'output_data': {
+                    'status': 'completed',
+                    'calc_no': calc_no,
+                    'calc_id': calc_id,
+                    'product_id': product_id,
+                    'demand_order_id': demand_order_id,
+                    'material_cost': round(total_material_cost, 2),
+                    'total_cost': round(total_cost, 2),
+                    'suggested_price': round(suggested_price, 2),
+                    'materials_needing_inquiry': len(materials_needing_inquiry),
+                    'updated_at': datetime.now().isoformat()
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"执行估价核算失败: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),

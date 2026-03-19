@@ -11,6 +11,7 @@ from app.utils.logger import get_logger
 from app.utils.data_source_accessor import DataSourceAccessor
 from app.utils.function_registry import prepare_function_environment, extract_function_names
 from app.engines.agent_executor import agent_executor
+from app.engines.task_manager import task_manager
 import traceback
 
 logger = get_logger(__name__)
@@ -28,7 +29,7 @@ class DriveEngine:
         self.stats = {
             'events_received': 0,
             'logics_matched': 0,
-            'tasks_assigned': 0,
+            'tasks_created': 0,
             'errors': 0
         }
     
@@ -58,7 +59,7 @@ class DriveEngine:
         logger.info("=" * 60)
         logger.info(f"接收事件数: {self.stats['events_received']}")
         logger.info(f"匹配逻辑数: {self.stats['logics_matched']}")
-        logger.info(f"分配任务数: {self.stats['tasks_assigned']}")
+        logger.info(f"创建任务数: {self.stats['tasks_created']}")
         logger.info(f"错误数: {self.stats['errors']}")
         logger.info("=" * 60)
 
@@ -241,105 +242,145 @@ class DriveEngine:
             return event.get('data', {})
     
     def _assign_tasks(self, tasks: List[Task], event: Dict[str, Any], db, trace_id: str = None):
-        """分配任务给Agent"""
+        """分配任务给Agent - 只创建任务实例，不立即执行"""
         try:
-            # 获取所有可用的Agent及其能力
-            agents = db.query(Agent).filter(Agent.status == 'active').all()
-            
             for task in tasks:
-                matched_agent = None
-                
-                # 根据任务的多个能力ID匹配Agent
-                # Agent需要支持任务的所有能力才能执行该任务
-                task_capability_ids = [cap.id for cap in task.capabilities]
-                for agent in agents:
-                    agent_capability_ids = [cap.id for cap in agent.capabilities]
-                    # 检查Agent是否支持任务的所有能力
-                    if all(cap_id in agent_capability_ids for cap_id in task_capability_ids):
-                        matched_agent = agent
-                        break
-                
-                # 创建任务实例
+                # 创建任务实例，初始状态为 pending
                 task_instance = TaskInstance(
                     task_id=task.id,
-                    assigned_agent_id=matched_agent.id if matched_agent else None,
-                    status='assigned' if matched_agent else 'pending',
+                    assigned_agent_id=None,
+                    status='pending',
                     result={
                         'event': event,
-                        'assigned_at': datetime.now().isoformat(),
+                        'created_at': datetime.now().isoformat(),
                         'trace_id': trace_id
                     }
                 )
                 db.add(task_instance)
-                db.flush()  # 获取task_instance.id
                 db.commit()
 
-                if matched_agent:
-                    logger.info(f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}")
-                    self.stats['tasks_assigned'] += 1
-                    self._log('info', 'agent_task', f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}", {'task_name': task.name, 'agent_name': matched_agent.name}, trace_id)
-                    
-                    # 触发Agent模拟执行 - 通过事件回调方式
-                    self._simulate_agent_execution(matched_agent, task, task_instance, event, db, trace_id)
-                else:
-                    task_capability_ids = [cap.id for cap in task.capabilities]
-                    logger.warning(f"没有找到支持能力ID {task_capability_ids} 的Agent，任务 '{task.name}' 等待分配")
-                    self._log('warning', 'agent_task', f"没有找到支持能力ID {task_capability_ids} 的Agent，任务 '{task.name}' 等待分配", {'task_name': task.name, 'capability_ids': task_capability_ids}, trace_id)
-        except Exception as e:
-            self.stats['errors'] += 1
-            logger.error(f"分配任务失败: {str(e)}")
-            logger.error(traceback.format_exc())
-
-    def _simulate_agent_execution(self, agent: Agent, task: Task, task_instance: TaskInstance, event: Dict[str, Any], db, trace_id: str = None):
-        """模拟Agent执行任务 - 通过事件回调方式"""
-        try:
-            # 创建Agent执行事件
-            agent_event = {
-                'type': 'agent_execute',
-                'agent_id': agent.id,
-                'agent_name': agent.name,
-                'task_id': task.id,
-                'task_name': task.name,
-                'task_instance_id': task_instance.id,
-                'capability_ids': [cap.id for cap in task.capabilities],
-                'event': event,
-                'trace_id': trace_id,
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            logger.info(f"触发Agent '{agent.name}' 执行任务 '{task.name}'")
-            self._log('info', 'agent_execution', f"触发Agent '{agent.name}' 执行任务 '{task.name}'", agent_event, trace_id)
-            
-            # 使用Agent执行器执行任务
-            execution_result = agent_executor.execute_agent_task(agent, task, event, trace_id)
-            
-            # 更新任务实例状态和结果（使用传入的数据库会话）
-            task_instance.status = 'completed' if execution_result.get('success', True) else 'failed'
-            task_instance.result = {
-                **task_instance.result,
-                'execution_result': execution_result,
-                'completed_at': datetime.now().isoformat()
-            }
-            task_instance.completed_at = datetime.now()
-            
-            status_text = '成功' if execution_result.get('success', True) else '失败'
-            logger.info(f"Agent '{agent.name}' 执行任务 '{task.name}' {status_text}")
-            self._log('info', 'agent_execution', f"Agent '{agent.name}' 执行任务 '{task.name}' {status_text}", 
-                     {'agent_name': agent.name, 'task_name': task.name, 'status': task_instance.status}, trace_id)
+                logger.info(f"任务 '{task.name}' 已创建，等待调度")
+                self.stats['tasks_created'] += 1
+                self._log('info', 'agent_task', f"任务 '{task.name}' 已创建，等待调度", {'task_name': task.name}, trace_id)
                 
         except Exception as e:
-            logger.error(f"模拟Agent执行失败: {str(e)}")
+            self.stats['errors'] += 1
+            logger.error(f"创建任务实例失败: {str(e)}")
             logger.error(traceback.format_exc())
-            # 更新任务实例为失败状态（使用传入的数据库会话）
-            task_instance.status = 'failed'
-            task_instance.result = {
-                **task_instance.result,
-                'error': str(e),
-                'completed_at': datetime.now().isoformat()
-            }
-            task_instance.completed_at = datetime.now()
 
-
-
+    def _schedule_tasks(self):
+        """任务调度循环 - 定期检查待处理任务并分配给合适的Agent"""
+        while self.is_running:
+            try:
+                db = self._get_db_session()
+                try:
+                    # 查询所有 pending 状态的任务实例
+                    pending_tasks = db.query(TaskInstance).filter(TaskInstance.status == 'pending').all()
+                    
+                    if pending_tasks:
+                        # 获取所有可用的Agent及其能力
+                        agents = db.query(Agent).filter(Agent.status == 'active').all()
+                        
+                        for task_instance in pending_tasks:
+                            task = task_instance.task
+                            matched_agent = None
+                            
+                            # 根据任务的多个能力ID匹配Agent
+                            task_capability_ids = [cap.id for cap in task.capabilities]
+                            for agent in agents:
+                                agent_capability_ids = [cap.id for cap in agent.capabilities]
+                                # 检查Agent是否支持任务的所有能力
+                                if all(cap_id in agent_capability_ids for cap_id in task_capability_ids):
+                                    matched_agent = agent
+                                    break
+                            
+                            if matched_agent:
+                                # 从任务实例中获取事件数据和trace_id
+                                event = task_instance.result.get('event', {})
+                                trace_id = task_instance.result.get('trace_id')
+                                
+                                # 更新任务实例为 assigned 状态
+                                task_instance.assigned_agent_id = matched_agent.id
+                                task_instance.status = 'assigned'
+                                task_instance.started_at = datetime.now()
+                                db.commit()
+                                
+                                logger.info(f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}")
+                                self._log('info', 'agent_task', f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}", 
+                                         {'task_name': task.name, 'agent_name': matched_agent.name}, trace_id)
+                                
+                                # 在新线程中执行任务，避免阻塞调度循环
+                                execution_thread = threading.Thread(
+                                    target=self._execute_task_in_background,
+                                    args=(matched_agent, task, task_instance.id, event, trace_id)
+                                )
+                                execution_thread.daemon = True
+                                execution_thread.start()
+                            else:
+                                logger.warning(f"没有找到支持能力ID {task_capability_ids} 的Agent，任务 '{task.name}' 继续等待")
+                                
+                finally:
+                    db.close()
+                    
+            except Exception as e:
+                logger.error(f"任务调度失败: {str(e)}")
+                logger.error(traceback.format_exc())
+            
+            # 每5秒检查一次
+            time.sleep(5)
+    
+    def _execute_task_in_background(self, agent: Agent, task: Task, task_instance_id: int, event: Dict[str, Any], trace_id: str):
+        """在后台线程中执行任务"""
+        try:
+            # 创建新的数据库会话用于更新任务状态
+            db = self._get_db_session()
+            try:
+                # 获取任务实例
+                task_instance = db.query(TaskInstance).filter(TaskInstance.id == task_instance_id).first()
+                if not task_instance or task_instance.status != 'assigned':
+                    logger.warning(f"任务 {task_instance_id} 状态已改变，跳过执行")
+                    return
+                
+                # 执行Agent任务
+                execution_result = agent_executor.execute_agent_task(agent, task, event, trace_id)
+                
+                # 更新任务实例状态和结果
+                task_instance.status = 'completed' if execution_result.get('success', True) else 'failed'
+                task_instance.result = {
+                    **task_instance.result,
+                    'execution_result': execution_result,
+                    'completed_at': datetime.now().isoformat()
+                }
+                task_instance.completed_at = datetime.now()
+                db.commit()
+                
+                status_text = '成功' if execution_result.get('success', True) else '失败'
+                logger.info(f"Agent '{agent.name}' 执行任务 '{task.name}' {status_text}")
+                self._log('info', 'agent_execution', f"Agent '{agent.name}' 执行任务 '{task.name}' {status_text}", 
+                         {'agent_name': agent.name, 'task_name': task.name, 'status': task_instance.status}, trace_id)
+                
+            finally:
+                db.close()
+                
+        except Exception as e:
+            logger.error(f"后台任务执行失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            # 更新任务实例为失败状态
+            try:
+                db = self._get_db_session()
+                task_instance = db.query(TaskInstance).filter(TaskInstance.id == task_instance.id).first()
+                if task_instance:
+                    task_instance.status = 'failed'
+                    task_instance.result = {
+                        **task_instance.result,
+                        'error': str(e),
+                        'completed_at': datetime.now().isoformat()
+                    }
+                    task_instance.completed_at = datetime.now()
+                    db.commit()
+            except:
+                pass
+            finally:
+                db.close()
 
 drive_engine = DriveEngine()
