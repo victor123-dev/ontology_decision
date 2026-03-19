@@ -242,26 +242,56 @@ class DriveEngine:
             return event.get('data', {})
     
     def _assign_tasks(self, tasks: List[Task], event: Dict[str, Any], db, trace_id: str = None):
-        """分配任务给Agent - 只创建任务实例，不立即执行"""
+        """分配任务给Agent - 只创建任务实例，不立即执行(支持任务组)"""
         try:
-            for task in tasks:
-                # 创建任务实例，初始状态为 pending
-                task_instance = TaskInstance(
-                    task_id=task.id,
-                    assigned_agent_id=None,
-                    status='pending',
-                    result={
-                        'event': event,
-                        'created_at': datetime.now().isoformat(),
-                        'trace_id': trace_id
-                    }
-                )
-                db.add(task_instance)
-                db.commit()
+            if len(tasks) <= 1:
+                # 单个任务：保持原有逻辑
+                for task in tasks:
+                    task_instance = TaskInstance(
+                        task_id=task.id,
+                        assigned_agent_id=None,
+                        status='pending',
+                        result={
+                            'event': event,
+                            'created_at': datetime.now().isoformat(),
+                            'trace_id': trace_id,
+                            'is_group_task': False
+                        }
+                    )
+                    db.add(task_instance)
+                    db.commit()
 
-                logger.info(f"任务 '{task.name}' 已创建，等待调度")
-                self.stats['tasks_created'] += 1
-                self._log('info', 'agent_task', f"任务 '{task.name}' 已创建，等待调度", {'task_name': task.name}, trace_id)
+                    logger.info(f"任务 '{task.name}' 已创建，等待调度")
+                    self.stats['tasks_created'] += 1
+                    self._log('info', 'agent_task', f"任务 '{task.name}' 已创建，等待调度", {'task_name': task.name}, trace_id)
+            else:
+                # 多个任务：创建任务组标识
+                import uuid
+                group_id = str(uuid.uuid4())
+                
+                for i, task in enumerate(tasks):
+                    task_instance = TaskInstance(
+                        task_id=task.id,
+                        assigned_agent_id=None,
+                        status='pending',
+                        result={
+                            'event': event,
+                            'created_at': datetime.now().isoformat(),
+                            'trace_id': trace_id,
+                            'is_group_task': True,
+                            'group_id': group_id,
+                            'group_size': len(tasks),
+                            'group_index': i,
+                            'group_tasks': [t.name for t in tasks]
+                        }
+                    )
+                    db.add(task_instance)
+                    db.commit()
+                    
+                    logger.info(f"任务组任务 '{task.name}' (组ID: {group_id}) 已创建，等待调度")
+                    self.stats['tasks_created'] += 1
+                    self._log('info', 'agent_task_group', f"任务组任务 '{task.name}' 已创建", 
+                             {'task_name': task.name, 'group_id': group_id, 'group_index': i}, trace_id)
                 
         except Exception as e:
             self.stats['errors'] += 1

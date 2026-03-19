@@ -1,3 +1,6 @@
+from sqlalchemy.sql.schema import Column
+
+
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from app.models.agent import Agent
@@ -28,14 +31,15 @@ class AgentExecutor:
         engine = create_engine("sqlite:///data.db")
         Session = sessionmaker(bind=engine)
         return Session()
-    
-    def execute_agent_task(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+        
+    def execute_agent_task_group(self, agents: List[Agent], tasks: List[Task], 
+                               event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """
-        执行Agent任务的具体逻辑 - 根据Agent名称和能力类型进行不同的模拟
+        执行Agent任务组的具体逻辑 - 根据Agent名称和能力类型进行不同的模拟
         
         Args:
-            agent: Agent对象
-            task: 任务对象
+            agents: Agent对象列表
+            tasks: 任务对象列表
             event: 触发事件
             trace_id: 追踪ID
             
@@ -46,15 +50,17 @@ class AgentExecutor:
             self.stats['executions'] += 1
             
             # 根据Agent名称进行特定的模拟执行逻辑
-            agent_name = agent.name
+            agent_names = [agent.name for agent in agents]
             
             # 可以在这里添加针对特定Agent名称的自定义逻辑
-            if agent_name == "智能配方研发Agent":
-                execution_result = self._execute_product_development(agent, task, event, trace_id)
-            if agent_name == "询价Agent":
-                execution_result = self._execute_quote_agent(agent, task, event, trace_id)
-            if agent_name == "估价核算Agent	":
-                execution_result = self._execute_evaluation_agent(agent, task, event, trace_id)
+            if agent_names == ["智能配方研发Agent"]:
+                execution_result = self._execute_product_development(agents[0], tasks[0], event, trace_id)
+            if agent_names == ["询价Agent"]:
+                execution_result = self._execute_inquiry_agent(agents[0], tasks[0], event, trace_id)
+            if agent_names == ["估价核算Agent"]:
+                execution_result = self._execute_evaluation_agent(agents[0], tasks[0], event, trace_id)
+            if set(agent_names) == {"报价Agent", "邮件发送Agent"}:
+                execution_result = self._execute_quote_agents(agents, tasks, event, trace_id)  
             # 添加更多特定Agent的执行逻辑...
             
             if execution_result.get('success', True):
@@ -483,7 +489,7 @@ class AgentExecutor:
             # 降级方案：使用需求规格中的逗号改为-拼接作为产品名
             return spec_requirement.replace('，', '-')
     
-    def _execute_quote_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+    def _execute_inquiry_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """询价Agent执行逻辑"""
         try:
             material_data = event.get('data', {})
@@ -860,8 +866,8 @@ class AgentExecutor:
                 # 获取询价任务
                 db = self._get_system_db_session()
                 try:
-                    quote_task = db.query(Task).filter(Task.name == "物料询价").first()
-                    if not quote_task:
+                    inquiry_task = db.query(Task).filter(Task.name == "物料询价").first()
+                    if not inquiry_task:
                         logger.warning("未找到询价任务，跳过询价")
                     else:
                         # 为每个需要询价的物料执行询价
@@ -879,21 +885,21 @@ class AgentExecutor:
                             if material_result:
                                 material_data = material_result[0]
                                 # 构造询价事件
-                                quote_event = {
+                                inquiry_event = {
                                     "data": material_data
                                 }
                                 
                                 # 同步执行询价任务
-                                quote_result = task_manager.assign_and_wait_for_task(
-                                    quote_task, 
-                                    quote_event, 
+                                inquiry_result = task_manager.assign_and_wait_for_task(
+                                    inquiry_task, 
+                                    inquiry_event, 
                                     trace_id, 
                                     timeout=60  # 1分钟超时
                                 )
                                 
-                                if quote_result['success']:
+                                if inquiry_result['success']:
                                     # 获取新的报价
-                                    new_price = quote_result['result']['output_data']['reply_price']
+                                    new_price = inquiry_result['result']['output_data']['reply_price']
                                     logger.info(f"物料 {material_id} 询价成功，新价格: {new_price}")
                                     
                                     # 更新该物料的价格用于成本计算
@@ -909,7 +915,7 @@ class AgentExecutor:
                                             total_material_cost = total_material_cost - old_material_cost + new_material_cost
                                             break
                                 else:
-                                    logger.warning(f"物料 {material_id} 询价失败: {quote_result.get('error', 'Unknown error')}")
+                                    logger.warning(f"物料 {material_id} 询价失败: {inquiry_result.get('error', 'Unknown error')}")
                 finally:
                     db.close()
             
@@ -981,6 +987,19 @@ class AgentExecutor:
                 'error': str(e),
                 'executed_at': datetime.now().isoformat()
             }
-    
+
+    def _execute_quote_agents(self, agents: List[Agent], tasks: List[Task], event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+        """暂不执行报价Agent的任务，仅返回成功结果"""
+        return {
+            'success': True,
+            'message': f"Agent '{[agent.name for agent in agents]}' 成功执行了任务 '{[task.name for task in tasks]}' ",
+            'executed_at': datetime.now().isoformat(),
+            'input_data': event.get('data', {}),
+            'output_data': {
+                'status': 'completed',
+                'result': f"任务 '{[task.name for task in tasks]}' 已完成"
+            }
+        }
+
 # 全局Agent执行器实例
 agent_executor = AgentExecutor()
