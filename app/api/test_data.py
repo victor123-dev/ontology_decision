@@ -46,7 +46,7 @@ def insert_test_data(
     if not data_source:
         raise HTTPException(status_code=404, detail="DataSource not found")
     
-    success = data_source_manager.execute_insert(data_source_id, table_name, data)
+    success = data_source_manager.execute_insert(data_source_id=data_source_id, table_name=table_name, data=data)
     
     if success:
         return {"message": "Data inserted successfully"}
@@ -67,7 +67,7 @@ def delete_test_data(
     if not data:
         raise HTTPException(status_code=400, detail="Delete conditions are required")
     
-    success = data_source_manager.execute_delete(data_source_id, table_name, data)
+    success = data_source_manager.execute_delete(data_source_id=data_source_id, table_name=table_name, conditions=data)
     
     if success:
         return {"message": "Data deleted successfully"}
@@ -88,7 +88,7 @@ def update_test_data(
     if not data:
         raise HTTPException(status_code=400, detail="Update data is required")
     
-    success = data_source_manager.execute_update(data_source_id, table_name, data)
+    success = data_source_manager.execute_update(data_source_id=data_source_id, table_name=table_name, data=data)
     
     if success:
         return {"message": "Data updated successfully"}

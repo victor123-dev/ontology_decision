@@ -269,7 +269,8 @@ class DriveEngine:
                 )
                 db.add(task_instance)
                 db.flush()  # 获取task_instance.id
-                
+                db.commit()
+
                 if matched_agent:
                     logger.info(f"任务 '{task.name}' 已分配给 Agent: {matched_agent.name}")
                     self.stats['tasks_assigned'] += 1
@@ -280,9 +281,6 @@ class DriveEngine:
                 else:
                     logger.warning(f"没有找到支持能力ID '{task.capability_id}' 的Agent，任务 '{task.name}' 等待分配")
                     self._log('warning', 'agent_task', f"没有找到支持能力ID '{task.capability_id}' 的Agent，任务 '{task.name}' 等待分配", {'task_name': task.name, 'capability_id': task.capability_id}, trace_id)
-                
-                db.commit()
-            
         except Exception as e:
             self.stats['errors'] += 1
             logger.error(f"分配任务失败: {str(e)}")

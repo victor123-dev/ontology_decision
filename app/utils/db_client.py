@@ -44,7 +44,7 @@ class DBClient:
         pk_constraint = inspector.get_pk_constraint(table_name)
         return pk_constraint.get('constrained_columns', [])
     
-    def execute_query(self, query: str, params: Dict = None) -> List[Dict]:
+    def execute_query(self, query: str, params=None) -> List[Dict]:
         if self.db_type == 'sqlite':
             conn = sqlite3.connect(self.connection_string.replace('sqlite:///', ''))
             conn.row_factory = sqlite3.Row
@@ -53,8 +53,17 @@ class DBClient:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            rows = cursor.fetchall()
-            result = [dict(row) for row in rows]
+            
+            # 检查是否是查询语句（SELECT）
+            is_select = query.strip().upper().startswith('SELECT')
+            if is_select:
+                rows = cursor.fetchall()
+                result = [dict(row) for row in rows]
+            else:
+                # 对于非查询语句（INSERT/UPDATE/DELETE），提交事务并返回空列表
+                conn.commit()
+                result = []
+            
             conn.close()
             return result
         else:
