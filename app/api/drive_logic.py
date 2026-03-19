@@ -62,7 +62,7 @@ def get_drive_logics(db: Session = Depends(get_db)):
             "config": logic.config,
             "description": logic.description,
             "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
-            "tasks": [{"id": t.id, "name": t.name, "capability_id": t.capability_id} for t in logic.tasks],
+            "tasks": [{"id": t.id, "name": t.name, "capability_ids": [cap.id for cap in t.capabilities]} for t in logic.tasks],
             "created_at": logic.created_at,
             "updated_at": logic.updated_at
         })
@@ -75,16 +75,16 @@ def get_drive_logic(logic_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="DriveLogic not found")
     
     return {
-        "id": logic.id,
-        "name": logic.name,
-        "type": logic.type,
-        "config": logic.config,
-        "description": logic.description,
-        "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
-        "tasks": [{"id": t.id, "name": t.name, "capability_id": t.capability_id} for t in logic.tasks],
-        "created_at": logic.created_at,
-        "updated_at": logic.updated_at
-    }
+            "id": logic.id,
+            "name": logic.name,
+            "type": logic.type,
+            "config": logic.config,
+            "description": logic.description,
+            "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
+            "tasks": [{"id": t.id, "name": t.name, "capability_ids": [cap.id for cap in t.capabilities]} for t in logic.tasks],
+            "created_at": logic.created_at,
+            "updated_at": logic.updated_at
+        }
 
 @router.put("/drive-logics/{logic_id}")
 def update_drive_logic(logic_id: int, logic: dict, db: Session = Depends(get_db)):
@@ -135,13 +135,21 @@ def delete_drive_logic(logic_id: int, db: Session = Depends(get_db)):
 def create_task(task: dict, db: Session = Depends(get_db)):
     db_task = Task(
         name=task.get("name"),
-        capability_id=task.get("capability_id"),
         config=task.get("config"),
         description=task.get("description")
     )
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
+    
+    # 关联能力
+    capability_ids = task.get("capability_ids", [])
+    if capability_ids:
+        capabilities = db.query(Capability).filter(Capability.id.in_(capability_ids)).all()
+        db_task.capabilities = capabilities
+        db.commit()
+        db.refresh(db_task)
+    
     return db_task
 
 @router.get("/tasks")
@@ -152,7 +160,7 @@ def get_tasks(db: Session = Depends(get_db)):
         task_dict = {
             "id": task.id,
             "name": task.name,
-            "capability_id": task.capability_id,
+            "capability_ids": [cap.id for cap in task.capabilities],
             "config": task.config,
             "description": task.description,
             "created_at": task.created_at,
@@ -169,12 +177,19 @@ def update_task(task_id: int, task: dict, db: Session = Depends(get_db)):
     
     if "name" in task:
         db_task.name = task["name"]
-    if "capability_id" in task:
-        db_task.capability_id = task["capability_id"]
     if "config" in task:
         db_task.config = task["config"]
     if "description" in task:
         db_task.description = task["description"]
+    
+    # 更新能力关联
+    if "capability_ids" in task:
+        capability_ids = task["capability_ids"]
+        if capability_ids:
+            capabilities = db.query(Capability).filter(Capability.id.in_(capability_ids)).all()
+            db_task.capabilities = capabilities
+        else:
+            db_task.capabilities = []
     
     db.commit()
     db.refresh(db_task)

@@ -18,6 +18,13 @@ logic_task_association = Table(
     Column('task_id', Integer, ForeignKey('tasks.id'))
 )
 
+task_capability_association = Table(
+    'task_capability_association',
+    Base.metadata,
+    Column('task_id', Integer, ForeignKey('tasks.id')),
+    Column('capability_id', Integer, ForeignKey('capabilities.id'))
+)
+
 class DriveLogic(Base):
     __tablename__ = "drive_logics"
     
@@ -38,17 +45,13 @@ class Task(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    capability_id = Column(Integer, ForeignKey('capabilities.id'), nullable=False)  # 能力ID，用于匹配Agent
     config = Column(JSON)  # 任务配置参数
     description = Column(Text)
-    assigned_agent_id = Column(Integer, ForeignKey('agents.id'), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # 关联能力
-    capability = relationship("Capability")
-    # 关联Agent
-    assigned_agent = relationship("Agent", back_populates="tasks")
+    # 多对多关系：关联能力
+    capabilities = relationship("Capability", secondary=task_capability_association, backref="tasks")
     # 关联任务实例
     instances = relationship("TaskInstance", back_populates="task")
 

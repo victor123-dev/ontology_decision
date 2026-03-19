@@ -249,10 +249,13 @@ class DriveEngine:
             for task in tasks:
                 matched_agent = None
                 
-                # 根据任务的能力ID匹配Agent
+                # 根据任务的多个能力ID匹配Agent
+                # Agent需要支持任务的所有能力才能执行该任务
+                task_capability_ids = [cap.id for cap in task.capabilities]
                 for agent in agents:
                     agent_capability_ids = [cap.id for cap in agent.capabilities]
-                    if task.capability_id in agent_capability_ids:
+                    # 检查Agent是否支持任务的所有能力
+                    if all(cap_id in agent_capability_ids for cap_id in task_capability_ids):
                         matched_agent = agent
                         break
                 
@@ -279,8 +282,9 @@ class DriveEngine:
                     # 触发Agent模拟执行 - 通过事件回调方式
                     self._simulate_agent_execution(matched_agent, task, task_instance, event, db, trace_id)
                 else:
-                    logger.warning(f"没有找到支持能力ID '{task.capability_id}' 的Agent，任务 '{task.name}' 等待分配")
-                    self._log('warning', 'agent_task', f"没有找到支持能力ID '{task.capability_id}' 的Agent，任务 '{task.name}' 等待分配", {'task_name': task.name, 'capability_id': task.capability_id}, trace_id)
+                    task_capability_ids = [cap.id for cap in task.capabilities]
+                    logger.warning(f"没有找到支持能力ID {task_capability_ids} 的Agent，任务 '{task.name}' 等待分配")
+                    self._log('warning', 'agent_task', f"没有找到支持能力ID {task_capability_ids} 的Agent，任务 '{task.name}' 等待分配", {'task_name': task.name, 'capability_ids': task_capability_ids}, trace_id)
         except Exception as e:
             self.stats['errors'] += 1
             logger.error(f"分配任务失败: {str(e)}")
@@ -297,7 +301,7 @@ class DriveEngine:
                 'task_id': task.id,
                 'task_name': task.name,
                 'task_instance_id': task_instance.id,
-                'capability_id': task.capability_id,
+                'capability_ids': [cap.id for cap in task.capabilities],
                 'event': event,
                 'trace_id': trace_id,
                 'timestamp': datetime.now().isoformat()

@@ -179,6 +179,10 @@ function DriveLogic() {
     if (record.config) {
       formValues.config = JSON.stringify(record.config, null, 2)
     }
+    // 确保capability_ids是数组格式
+    if (record.capability_ids && !Array.isArray(record.capability_ids)) {
+      formValues.capability_ids = [record.capability_ids];
+    }
     taskForm.setFieldsValue(formValues)
     setTaskModalVisible(true)
   }
@@ -187,7 +191,7 @@ function DriveLogic() {
     try {
       const taskData = {
         name: values.name,
-        capability_id: values.capability_id,
+        capability_ids: values.capability_ids || [],
         config: values.config ? JSON.parse(values.config) : null,
         description: values.description
       }
@@ -283,11 +287,14 @@ function DriveLogic() {
     },
     {
       title: '能力',
-      dataIndex: 'capability_id',
-      key: 'capability_id',
-      render: (capabilityId) => {
-        const capability = capabilities.find(cap => cap.id === capabilityId);
-        return <Tag color="blue">{capability ? capability.name : capabilityId}</Tag>;
+      dataIndex: 'capability_ids',
+      key: 'capability_ids',
+      render: (capabilityIds) => {
+        if (!capabilityIds || capabilityIds.length === 0) return '-';
+        return capabilityIds.map((capId, idx) => {
+          const capability = capabilities.find(cap => cap.id === capId);
+          return <Tag key={idx} color="blue">{capability ? capability.name : capId}</Tag>;
+        });
       }
     },
     {
@@ -374,10 +381,13 @@ function DriveLogic() {
           <Form.Item name="task_ids" label="关联任务">
             <Select mode="multiple" placeholder="选择触发后要执行的任务">
               {tasks.map(task => {
-                const capability = capabilities.find(cap => cap.id === task.capability_id);
+                const capabilityNames = task.capability_ids?.map(capId => {
+                  const cap = capabilities.find(c => c.id === capId);
+                  return cap ? cap.name : capId;
+                }) || [];
                 return (
                   <Option key={task.id} value={task.id}>
-                    {task.name} (能力: {capability ? capability.name : task.capability_id})
+                    {task.name} (能力: {capabilityNames.join(', ')})
                   </Option>
                 );
               })}
@@ -427,8 +437,8 @@ function DriveLogic() {
             <Input placeholder="例如：发送温度告警通知" />
           </Form.Item>
           
-          <Form.Item name="capability_id" label="能力" rules={[{ required: true, message: '请选择能力' }]}>
-            <Select placeholder="选择任务需要的能力">
+          <Form.Item name="capability_ids" label="能力" rules={[{ required: true, message: '请选择至少一个能力' }]}>
+            <Select mode="multiple" placeholder="选择任务需要的能力">
               {capabilities.map(cap => (
                 <Option key={cap.id} value={cap.id}>
                   {cap.name}
