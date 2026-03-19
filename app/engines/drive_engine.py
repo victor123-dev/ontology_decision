@@ -2,7 +2,6 @@ import threading
 import time
 from typing import Dict, Any, List
 from datetime import datetime
-from cachetools import TTLCache
 from app.models.drive_logic import DriveLogic, Task, TaskInstance
 from app.models.drive_log import DriveLog
 from app.models.agent import Agent
@@ -26,8 +25,6 @@ class DriveEngine:
         self.event_queue = []
         self.event_lock = threading.Lock()
         
-        self.logic_cache = TTLCache(maxsize=100, ttl=300)
-        
         self.stats = {
             'events_received': 0,
             'logics_matched': 0,
@@ -44,13 +41,7 @@ class DriveEngine:
         process_thread.start()
         self.threads.append(process_thread)
         
-        refresh_thread = threading.Thread(target=self._refresh_logic_cache)
-        refresh_thread.daemon = True
-        refresh_thread.start()
-        self.threads.append(refresh_thread)
-        
         logger.info("数据驱动引擎启动")
-        logger.info("驱动引擎配置: 逻辑缓存(100条目, 5分钟)")
     
     def stop(self):
         """停止驱动引擎"""
@@ -69,7 +60,6 @@ class DriveEngine:
         logger.info(f"匹配逻辑数: {self.stats['logics_matched']}")
         logger.info(f"分配任务数: {self.stats['tasks_assigned']}")
         logger.info(f"错误数: {self.stats['errors']}")
-        logger.info(f"逻辑缓存: {len(self.logic_cache)}/{self.logic_cache.maxsize} 条目")
         logger.info("=" * 60)
 
     def _log(self, level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None):
@@ -92,33 +82,12 @@ class DriveEngine:
         except Exception as e:
             logger.error(f"记录驱动日志失败: {str(e)}")
     
-    def _refresh_logic_cache(self):
-        """定期刷新逻辑缓存"""
-        while self.is_running:
-            time.sleep(300)
-            if self.is_running:
-                self._load_drive_logics()
-    
     def _get_db_session(self):
         """获取数据库会话"""
         engine = create_engine(settings.DATABASE_URL)
         Base.metadata.create_all(bind=engine)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         return SessionLocal()
-    
-    def _load_drive_logics(self):
-        """从数据库加载驱动逻辑"""
-        try:
-            db = self._get_db_session()
-            try:
-                logics = db.query(DriveLogic).all()
-                for logic in logics:
-                    self.logic_cache[logic.id] = logic
-                logger.info(f"已加载 {len(logics)} 条驱动逻辑到缓存")
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(f"加载驱动逻辑失败: {str(e)}")
     
     def handle_event(self, event: Dict[str, Any]):
         """处理事件"""

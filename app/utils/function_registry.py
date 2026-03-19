@@ -111,7 +111,6 @@ class FunctionRegistry:
                     raise ImportError(f"在 functions 包中未找到函数 {func_name}")
 
             self._functions[path] = func
-            logger.info(f"动态加载函数: {path}")
             return func
         except Exception as e:
             raise ImportError(f"无法加载函数 {path}: {str(e)}")
