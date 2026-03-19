@@ -173,7 +173,7 @@ class AgentExecutor:
                 }
             product_id = product_result[0]['id']
             
-            # 4. 插入新物料（如果有）并获取新物料ID
+            # 4. 插入新物料/价格快照（如果有）并获取新物料ID
             material_code_to_id = {}
             for new_material in new_materials:
                 # 生成唯一的material_code
@@ -185,7 +185,7 @@ class AgentExecutor:
                     'material_name': new_material['material_name'],
                     'specification': new_material['specification'],
                     'unit': new_material['unit'],
-                    'base_price': new_material['base_price'],
+                    'base_price': round(new_material['base_price'], 2),
                     'status': 'ACTIVE'
                 }
                 data_source_manager.execute_insert(
@@ -201,6 +201,21 @@ class AgentExecutor:
                 )
                 if material_result:
                     material_code_to_id[material_code] = material_result[0]['id']
+
+                # 写入价格快照表
+                snapshot_data = {
+                    'material_id': material_result[0]['id'],
+                    'price': round(new_material['base_price'], 2),
+                    'valid_from': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'source_type': 'BASE',
+                    'source_id': material_result[0]['id']
+                }
+                
+                success = data_source_manager.execute_insert(
+                    data_source_name='commander_data_database',
+                    table_name='price_snapshot',
+                    data=snapshot_data
+                )
             
             # 5. 维护产品BOM明细
             for item in bom_items:
