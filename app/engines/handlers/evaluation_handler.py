@@ -1,5 +1,5 @@
 """估价核算Agent处理器"""
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import time
 from typing import Dict, Any
@@ -46,6 +46,83 @@ class EvaluationHandler:
         # 生成新编码
         return f"{prefix}{number:03d}"
     
+    def _check_material_price_fluctuation_with_date(self, material_id: int) -> bool:
+        """
+        检查物料价格波动，同时检查最新价格快照是否超过一天
+        """
+        try:
+            if material_id is None:
+                return True
+            
+            # 查询最新的三笔价格快照，包含valid_from日期
+            price_query = f"""
+            SELECT price, valid_from FROM price_snapshot 
+            WHERE material_id = {material_id} ORDER BY valid_from DESC LIMIT 3
+            """
+            
+            price_results = data_source_manager.execute_query(
+                data_source_name='commander_data_database',
+                query=price_query,
+                max_rows=3
+            )
+            
+            # 若查到小于三笔，返回true
+            if len(price_results) < 3:
+                return True
+            
+            # 获取价格阈值
+            threshold_query = """SELECT threshold_percent FROM rule_price WHERE status = 'ACTIVE' LIMIT 1"""
+            
+            threshold_results = data_source_manager.execute_query(
+                data_source_name='commander_data_database',
+                query=threshold_query,
+                max_rows=1
+            )
+            
+            threshold_percent = 5.0
+            if threshold_results:
+                threshold_percent = threshold_results[0].get('threshold_percent', 5.0)
+            
+            # 提取价格并计算波动
+            prices = [result.get('price', 0) for result in price_results]
+            
+            # 计算价格间的波动
+            price_fluctuation_exceeds = False
+            for i in range(len(prices) - 1):
+                price1 = prices[i]
+                price2 = prices[i + 1]
+                
+                if price2 == 0:
+                    continue
+                    
+                fluctuation = abs((price1 - price2) / price2 * 100)
+                if fluctuation > threshold_percent:
+                    price_fluctuation_exceeds = True
+                    break
+            
+            # 检查最新价格快照是否超过一天
+            latest_valid_from = price_results[0].get('valid_from', '')
+            if latest_valid_from:
+                try:
+                    latest_date = datetime.strptime(latest_valid_from, '%Y-%m-%d %H:%M:%S')
+                    one_day_ago = datetime.now() - timedelta(days=1)
+                    price_snapshot_too_old = latest_date < one_day_ago
+                except:
+                    price_snapshot_too_old = True
+            else:
+                price_snapshot_too_old = True
+            
+            # 如果价格波动超过阈值且最新价格快照超过一天，则返回true
+            if price_fluctuation_exceeds and price_snapshot_too_old:
+                return True
+            
+            # 如果价格快照少于3笔，也返回true（已经在前面处理了）
+            return False
+            
+        except Exception as e:
+            logger.error(f"检查物料价格波动和日期失败: {str(e)}")
+            return True
+    
     def execute_evaluation_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """估价核算Agent执行逻辑"""
         try:
@@ -85,31 +162,59 @@ class EvaluationHandler:
                 ORDER BY valid_from DESC 
                 LIMIT 1
                 """
-                price_result = data_source_manager.execute_query(
+                
+                price_results = data_source_manager.execute_query(
                     data_source_name='commander_data_database',
-                    query=price_query
+                    query=price_query,
+                    max_rows=1
                 )
                 
-                if price_result:
-                    # 有价格快照，使用最新价格
-                    latest_price = float(price_result[0]['price'])
-                    effective_usage = unit_usage * (1 + loss_rate)
-                    material_cost = latest_price * effective_usage
-                    total_material_cost += material_cost
+                current_price = 0.0
+                if price_results:
+                    current_price = float(price_results[0].get('price', 0))
+                
+                # 检查是否需要询价
+                need_inquiry = False
+                
+                # 查询最新的三笔价格快照数量
+                three_prices_query = f"""
+                SELECT COUNT(*) as count 
+                FROM price_snapshot 
+                WHERE material_id = {material_id}
+                """
+                count_result = data_source_manager.execute_query(
+                    data_source_name='commander_data_database',
+                    query=three_prices_query,
+                    max_rows=1
+                )
+                price_count = count_result[0].get('count', 0) if count_result else 0
+                
+                if price_count < 3:
+                    need_inquiry = True
                 else:
-                    # 没有价格快照，需要询价
+                    # 检查价格波动和日期
+                    if self._check_material_price_fluctuation_with_date(material_id):
+                        need_inquiry = True
+                
+                if need_inquiry:
                     materials_needing_inquiry.append({
                         'material_id': material_id,
+                        'current_price': current_price,
                         'unit_usage': unit_usage,
                         'loss_rate': loss_rate
                     })
+                
+                # 计算物料成本（即使需要询价，也先用当前价格计算）
+                effective_usage = unit_usage * (1 + loss_rate)
+                material_cost = effective_usage * current_price
+                total_material_cost += material_cost
             
             # 3. 对需要询价的物料执行询价
             if materials_needing_inquiry:
-                # 获取询价任务（假设任务ID为2）
+                # 获取询价任务
                 db = self._get_db_session()
                 try:
-                    inquiry_task = db.query(Task).filter(Task.id == 2).first()
+                    inquiry_task = db.query(Task).filter(Task.name == "物料询价").first()
                     if not inquiry_task:
                         return {
                             'success': False,
@@ -154,9 +259,11 @@ class EvaluationHandler:
                                 logger.info(f"物料 {material_id} 询价成功，新价格: {new_price}")
                                 
                                 # 更新该物料的价格用于成本计算
+                                # 从总成本中减去旧价格，加上新价格
                                 effective_usage = material_info['unit_usage'] * (1 + material_info['loss_rate'])
-                                material_cost = new_price * effective_usage
-                                total_material_cost += material_cost
+                                old_material_cost = effective_usage * material_info['current_price']
+                                new_material_cost = effective_usage * new_price
+                                total_material_cost = total_material_cost - old_material_cost + new_material_cost
                             else:
                                 logger.warning(f"物料 {material_id} 询价失败，跳过该物料")
                                 # 可以选择使用基准价或跳过
@@ -221,6 +328,7 @@ class EvaluationHandler:
                     'material_cost': round(total_material_cost, 2),
                     'total_cost': round(total_cost, 2),
                     'suggested_price': round(suggested_price, 2),
+                    'materials_needing_inquiry': len(materials_needing_inquiry),
                     'updated_at': datetime.now().isoformat()
                 }
             }
