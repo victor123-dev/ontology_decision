@@ -57,7 +57,7 @@ class EvaluationHandler:
             # 查询最新的三笔价格快照，包含valid_from日期
             price_query = f"""
             SELECT price, valid_from FROM price_snapshot 
-            WHERE material_id = {material_id} ORDER BY valid_from DESC LIMIT 3
+            WHERE material_id = {material_id} ORDER BY valid_from DESC
             """
             
             price_results = data_source_manager.execute_query(
@@ -71,7 +71,7 @@ class EvaluationHandler:
                 return True
             
             # 获取价格阈值
-            threshold_query = """SELECT threshold_percent FROM rule_price WHERE status = 'ACTIVE' LIMIT 1"""
+            threshold_query = """SELECT threshold_percent FROM rule_price WHERE status = 'ACTIVE'"""
             
             threshold_results = data_source_manager.execute_query(
                 data_source_name='commander_data_database',
@@ -160,7 +160,6 @@ class EvaluationHandler:
                 FROM price_snapshot 
                 WHERE material_id = {material_id} 
                 ORDER BY valid_from DESC 
-                LIMIT 1
                 """
                 
                 price_results = data_source_manager.execute_query(
