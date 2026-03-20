@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from app.api import example, data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution
@@ -7,6 +8,7 @@ from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
 from app.engines.data_sensing_engine import data_sensing_engine
 from app.engines.drive_engine import drive_engine
+from app.engines.task_manager import task_manager
 
 logger = get_logger(__name__)
 
@@ -16,16 +18,30 @@ def event_callback(event):
 
 data_sensing_engine.register_event_callback(event_callback)
 
-# 启动引擎
-data_sensing_engine.start()
-drive_engine.start()
+# 定义应用生命周期管理
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时
+    logger.info("启动所有引擎...")
+    data_sensing_engine.start()
+    drive_engine.start()
+    task_manager.start()
+    
+    yield
+    
+    # 关闭时
+    logger.info("停止所有引擎...")
+    task_manager.stop()
+    drive_engine.stop()
+    data_sensing_engine.stop()
 
 app = FastAPI(
     title="Data Driven Project",
     description="数据驱动项目系统",
     version=settings.APP_VERSION,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # 添加CORS中间件

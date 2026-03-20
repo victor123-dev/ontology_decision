@@ -1,10 +1,9 @@
+from calendar import c
+import json
 import threading
 import time
-import json
-import hashlib
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from diskcache import Cache
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +14,8 @@ from app.models.drive_log import DriveLog
 from app.utils.db_client import DBClient
 from app.utils.logger import get_logger
 from app.config import settings
+from .cache_manager import CacheManager
+from .shared_utils import get_db_session, log_event
 
 logger = get_logger(__name__)
 
@@ -32,20 +33,8 @@ class DataSensingEngine:
         # 线程池 - 用于执行检查任务
         self.executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="sensing_")
         
-        # 使用 DiskCache 管理数据变化状态
-        # 存储在 .cache 目录中，使用不同的子缓存
-        self.data_states = Cache('.cache/data_states')  # 数据变化状态
-        
-        # 使用 DiskCache 管理阈值触发状态
-        self.threshold_states = Cache('.cache/threshold_states')  # 阈值触发状态
-        
-        # 使用 DiskCache 缓存查询结果，减少数据库压力
-        self.query_cache = Cache('.cache/query_cache')  # 查询结果缓存
-        
-        # 缓存过期时间设置（与原来的TTL保持一致）
-        self.DATA_STATE_TTL = 3600  # 数据变化状态：1小时
-        self.THRESHOLD_STATE_TTL = 86400  # 阈值触发状态：24小时
-        self.QUERY_CACHE_TTL = 30  # 查询结果缓存：30秒
+        # 缓存管理器
+        self.cache_manager = CacheManager()
         
         # 配置任务映射 - 记录config_id对应的job_id
         self.config_jobs: Dict[int, str] = {}
@@ -55,8 +44,6 @@ class DataSensingEngine:
             'events_triggered': 0,
             'tasks_executed': 0,
             'tasks_failed': 0,
-            'cache_hits': 0,
-            'cache_misses': 0,
             'db_queries': 0
         }
         
@@ -72,11 +59,6 @@ class DataSensingEngine:
         
         # 加载所有配置并创建调度任务
         self._load_all_configs()
-        
-        # 启动统计信息打印线程（每5分钟打印一次）
-        stats_thread = threading.Thread(target=self._print_stats_periodically)
-        stats_thread.daemon = True
-        stats_thread.start()
         
         logger.info("数据感知引擎启动")
         logger.info(f"调度器已启动，线程池大小: 10")
@@ -95,48 +77,14 @@ class DataSensingEngine:
         logger.info("数据感知引擎停止")
         self._print_stats()
     
-    def _log(self, level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None):
-        """记录驱动日志"""
-        try:
-            from sqlalchemy.orm import sessionmaker
-            from app.utils.db_client import create_engine
-            from app.config import settings
-            import uuid
-            
-            engine = create_engine(settings.DATABASE_URL)
-            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-            db = SessionLocal()
-            try:
-                log = DriveLog(
-                    level=level,
-                    category=category,
-                    message=message,
-                    data=data,
-                    trace_id=trace_id or str(uuid.uuid4())
-                )
-                db.add(log)
-                db.commit()
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(f"记录驱动日志失败: {str(e)}")
-    
+
     def register_event_callback(self, callback):
         """注册事件回调函数"""
         self.event_callbacks.append(callback)
     
-    def _print_stats_periodically(self):
-        """定期打印统计信息"""
-        while self.is_running:
-            time.sleep(300)  # 每5分钟
-            if self.is_running:
-                self._print_stats()
-    
     def _print_stats(self):
         """打印统计信息"""
-        total_cache_ops = self.stats['cache_hits'] + self.stats['cache_misses']
-        cache_hit_rate = (self.stats['cache_hits'] / total_cache_ops * 100) if total_cache_ops > 0 else 0
-        
+
         logger.info("=" * 60)
         logger.info("数据感知引擎统计信息")
         logger.info("=" * 60)
@@ -144,52 +92,16 @@ class DataSensingEngine:
         logger.info(f"任务执行次数: {self.stats['tasks_executed']}")
         logger.info(f"任务失败次数: {self.stats['tasks_failed']}")
         logger.info(f"数据库查询次数: {self.stats['db_queries']}")
-        logger.info(f"缓存命中率: {cache_hit_rate:.1f}% ({self.stats['cache_hits']}/{total_cache_ops})")
         logger.info(f"调度任务数: {len(self.config_jobs)}")
-        logger.info(f"数据状态缓存: {len(self.data_states)} 条目")
-        logger.info(f"阈值状态缓存: {len(self.threshold_states)} 条目")
-        logger.info(f"查询缓存: {len(self.query_cache)} 条目")
+        logger.info(f"数据状态缓存: {len(self.cache_manager.data_states)} 条目")
+        logger.info(f"阈值状态缓存: {len(self.cache_manager.threshold_states)} 条目")
         logger.info("=" * 60)
     
-    def _get_db_session(self):
-        """获取数据库会话"""
-        from sqlalchemy.orm import sessionmaker
-        from app.utils.db_client import create_engine, Base
-        
-        engine = create_engine(settings.DATABASE_URL)
-        Base.metadata.create_all(bind=engine)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        return SessionLocal()
-    
-    def _compute_data_hash(self, data: List[Dict]) -> str:
-        """计算数据的哈希值，用于比较数据变化"""
-        if not data:
-            return ""
-        data_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
-        return hashlib.md5(data_str.encode()).hexdigest()
-    
-    def _get_record_key(self, record: Dict, primary_key: str = "id") -> str:
-        """获取记录的唯一标识"""
-        return str(record.get(primary_key, json.dumps(record, sort_keys=True)))
-    
-    def _get_cached_query(self, cache_key: str) -> Optional[List[Dict]]:
-        """获取缓存的查询结果"""
-        try:
-            result = self.query_cache[cache_key]
-            self.stats['cache_hits'] += 1
-            return result
-        except KeyError:
-            self.stats['cache_misses'] += 1
-            return None
-    
-    def _set_cached_query(self, cache_key: str, data: List[Dict]):
-        """设置查询缓存"""
-        self.query_cache.set(cache_key, data, expire=self.QUERY_CACHE_TTL)
-    
+
     def _load_all_configs(self):
         """加载所有配置并创建调度任务"""
         try:
-            db = self._get_db_session()
+            db = get_db_session()
             try:
                 # 只加载生效的配置
                 configs = db.query(DataSensingConfig).filter(DataSensingConfig.status == True).all()
@@ -250,7 +162,7 @@ class DataSensingEngine:
         try:
             self.stats['tasks_executed'] += 1
             
-            db = self._get_db_session()
+            db = get_db_session()
             try:
                 config = db.query(DataSensingConfig).filter(DataSensingConfig.id == config_id).first()
                 if not config:
@@ -298,10 +210,10 @@ class DataSensingEngine:
         """移除配置（删除调度任务）"""
         self._remove_config_job(config_id)
         # 清理相关缓存
-        if config_id in self.data_states:
-            del self.data_states[config_id]
-        if config_id in self.threshold_states:
-            del self.threshold_states[config_id]
+        if config_id in self.cache_manager.data_states:
+            del self.cache_manager.data_states[config_id]
+        if config_id in self.cache_manager.threshold_states:
+            del self.cache_manager.threshold_states[config_id]
         logger.info(f"移除配置 {config_id} 的调度任务和相关缓存")
     
     def _monitor_data_change(self, config: DataSensingConfig, db):
@@ -330,36 +242,41 @@ class DataSensingEngine:
             try:
                 table_name = model.id
                 
-                # 检查查询缓存
-                cached_data = self._get_cached_query(query_cache_key)
-                if cached_data is not None:
-                    current_data = cached_data
-                else:
-                    # 执行查询 - 总是查询所有字段，确保记录完整
-                    fields_str = '*'
-                    query = f"SELECT {fields_str} FROM {table_name}"
-                    current_data = client.execute_query(query)
-                    self.stats['db_queries'] += 1
-                    
-                    # 缓存查询结果
-                    self._set_cached_query(query_cache_key, current_data)
+                # 执行查询 - 总是查询所有字段，确保记录完整
+                fields_str = '*'
+                query = f"SELECT {fields_str} FROM {table_name}"
+                current_data = client.execute_query(query)
+                self.stats['db_queries'] += 1
                 
-                current_records = {self._get_record_key(row, primary_key): row for row in current_data}
+                current_records = {self.cache_manager.get_record_key(row, primary_key): row for row in current_data}
                 
                 config_id = config.id
-                last_state = self.data_states.get(config_id, {})
+                last_state = self.cache_manager.get_data_state(config_id) or {}
                 last_records = last_state.get('records', {})
+                
+                # 初始化变化记录变量
+                created_records = []
+                deleted_records = []
+                updated_records = []
+                
+                # 调试日志：记录当前和上次的数据状态
+                current_record_count = len(current_records)
+                last_record_count = len(last_records)
+                logger.debug(f"配置 {config_id} 数据状态 - 当前记录数: {current_record_count}, 上次记录数: {last_record_count}")
                 
                 # 检测新增
                 if 'create' in trigger_conditions:
                     created_records = []
                     for key, record in current_records.items():
                         if key not in last_records:
-                            created_records.append(record)
+                            created_records.append({
+                                "record": record
+                            })
                     
                     if created_records:
+                        logger.info(f"检测到 {len(created_records)} 条新增记录，触发创建事件")
                         self.trigger_event(
-                            "data_change",
+                            config.name,
                             config.model_id,
                             {
                                 "config_id": config.id,
@@ -376,11 +293,14 @@ class DataSensingEngine:
                     deleted_records = []
                     for key, record in last_records.items():
                         if key not in current_records:
-                            deleted_records.append(record)
+                            deleted_records.append({
+                                "record": record
+                            })
                     
                     if deleted_records:
+                        logger.info(f"检测到 {len(deleted_records)} 条删除记录，触发删除事件")
                         self.trigger_event(
-                            "data_change",
+                            config.name,
                             config.model_id,
                             {
                                 "config_id": config.id,
@@ -421,8 +341,15 @@ class DataSensingEngine:
                                 })
                     
                     if updated_records:
+                        logger.info(f"检测到 {len(updated_records)} 条更新记录，触发更新事件")
+                        # 记录具体的变更字段用于调试
+                        for record_info in updated_records[:3]:  # 只记录前3条的详细信息
+                            changed_fields = record_info.get('changed_fields', [])
+                            if changed_fields:
+                                field_names = [f['field'] for f in changed_fields]
+                                logger.debug(f"记录变更字段: {field_names}")
                         self.trigger_event(
-                            "data_change",
+                            config.name,
                             config.model_id,
                             {
                                 "config_id": config.id,
@@ -434,13 +361,18 @@ class DataSensingEngine:
                             }
                         )
                 
+                # 检查是否有任何变化
+                has_changes = (created_records or deleted_records or updated_records)
+                
+                if not has_changes:
+                    logger.debug(f"配置 {config_id} 未检测到数据变化，跳过事件触发")
+                
                 # 更新状态缓存
                 state_data = {
                     'records': current_records,
-                    'record_count': len(current_data),
-                    'data_hash': self._compute_data_hash(current_data)
+                    'record_count': len(current_data)
                 }
-                self.data_states.set(config_id, state_data, expire=self.DATA_STATE_TTL)
+                self.cache_manager.set_data_state(config_id, state_data)
                 
             finally:
                 client.close()
@@ -484,25 +416,18 @@ class DataSensingEngine:
                 if threshold_type == 'dynamic' and threshold_field:
                     query_fields.append(threshold_field)
                 
-                query_cache_key = f"{model.id}:{','.join(query_fields)}"
-                
-                cached_data = self._get_cached_query(query_cache_key)
-                if cached_data is not None:
-                    data = cached_data
-                else:
-                    query = f"SELECT {', '.join(query_fields)} FROM {table_name}"
-                    data = client.execute_query(query)
-                    self.stats['db_queries'] += 1
-                    self._set_cached_query(query_cache_key, data)
+                query = f"SELECT {', '.join(query_fields)} FROM {table_name}"
+                data = client.execute_query(query)
+                self.stats['db_queries'] += 1
                 
                 config_id = config.id
                 if config_id not in self.threshold_states:
-                    self.threshold_states.set(config_id, {}, expire=self.THRESHOLD_STATE_TTL)
+                    self.cache_manager.set_threshold_state(config_id, {})
                 
                 triggered_records = []
                 
                 for row in data:
-                    record_key = self._get_record_key(row, primary_key)
+                    record_key = self.cache_manager.get_record_key(row, primary_key)
                     value = row.get(monitored_field)
                     
                     if value is None:
@@ -547,7 +472,7 @@ class DataSensingEngine:
                     elif operator == 'lte' and value <= threshold_val:
                         is_triggered = True
                     
-                    threshold_state = self.threshold_states.get(config_id, {})
+                    threshold_state = self.cache_manager.get_threshold_state(config_id) or {}
                     was_triggered = threshold_state.get(record_key, False)
                     
                     if is_triggered and not was_triggered:
@@ -560,10 +485,10 @@ class DataSensingEngine:
                         })
                     
                     # 获取当前阈值状态
-                    threshold_state = self.threshold_states.get(config_id, {})
+                    threshold_state = self.cache_manager.get_threshold_state(config_id) or {}
                     threshold_state[record_key] = is_triggered
                     # 更新缓存并设置过期时间
-                    self.threshold_states.set(config_id, threshold_state, expire=self.THRESHOLD_STATE_TTL)
+                    self.cache_manager.set_threshold_state(config_id, threshold_state)
                 
                 if triggered_records:
                     # 对于静态阈值，使用配置中的阈值；对于动态阈值，不传递全局阈值（因为每条记录的阈值可能不同）
@@ -579,7 +504,7 @@ class DataSensingEngine:
                         event_data["threshold_value"] = config_dict.get('threshold_value')
                     
                     self.trigger_event(
-                        "threshold",
+                        config.name,
                         config.model_id,
                         event_data
                     )
@@ -613,7 +538,7 @@ class DataSensingEngine:
                 logger.error(f"事件回调出错: {str(e)}")
         
         logger.info(f"触发事件: {event_type}, 模型: {model_id}, 数据: {json.dumps(data, ensure_ascii=False, default=str)[:200]}")
-        self._log('info', 'data_sensing', f"触发事件: {event_type}, 模型: {model_id}", event, trace_id)
+        log_event('info', 'data_sensing', f"触发事件: {event_type}, 模型: {model_id}", event, trace_id)
 
 
 # 全局引擎实例
