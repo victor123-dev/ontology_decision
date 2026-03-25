@@ -1,5 +1,5 @@
 import json
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 from openai.resources.chat import Chat, Completions
 
 
@@ -63,6 +63,8 @@ class ChatCompletionsWrapper:
                 if "index" in choice:
                     choice_log["index"] = choice["index"]
                 response_log["choices"].append(choice_log)
+        if "usage" in response_dict:
+            response_log["usage"] = response_dict["usage"]
         
         # 记录响应
         llm_logger.debug(f"LLM API响应: {json.dumps(response_log, ensure_ascii=False, indent=2)}")
@@ -101,12 +103,25 @@ class LLMClient:
     """
     
     def __init__(self):
-        # 初始化Azure OpenAI客户端
-        self.client = AzureOpenAI(
-            azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-            api_key=settings.AZURE_OPENAI_API_KEY,
-            api_version=settings.AZURE_OPENAI_API_VERSION
-        )
+        # 优先使用阿里云DashScope（Owen3.5-Plus）
+        if settings.DASHSCOPE_API_KEY:
+            llm_logger.info(f"初始化阿里云DashScope客户端")
+            self.client = OpenAI(
+                base_url=settings.DASHSCOPE_BASE_URL,
+                api_key=settings.DASHSCOPE_API_KEY
+            )
+            self.model_name = settings.OWEN_3_5_PLUS_MODEL
+        # 否则使用Azure OpenAI
+        elif settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY and settings.AZURE_OPENAI_API_VERSION:
+            llm_logger.info("初始化Azure OpenAI客户端")
+            self.client = AzureOpenAI(
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                api_key=settings.AZURE_OPENAI_API_KEY,
+                api_version=settings.AZURE_OPENAI_API_VERSION
+            )
+            self.model_name = settings.AZURE_OPENAI_ADVANCED_GPT_DEPLOYMENT or settings.AZURE_OPENAI_GPT_DEPLOYMENT or "gpt-35-turbo"
+        else:
+            raise ValueError("未配置有效的LLM提供商（阿里云DashScope或Azure OpenAI）")
     
     @property
     def chat(self):
@@ -125,7 +140,7 @@ class LLMClient:
 
 # 创建单例实例（仅当配置存在时）
 llm_client = None
-if settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY and settings.AZURE_OPENAI_API_VERSION:
+if settings.DASHSCOPE_API_KEY or (settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY and settings.AZURE_OPENAI_API_VERSION):
     try:
         llm_client = LLMClient()
     except Exception as e:

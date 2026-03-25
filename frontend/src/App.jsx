@@ -12,6 +12,7 @@ import Agent from './components/Agent/Agent'
 import TestData from './components/TestData/TestData'
 import DriveLog from './components/DriveLog/DriveLog'
 import TestExecution from './components/TestExecution/TestExecution'
+import DocumentImport from './components/DocumentImport/DocumentImport'
 
 const { Header, Sider, Content } = Layout
 
@@ -69,6 +70,11 @@ function App() {
                 icon: <span>🧪</span>,
                 label: <Link to="/test-execution">测试执行</Link>,
               },
+              {
+                key: 'document-import',
+                icon: <span>📄</span>,
+                label: <Link to="/document-import">文档导入</Link>,
+              },
             ]}
           />
         </Sider>
@@ -113,6 +119,7 @@ function App() {
               <Route path="/test-data" element={<TestData />} />
               <Route path="/drive-log" element={<DriveLog />} />
               <Route path="/test-execution" element={<TestExecution />} />
+              <Route path="/document-import" element={<DocumentImport />} />
               <Route path="/" element={<DataSource />} />
             </Routes>
           </Content>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Tag } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, message, Tag, Popconfirm } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { agentApi } from '../../services/api'
 
 const { Option } = Select
@@ -166,12 +167,19 @@ function Agent() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个Agent吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -194,12 +202,19 @@ function Agent() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEditCapability(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEditCapability(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDeleteCapability(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个能力吗？"
+            onConfirm={() => handleDeleteCapability(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -209,7 +224,7 @@ function Agent() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Agent管理</h2>
-        <Button type="primary" onClick={handleAdd}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           添加Agent
         </Button>
       </div>
@@ -219,7 +234,7 @@ function Agent() {
 
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3>能力清单</h3>
-        <Button type="primary" onClick={handleAddCapability}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCapability}>
           添加能力
         </Button>
       </div>

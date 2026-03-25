@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ADVANCED_GPT_DEPLOYMENT: Optional[str] = None
     AZURE_OPENAI_EMBED_DEPLOYMENT: Optional[str] = None
     
+    # 阿里云DashScope配置
+    DASHSCOPE_API_KEY: Optional[str] = None
+    DASHSCOPE_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    OWEN_3_5_PLUS_MODEL: str = "qwen3.5-plus"
+    
     # Milvus配置
     MILVUS_URL: Optional[str] = None
     MILVUS_USER: Optional[str] = None

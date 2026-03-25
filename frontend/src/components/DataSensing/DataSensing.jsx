@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, Switch, message } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Switch, message, Popconfirm } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { dataSensingApi, businessModelApi } from '../../services/api'
 
 const { Option } = Select
@@ -197,12 +198,19 @@ function DataSensing() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个配置吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -212,7 +220,7 @@ function DataSensing() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>数据感知配置</h2>
-        <Button type="primary" onClick={handleAdd}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           添加配置
         </Button>
       </div>

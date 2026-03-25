@@ -179,7 +179,7 @@
 
 ### 2. 前端配置
 
-- 端口: 3000
+- 端口: 3001
 - API基础URL: http://localhost:8081/api/v1
 - 路由: React Router
 

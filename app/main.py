@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api import example, data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution
+from app.api import example, data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution, document_import
 from app.config import settings
 from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
@@ -66,6 +66,7 @@ app.include_router(agent.router, prefix="/api/v1", tags=["Agent"])
 app.include_router(test_data.router, prefix="/api/v1", tags=["Test Data"])
 app.include_router(drive_log.router, prefix="/api/v1", tags=["Drive Log"])
 app.include_router(test_execution.router, prefix="/api/v1", tags=["Test Execution"])
+app.include_router(document_import.router, prefix="/api/v1", tags=["Document Import"])
 
 # 根路径
 @app.get("/")

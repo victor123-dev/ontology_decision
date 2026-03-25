@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Card, Tag } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, message, Card, Tag, Popconfirm } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { driveLogicApi, dataSensingApi, agentApi } from '../../services/api'
 
 const { Option } = Select
@@ -268,12 +269,19 @@ function DriveLogic() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个驱动逻辑吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -307,12 +315,19 @@ function DriveLogic() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEditTask(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEditTask(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDeleteTask(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个任务吗？"
+            onConfirm={() => handleDeleteTask(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -322,8 +337,8 @@ function DriveLogic() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>驱动逻辑配置</h2>
-        <Button type="primary" onClick={handleAdd}>
-          添加驱动逻辑
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          添加逻辑
         </Button>
       </div>
 
@@ -332,7 +347,7 @@ function DriveLogic() {
 
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3>任务列表</h3>
-        <Button type="primary" onClick={handleAddTask}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddTask}>
           添加任务
         </Button>
       </div>
