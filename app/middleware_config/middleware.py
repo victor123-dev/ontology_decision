@@ -4,7 +4,6 @@ from starlette.responses import Response
 from fastapi.responses import StreamingResponse
 import time
 import json
-import uuid
 from app.utils.logger import get_logger, get_request_logger
 
 logger = get_logger(__name__)

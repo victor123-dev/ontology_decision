@@ -1,7 +1,6 @@
 """缓存管理器 - 管理数据感知引擎的缓存操作"""
 import json
-import hashlib
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from diskcache import Cache
 
 

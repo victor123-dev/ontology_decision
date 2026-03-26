@@ -2,13 +2,14 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api import example, data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution, document_import
+from app.api import data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution, nl_rule_interface, document_import
 from app.config import settings
 from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
 from app.engines.data_sensing_engine import data_sensing_engine
 from app.engines.drive_engine import drive_engine
 from app.engines.task_manager import task_manager
+from app.utils.background_task_processor import background_task_processor
 
 logger = get_logger(__name__)
 
@@ -26,11 +27,13 @@ async def lifespan(app: FastAPI):
     data_sensing_engine.start()
     drive_engine.start()
     task_manager.start()
+    background_task_processor.start()
     
     yield
     
     # 关闭时
     logger.info("停止所有引擎...")
+    background_task_processor.stop()
     task_manager.stop()
     drive_engine.stop()
     data_sensing_engine.stop()
@@ -57,7 +60,6 @@ app.add_middleware(
 app.add_middleware(RequestLoggingMiddleware)
 
 # 包含API路由
-app.include_router(example.router, prefix="/api/v1", tags=["Example"])
 app.include_router(data_source.router, prefix="/api/v1", tags=["Data Source"])
 app.include_router(business_model.router, prefix="/api/v1", tags=["Business Model"])
 app.include_router(data_sensing.router, prefix="/api/v1", tags=["Data Sensing"])
@@ -67,6 +69,7 @@ app.include_router(test_data.router, prefix="/api/v1", tags=["Test Data"])
 app.include_router(drive_log.router, prefix="/api/v1", tags=["Drive Log"])
 app.include_router(test_execution.router, prefix="/api/v1", tags=["Test Execution"])
 app.include_router(document_import.router, prefix="/api/v1", tags=["Document Import"])
+app.include_router(nl_rule_interface.router, prefix="/api/v1", tags=["Natural Language Rule Interface"])
 
 # 根路径
 @app.get("/")

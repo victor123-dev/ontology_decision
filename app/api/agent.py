@@ -1,22 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from app.models.agent import Agent, Capability
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
+from app.utils.shared_utils import get_db
 
 router = APIRouter()
-
-# 数据库会话依赖
-def get_db():
-    engine = create_engine(settings.DATABASE_URL)
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/agents")
 def create_agent(agent: dict, db: Session = Depends(get_db)):

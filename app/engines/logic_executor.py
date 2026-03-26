@@ -3,16 +3,11 @@ import copy
 from typing import Dict, Any, List
 from datetime import datetime
 from app.models.drive_logic import DriveLogic, Task, TaskInstance
-from app.models.agent import Agent
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
 from app.utils.logger import get_logger
 from app.utils.data_source_accessor import DataSourceAccessor
 from app.utils.function_registry import prepare_function_environment, extract_function_names
-from app.engines.agent_executor import agent_executor
-from app.engines.task_manager import task_manager
 import traceback
-from .shared_utils import get_db_session, log_event
+from app.utils.shared_utils import log_event
 
 logger = get_logger(__name__)
 
@@ -22,13 +17,6 @@ class LogicExecutor:
     
     def __init__(self):
         pass
-    
-    def _get_db_session(self):
-        """获取数据库会话"""
-        engine = create_engine(settings.DATABASE_URL)
-        Base.metadata.create_all(bind=engine)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        return SessionLocal()
     
     def execute_logic(self, logic: DriveLogic, event: Dict[str, Any], db, trace_id: str = None):
         """执行驱动逻辑"""
