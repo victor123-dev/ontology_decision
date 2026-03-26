@@ -168,7 +168,7 @@ class LLMTranslator:
     def _generate_sensing_config_prompt(self, document_content: str, business_models: List[Dict]) -> str:
         """生成数据感知配置的提示词"""
         models_info = "\n".join([
-            f"- 模型ID: {model['id']}, 名称: {model['name']}, 字段: {', '.join([f['field_id'] for f in model.get('fields', [])])}"
+            f"- 模型ID: {model['id']}, 名称: {model['name']}, 字段: {', '.join([f'{f['field_id']}({f['data_type']})' for f in model.get('fields', [])])}"
             for model in business_models
         ])
         
@@ -216,7 +216,7 @@ class LLMTranslator:
         ])
         
         tasks_info = "\n".join([
-            f"- 任务ID: {task['id']}, 名称: {task['name']}, 能力: {', '.join([str(cap_id) for cap_id in task.get('capability_ids', [])])}"
+            f"- 任务ID: {task['id']}, 名称: {task['name']}, 所需能力: {', '.join(task.get('capability_names', []))}"
             for task in tasks
         ])
         

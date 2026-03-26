@@ -318,12 +318,9 @@ def generate_configs_from_document(
     db: Session = Depends(get_db)
 ):
     """基于文档内容生成配置预览"""
-    start_time = time.time()
-    logger.info(f"开始生成配置，文档长度: {len(document_content)} 字符")
     
     try:
         # 获取所有业务模型
-        step1_start = time.time()
         business_models = []
         models = db.query(BusinessModel).all()
         for model in models:
@@ -334,11 +331,8 @@ def generate_configs_from_document(
                 "description": model.description,
                 "fields": [{"field_id": f.field_id, "name": f.name} for f in model.fields] if model.fields else []
             })
-        step1_end = time.time()
-        logger.info(f"步骤1 - 获取业务模型完成，耗时: {step1_end - step1_start:.2f}秒，找到 {len(business_models)} 个模型")
         
         # 获取所有任务
-        step2_start = time.time()
         tasks = []
         task_list = db.query(Task).all()
         for task in task_list:
@@ -346,13 +340,11 @@ def generate_configs_from_document(
             tasks.append({
                 "id": task.id,
                 "name": task.name,
-                "capability_ids": [cap.id for cap in task.capabilities] if task.capabilities else []
+                "capability_ids": [cap.id for cap in task.capabilities] if task.capabilities else [],
+                "capability_names": [cap.name for cap in task.capabilities] if task.capabilities else []
             })
-        step2_end = time.time()
-        logger.info(f"步骤2 - 获取任务完成，耗时: {step2_end - step2_start:.2f}秒，找到 {len(tasks)} 个任务")
         
         # 提取数据感知配置
-        step3_start = time.time()
         sensing_configs = llm_translator.extract_sensing_configs_from_document(
             document_content, business_models
         )
@@ -361,21 +353,13 @@ def generate_configs_from_document(
         # 为每个配置添加临时ID，用于驱动逻辑引用
         for i, config in enumerate(sensing_configs):
             config['temp_id'] = f"temp_{i}"
-        step3_end = time.time()
-        logger.info(f"步骤3 - 提取数据感知配置完成，耗时: {step3_end - step3_start:.2f}秒，生成 {len(sensing_configs)} 个配置")
         
         # 提取驱动逻辑配置（需要先有感知配置）
-        step4_start = time.time()
         drive_logics = llm_translator.extract_drive_logics_from_document(
             document_content, sensing_configs, tasks
         )
         # 标准化驱动逻辑配置格式
         drive_logics = [_standardize_drive_logic_config(config) for config in drive_logics]
-        step4_end = time.time()
-        logger.info(f"步骤4 - 提取驱动逻辑配置完成，耗时: {step4_end - step4_start:.2f}秒，生成 {len(drive_logics)} 个逻辑")
-        
-        total_time = time.time() - start_time
-        logger.info(f"配置生成完成，总耗时: {total_time:.2f}秒")
         
         return {
             "success": True,
@@ -383,8 +367,6 @@ def generate_configs_from_document(
             "drive_logics": drive_logics
         }
     except Exception as e:
-        total_time = time.time() - start_time
-        logger.error(f"配置生成失败，总耗时: {total_time:.2f}秒，错误: {str(e)}")
         raise HTTPException(status_code=500, detail=f"配置生成失败: {str(e)}")
 
 @router.post("/document-import/apply-configs")
