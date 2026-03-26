@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Card, List, Typography } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, message, Card, List, Typography, Popconfirm } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined } from '@ant-design/icons'
 import { businessModelApi, dataSourceApi } from '../../services/api'
 
 const { Option } = Select
@@ -178,15 +179,22 @@ function BusinessModel() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
           </Button>
           <Button size="small" style={{ marginRight: 8 }} onClick={() => handleEditField(record, null)}>
             编辑字段
           </Button>
-          <Button danger size="small" onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个业务模型吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -197,10 +205,10 @@ function BusinessModel() {
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>业务模型管理</h2>
         <div>
-          <Button type="primary" style={{ marginRight: 8 }} onClick={handleAdd}>
+          <Button type="primary" icon={<PlusOutlined />} style={{ marginRight: 8 }} onClick={handleAdd}>
             添加模型
           </Button>
-          <Button onClick={handleImportModal}>
+          <Button icon={<ImportOutlined />} onClick={handleImportModal}>
             导入模型
           </Button>
         </div>

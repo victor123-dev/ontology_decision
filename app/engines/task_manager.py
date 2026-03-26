@@ -1,14 +1,12 @@
 import threading
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from datetime import datetime
 from app.models.drive_logic import Task, TaskInstance
 from app.models.agent import Agent
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
 from app.utils.logger import get_logger
 from .agent_assigner import AgentAssigner
-from .shared_utils import get_db_session, log_event
+from app.utils.shared_utils import get_db_session, log_event
 
 import traceback
 

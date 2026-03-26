@@ -9,11 +9,25 @@ logger = get_logger(__name__)
 
 
 def get_db_session():
-    """获取数据库会话"""
+    """获取数据库会话（直接返回模式，用于引擎类等需要手动管理的场景）"""
     engine = create_engine(settings.DATABASE_URL)
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    
     return SessionLocal()
+
+
+def get_db():
+    """获取数据库会话（生成器模式，用于FastAPI Depends依赖注入）"""
+    engine = create_engine(settings.DATABASE_URL)
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def log_event(level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None):

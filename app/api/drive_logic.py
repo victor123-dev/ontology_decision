@@ -1,24 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from app.models.drive_logic import DriveLogic, Task, TaskInstance
 from app.models.data_sensing import DataSensingConfig
-from app.models.agent import Agent, Capability
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
-from sqlalchemy import select
+from app.models.agent import Capability
+from app.utils.shared_utils import get_db
+from app.utils.background_task_processor import background_task_processor
+from app.utils.natural_language_generator import generate_natural_language_description_for_drive_logic
 
 router = APIRouter()
-
-def get_db():
-    engine = create_engine(settings.DATABASE_URL)
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/drive-logics")
 def create_drive_logic(logic: dict, db: Session = Depends(get_db)):
@@ -26,7 +15,8 @@ def create_drive_logic(logic: dict, db: Session = Depends(get_db)):
         name=logic.get("name"),
         type=logic.get("type"),
         config=logic.get("config", {}),
-        description=logic.get("description")
+        description=logic.get("description"),
+        natural_language_description=None  # 初始化为空
     )
     db.add(db_logic)
     db.commit()
@@ -48,6 +38,12 @@ def create_drive_logic(logic: dict, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(db_logic)
     
+    # 触发异步任务生成自然语言描述
+    background_task_processor.submit_task(
+        generate_natural_language_description_for_drive_logic, 
+        db_logic.id
+    )
+    
     return db_logic
 
 @router.get("/drive-logics")
@@ -61,6 +57,7 @@ def get_drive_logics(db: Session = Depends(get_db)):
             "type": logic.type,
             "config": logic.config,
             "description": logic.description,
+            "natural_language_description": logic.natural_language_description,
             "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
             "tasks": [{"id": t.id, "name": t.name, "capability_ids": [cap.id for cap in t.capabilities]} for t in logic.tasks],
             "created_at": logic.created_at,
@@ -80,6 +77,7 @@ def get_drive_logic(logic_id: int, db: Session = Depends(get_db)):
             "type": logic.type,
             "config": logic.config,
             "description": logic.description,
+            "natural_language_description": logic.natural_language_description,
             "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
             "tasks": [{"id": t.id, "name": t.name, "capability_ids": [cap.id for cap in t.capabilities]} for t in logic.tasks],
             "created_at": logic.created_at,
@@ -92,33 +90,69 @@ def update_drive_logic(logic_id: int, logic: dict, db: Session = Depends(get_db)
     if not db_logic:
         raise HTTPException(status_code=404, detail="DriveLogic not found")
     
-    if "name" in logic:
+    # 检查是否有实质性变化，需要重新生成描述
+    should_regenerate_description = False
+    
+    if "name" in logic and db_logic.name != logic["name"]:
         db_logic.name = logic["name"]
-    if "type" in logic:
+        should_regenerate_description = True
+    elif "name" in logic:
+        db_logic.name = logic["name"]
+        
+    if "type" in logic and db_logic.type != logic["type"]:
         db_logic.type = logic["type"]
-    if "config" in logic:
+        should_regenerate_description = True
+    elif "type" in logic:
+        db_logic.type = logic["type"]
+        
+    if "config" in logic and db_logic.config != logic["config"]:
         db_logic.config = logic["config"]
-    if "description" in logic:
+        should_regenerate_description = True
+    elif "config" in logic:
+        db_logic.config = logic["config"]
+        
+    if "description" in logic and db_logic.description != logic["description"]:
+        db_logic.description = logic["description"]
+        should_regenerate_description = True
+    elif "description" in logic:
         db_logic.description = logic["description"]
     
+    # 检查事件关联是否变化
     if "event_ids" in logic:
-        event_ids = logic["event_ids"]
-        if event_ids:
-            events = db.query(DataSensingConfig).filter(DataSensingConfig.id.in_(event_ids)).all()
+        old_event_ids = [e.id for e in db_logic.events]
+        new_event_ids = logic["event_ids"] or []
+        if set(old_event_ids) != set(new_event_ids):
+            should_regenerate_description = True
+            
+        if new_event_ids:
+            events = db.query(DataSensingConfig).filter(DataSensingConfig.id.in_(new_event_ids)).all()
             db_logic.events = events
         else:
             db_logic.events = []
     
+    # 检查任务关联是否变化
     if "task_ids" in logic:
-        task_ids = logic["task_ids"]
-        if task_ids:
-            tasks = db.query(Task).filter(Task.id.in_(task_ids)).all()
+        old_task_ids = [t.id for t in db_logic.tasks]
+        new_task_ids = logic["task_ids"] or []
+        if set(old_task_ids) != set(new_task_ids):
+            should_regenerate_description = True
+            
+        if new_task_ids:
+            tasks = db.query(Task).filter(Task.id.in_(new_task_ids)).all()
             db_logic.tasks = tasks
         else:
             db_logic.tasks = []
     
     db.commit()
     db.refresh(db_logic)
+    
+    # 如果需要重新生成描述，触发异步任务
+    if should_regenerate_description:
+        background_task_processor.submit_task(
+            generate_natural_language_description_for_drive_logic, 
+            db_logic.id
+        )
+    
     return db_logic
 
 @router.delete("/drive-logics/{logic_id}")

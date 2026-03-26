@@ -1,22 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from app.models.data_sensing import DataSensingConfig
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
+from app.utils.shared_utils import get_db
+from app.engines.drive_engine import drive_engine
+import time
+import uuid
 
 router = APIRouter()
-
-# 数据库会话依赖
-def get_db():
-    engine = create_engine(settings.DATABASE_URL)
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/test-execution/simulate-event")
 def simulate_event(
@@ -31,18 +21,33 @@ def simulate_event(
     }
     """
     config_id = event_data.get("config_id")
-    event_data = event_data.get("data")
+    event_payload = event_data.get("data", {})
     
     # 验证配置是否存在
     config = db.query(DataSensingConfig).filter(DataSensingConfig.id == config_id).first()
     if not config:
         raise HTTPException(status_code=404, detail="DataSensingConfig not found")
     
-    # 模拟事件处理逻辑
-    # 这里可以触发数据驱动引擎的处理流程
+    # 构建完整的事件对象
+    trace_id = str(uuid.uuid4())
+    event = {
+        "type": config.name,  # 使用配置名称作为事件类型
+        "model_id": config.model_id,  # 从配置中获取模型ID
+        "data": {
+            "config_id": config_id,
+            "config_name": config.name,
+            "affected_records": [{"record": event_payload}]
+        },
+        "timestamp": time.time(),
+        "trace_id": trace_id
+    }
+    
+    # 触发数据驱动引擎的处理流程
+    drive_engine.handle_event(event)
     
     return {
         "message": "Event simulated successfully",
         "config": config.name,
-        "data": event_data
+        "data": event_payload,
+        "trace_id": trace_id
     }
