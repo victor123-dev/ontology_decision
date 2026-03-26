@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api import data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution, nl_rule_interface, document_import
+from app.api import data_source, business_model, data_sensing, drive_logic, agent, test_data, drive_log, test_execution, nl_rule_interface, document_import, drive_visualization
 from app.config import settings
 from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
@@ -70,6 +70,7 @@ app.include_router(drive_log.router, prefix="/api/v1", tags=["Drive Log"])
 app.include_router(test_execution.router, prefix="/api/v1", tags=["Test Execution"])
 app.include_router(document_import.router, prefix="/api/v1", tags=["Document Import"])
 app.include_router(nl_rule_interface.router, prefix="/api/v1", tags=["Natural Language Rule Interface"])
+app.include_router(drive_visualization.router, prefix="/api/v1", tags=["Drive Visualization"])
 
 # 根路径
 @app.get("/")
@@ -83,5 +84,5 @@ if __name__ == "__main__":
         "app.main:app",  # 指定应用实例路径（模块路径:实例名）
         reload=True,     # 开启热重载（开发模式专属）
         host="127.0.0.1",# 主机（默认127.0.0.1，改为0.0.0.0可局域网访问）
-        port=settings.PORT        # 端口（默认8080）
+        port=settings.PORT        # 端口（默认8081）
     )
