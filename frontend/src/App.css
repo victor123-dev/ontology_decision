@@ -95,3 +95,36 @@ p {
 .example-form button:hover {
   background-color: #21a1c4;
 }
+
+/* 菜单分组标题样式 */
+.ant-menu-item-group-title {
+  padding: 12px 16px 8px 16px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #bfbfbf !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  margin-top: 8px !important;
+}
+
+/* 第一个分组去除上边距 */
+.ant-menu-item-group:first-child .ant-menu-item-group-title {
+  margin-top: 0 !important;
+  padding-top: 16px !important;
+}
+
+/* 菜单项悬停效果 */
+.ant-menu-dark .ant-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* 选中菜单项样式 */
+.ant-menu-dark .ant-menu-item-selected {
+  background-color: #1890ff !important;
+}
+
+/* 菜单图标间距 */
+.ant-menu-item-icon {
+  margin-right: 12px !important;
+}

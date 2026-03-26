@@ -12,6 +12,7 @@ import Agent from './components/Agent/Agent'
 import TestData from './components/TestData/TestData'
 import DriveLog from './components/DriveLog/DriveLog'
 import TestExecution from './components/TestExecution/TestExecution'
+import DocumentImport from './components/DocumentImport/DocumentImport'
 
 const { Header, Sider, Content } = Layout
 
@@ -30,45 +31,78 @@ function App() {
             defaultSelectedKeys={['data-source']}
             items={[
               {
-                key: 'data-source',
-                icon: <span>📊</span>,
-                label: <Link to="/data-source">数据源管理</Link>,
+                key: 'group-1',
+                label: '基础数据配置',
+                type: 'group',
+                children: [
+                  {
+                    key: 'data-source',
+                    icon: <span>📊</span>,
+                    label: <Link to="/data-source">数据源管理</Link>,
+                  },
+                  {
+                    key: 'business-model',
+                    icon: <span>🏗️</span>,
+                    label: <Link to="/business-model">业务模型管理</Link>,
+                  },
+                  {
+                    key: 'test-data',
+                    icon: <span>📝</span>,
+                    label: <Link to="/test-data">测试数据管理</Link>,
+                  }
+                ]
               },
               {
-                key: 'business-model',
-                icon: <span>🏗️</span>,
-                label: <Link to="/business-model">业务模型管理</Link>,
+                key: 'group-2',
+                label: '智能体管理',
+                type: 'group',
+                children: [
+                  {
+                    key: 'agent',
+                    icon: <span>🤖</span>,
+                    label: <Link to="/agent">Agent管理</Link>,
+                  }
+                ]
               },
               {
-                key: 'data-sensing',
-                icon: <span>🔍</span>,
-                label: <Link to="/data-sensing">数据感知配置</Link>,
+                key: 'group-3',
+                label: '核心驱动配置',
+                type: 'group',
+                children: [
+                  {
+                    key: 'document-import',
+                    icon: <span>📄</span>,
+                    label: <Link to="/document-import">文档导入</Link>,
+                  },
+                  {
+                    key: 'data-sensing',
+                    icon: <span>🔍</span>,
+                    label: <Link to="/data-sensing">数据感知配置</Link>,
+                  },
+                  {
+                    key: 'drive-logic',
+                    icon: <span>⚙️</span>,
+                    label: <Link to="/drive-logic">驱动逻辑配置</Link>,
+                  }
+                ]
               },
               {
-                key: 'drive-logic',
-                icon: <span>⚙️</span>,
-                label: <Link to="/drive-logic">驱动逻辑配置</Link>,
-              },
-              {
-                key: 'agent',
-                icon: <span>🤖</span>,
-                label: <Link to="/agent">Agent管理</Link>,
-              },
-              {
-                key: 'test-data',
-                icon: <span>📝</span>,
-                label: <Link to="/test-data">测试数据管理</Link>,
-              },
-              {
-                key: 'drive-log',
-                icon: <span>📋</span>,
-                label: <Link to="/drive-log">驱动日志</Link>,
-              },
-              {
-                key: 'test-execution',
-                icon: <span>🧪</span>,
-                label: <Link to="/test-execution">测试执行</Link>,
-              },
+                key: 'group-4',
+                label: '测试监控',
+                type: 'group',
+                children: [
+                  {
+                    key: 'test-execution',
+                    icon: <span>🧪</span>,
+                    label: <Link to="/test-execution">测试执行</Link>,
+                  },
+                  {
+                    key: 'drive-log',
+                    icon: <span>📋</span>,
+                    label: <Link to="/drive-log">驱动日志</Link>,
+                  }
+                ]
+              }
             ]}
           />
         </Sider>
@@ -107,12 +141,13 @@ function App() {
             <Routes>
               <Route path="/data-source" element={<DataSource />} />
               <Route path="/business-model" element={<BusinessModel />} />
+              <Route path="/test-data" element={<TestData />} />
+              <Route path="/agent" element={<Agent />} />
+              <Route path="/document-import" element={<DocumentImport />} />
               <Route path="/data-sensing" element={<DataSensing />} />
               <Route path="/drive-logic" element={<DriveLogic />} />
-              <Route path="/agent" element={<Agent />} />
-              <Route path="/test-data" element={<TestData />} />
-              <Route path="/drive-log" element={<DriveLog />} />
               <Route path="/test-execution" element={<TestExecution />} />
+              <Route path="/drive-log" element={<DriveLog />} />
               <Route path="/" element={<DataSource />} />
             </Routes>
           </Content>
