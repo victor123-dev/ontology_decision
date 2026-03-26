@@ -1,23 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from app.models.data_source import DataSource
-from app.utils.db_client import Base, create_engine, sessionmaker
 from app.utils.data_source_manager import data_source_manager
-from app.config import settings
+from app.utils.shared_utils import get_db
 
 router = APIRouter()
-
-# 数据库会话依赖
-def get_db():
-    engine = create_engine(settings.DATABASE_URL)
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/test-data/{data_source_id}/{table_name}")
 def get_test_data(

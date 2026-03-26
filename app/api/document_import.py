@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 import tempfile
 import os
-import time
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
+from app.utils.shared_utils import get_db
 from app.utils.logger import get_logger
 from app.utils.llm_translator import llm_translator
 from app.models.business_model import BusinessModel
@@ -13,6 +11,8 @@ from app.models.data_sensing import DataSensingConfig
 from app.models.drive_logic import DriveLogic, Task
 from app.services.document_parser import DocumentParser
 from app.engines.data_sensing_engine import data_sensing_engine
+from app.utils.background_task_processor import background_task_processor
+from app.utils.natural_language_generator import generate_natural_language_description_for_sensing_config, generate_natural_language_description_for_drive_logic
 
 logger = get_logger(__name__)
 
@@ -270,16 +270,6 @@ def _standardize_drive_logic_config(config: dict) -> dict:
 
 router = APIRouter()
 
-def get_db():
-    engine = create_engine(settings.DATABASE_URL)
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 @router.post("/document-import/parse")
 async def parse_document(
     file: UploadFile = File(...),
@@ -435,6 +425,19 @@ def apply_configs_from_document(
             db.commit()
             db.refresh(db_logic)
             created_drive_logics.append(db_logic)
+        
+        # 触发异步任务生成自然语言描述
+        for config in created_sensing_configs:
+            background_task_processor.submit_task(
+                generate_natural_language_description_for_sensing_config, 
+                config.id
+            )
+        
+        for logic in created_drive_logics:
+            background_task_processor.submit_task(
+                generate_natural_language_description_for_drive_logic, 
+                logic.id
+            )
         
         return {
             "success": True,
