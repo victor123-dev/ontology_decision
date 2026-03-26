@@ -1,23 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from app.utils.shared_utils import get_db
 from app.models.data_sensing import DataSensingConfig
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
 from app.engines.data_sensing_engine import data_sensing_engine
+from app.utils.background_task_processor import background_task_processor
+from app.utils.natural_language_generator import generate_natural_language_description_for_sensing_config
 
 router = APIRouter()
-
-# 数据库会话依赖
-def get_db():
-    engine = create_engine(settings.DATABASE_URL)
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/data-sensing-configs")
 def create_data_sensing_config(config: dict, db: Session = Depends(get_db)):
@@ -27,6 +16,7 @@ def create_data_sensing_config(config: dict, db: Session = Depends(get_db)):
         model_id=config.get("model_id"),
         config=config.get("config"),
         description=config.get("description"),
+        natural_language_description=None,  # 初始化为空
         status=config.get("status", True)
     )
     db.add(db_config)
@@ -40,6 +30,12 @@ def create_data_sensing_config(config: dict, db: Session = Depends(get_db)):
         # 记录错误但不影响API返回
         import logging
         logging.getLogger(__name__).error(f"添加调度任务失败: {e}")
+    
+    # 触发异步任务生成自然语言描述
+    background_task_processor.submit_task(
+        generate_natural_language_description_for_sensing_config, 
+        db_config.id
+    )
     
     return db_config
 
@@ -60,7 +56,11 @@ def update_data_sensing_config(config_id: int, config: dict, db: Session = Depen
     if not db_config:
         raise HTTPException(status_code=404, detail="DataSensingConfig not found")
     
+    # 如果配置有实质性变化，重置自然语言描述
+    should_regenerate_description = False
     for key, value in config.items():
+        if key in ['name', 'type', 'model_id', 'config', 'description'] and getattr(db_config, key) != value:
+            should_regenerate_description = True
         setattr(db_config, key, value)
     
     db.commit()
@@ -73,6 +73,13 @@ def update_data_sensing_config(config_id: int, config: dict, db: Session = Depen
         # 记录错误但不影响API返回
         import logging
         logging.getLogger(__name__).error(f"更新调度任务失败: {e}")
+    
+    # 如果需要重新生成描述，触发异步任务
+    if should_regenerate_description:
+        background_task_processor.submit_task(
+            generate_natural_language_description_for_sensing_config, 
+            db_config.id
+        )
     
     return db_config
 

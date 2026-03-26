@@ -11,7 +11,7 @@ from app.utils.logger import get_logger
 from app.engines.agent_executor import agent_executor
 from app.engines.task_manager import task_manager
 from .logic_executor import LogicExecutor
-from .shared_utils import get_db_session, log_event
+from app.utils.shared_utils import get_db_session, log_event
 
 logger = get_logger(__name__)
 

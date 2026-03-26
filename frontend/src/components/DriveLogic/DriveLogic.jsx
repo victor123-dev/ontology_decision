@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Card, Tag } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Tag, Card } from 'antd'
+import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { driveLogicApi, dataSensingApi, agentApi } from '../../services/api'
+import nlRuleApi from '../../services/nlRuleApi'
 
 const { Option } = Select
 
@@ -20,6 +22,8 @@ function DriveLogic() {
   const [selectedType, setSelectedType] = useState('first_order')
   const [form] = Form.useForm()
   const [taskForm] = Form.useForm()
+  const [showAILogicModal, setShowAILogicModal] = useState(false)
+  const [aiInput, setAiInput] = useState('')
 
   useEffect(() => {
     fetchLogics()
@@ -117,6 +121,73 @@ function DriveLogic() {
   const handleTypeChange = (value) => {
     setSelectedType(value)
   }
+
+  // 添加配置验证函数
+  const isValidDriveLogic = (logic) => {
+    if (!logic.name || !logic.type || !logic.config || !logic.event_ids || !logic.task_ids) {
+      return false;
+    }
+    
+    if (logic.type === 'first_order') {
+      // first_order类型可以没有pre_condition
+      return Array.isArray(logic.event_ids) && Array.isArray(logic.task_ids);
+    } else if (logic.type === 'script') {
+      return logic.config.script_content && Array.isArray(logic.event_ids) && Array.isArray(logic.task_ids);
+    }
+    
+    return true;
+  };
+
+  // AI智能生成处理函数
+  const handleGenerateWithAI = async () => {
+    if (!aiInput.trim()) {
+      message.warning('请输入自然语言描述');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const response = await nlRuleApi.parseDriveLogic(aiInput);
+      if (response.data.success && response.data.logic) {
+        const parsedLogic = response.data.logic;
+        
+        // 验证配置是否完整
+        if (!isValidDriveLogic(parsedLogic)) {
+          message.error('解析结果不完整，请尝试更明确的描述');
+          return;
+        }
+        
+        // 设置表单字段
+        const formValues = {
+          name: parsedLogic.name || '',
+          type: parsedLogic.type || 'first_order',
+          description: parsedLogic.description || '',
+          event_ids: parsedLogic.event_ids || [],
+          task_ids: parsedLogic.task_ids || []
+        };
+        
+        // 根据类型设置配置字段
+        if (parsedLogic.type === 'first_order') {
+          formValues.pre_condition = parsedLogic.config?.pre_condition || '';
+        } else if (parsedLogic.type === 'script') {
+          formValues.script_content = parsedLogic.config?.script_content || '';
+        }
+        
+        form.setFieldsValue(formValues);
+        setSelectedType(parsedLogic.type || 'first_order');
+        
+        message.success('AI智能生成配置成功');
+        setShowAILogicModal(false);
+        setAiInput('');
+      } else {
+        message.error('生成失败，请参考以下示例：\n• 如果订单金额大于10000，则需要经理审批\n• 当温度异常时发送邮件通知\n• 计算风险评分并根据结果分配不同处理流程');
+      }
+    } catch (error) {
+      message.error('生成失败: ' + error.response?.data?.detail || error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDelete = async (id) => {
     try {
@@ -225,6 +296,14 @@ function DriveLogic() {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
+      render: (name, record) => {
+        const description = record.natural_language_description || '暂无自然语言描述';
+        return (
+          <Tooltip title={description} placement="top">
+            <span style={{ cursor: 'help' }}>{name}</span>
+          </Tooltip>
+        );
+      }
     },
     {
       title: '类型',
@@ -268,12 +347,19 @@ function DriveLogic() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个驱动逻辑吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -307,12 +393,19 @@ function DriveLogic() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEditTask(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEditTask(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDeleteTask(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个任务吗？"
+            onConfirm={() => handleDeleteTask(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -322,8 +415,8 @@ function DriveLogic() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>驱动逻辑配置</h2>
-        <Button type="primary" onClick={handleAdd}>
-          添加驱动逻辑
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          添加逻辑
         </Button>
       </div>
 
@@ -332,7 +425,7 @@ function DriveLogic() {
 
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3>任务列表</h3>
-        <Button type="primary" onClick={handleAddTask}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddTask}>
           添加任务
         </Button>
       </div>
@@ -348,7 +441,17 @@ function DriveLogic() {
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="例如：温度告警驱动逻辑" />
+            <Input 
+              placeholder="例如：温度告警驱动逻辑"
+              suffix={
+                <Button 
+                  type="text" 
+                  icon={<ThunderboltOutlined style={{ color: '#faad14' }} />} 
+                  onClick={() => setShowAILogicModal(true)}
+                  title="AI智能生成配置"
+                />
+              }
+            />
           </Form.Item>
           
           <Form.Item name="type" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
@@ -456,7 +559,27 @@ function DriveLogic() {
           </Form.Item>
         </Form>
       </Modal>
-
+      
+      {/* AI智能生成模态框 */}
+      <Modal
+        title="AI智能配置生成"
+        open={showAILogicModal}
+        onOk={handleGenerateWithAI}
+        onCancel={() => setShowAILogicModal(false)}
+        confirmLoading={loading}
+      >
+        <Input.TextArea 
+          value={aiInput}
+          onChange={(e) => setAiInput(e.target.value)}
+          placeholder="例如：如果订单金额大于10000，则需要经理审批"
+          rows={4}
+        />
+        <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
+          支持的场景：
+          <br/>• 一阶函数："如果订单金额大于10000，则需要经理审批"
+          <br/>• 脚本函数："计算风险评分并根据结果分配不同处理流程"
+        </div>
+      </Modal>
 
     </div>
   )

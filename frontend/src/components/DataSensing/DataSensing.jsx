@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, Switch, message } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip } from 'antd'
+import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { dataSensingApi, businessModelApi } from '../../services/api'
+import nlRuleApi from '../../services/nlRuleApi'
 
 const { Option } = Select
 
@@ -12,6 +14,8 @@ function DataSensing() {
   const [modalVisible, setModalVisible] = useState(false)
   const [editingConfig, setEditingConfig] = useState(null)
   const [form] = Form.useForm()
+  const [showAILogicModal, setShowAILogicModal] = useState(false)
+  const [aiInput, setAiInput] = useState('')
 
   useEffect(() => {
     fetchConfigs()
@@ -115,6 +119,88 @@ function DataSensing() {
     })
   }
 
+  // 添加配置验证函数
+  const isValidSensingConfig = (config) => {
+    if (!config.name || !config.type || !config.model_id || !config.config) {
+      return false;
+    }
+    
+    if (config.type === 'data_change') {
+      return config.config.trigger_conditions && config.config.check_interval;
+    } else if (config.type === 'threshold') {
+      const hasStatic = config.config.threshold_type === 'static' && config.config.threshold_value !== undefined;
+      const hasDynamic = config.config.threshold_type === 'dynamic' && config.config.threshold_field;
+      return config.config.monitored_field && config.config.operator && config.config.check_interval && (hasStatic || hasDynamic);
+    }
+    
+    return true;
+  };
+
+  // AI智能生成处理函数
+  const handleGenerateWithAI = async () => {
+    if (!aiInput.trim()) {
+      message.warning('请输入自然语言描述');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const response = await nlRuleApi.parseSensingConfig(aiInput);
+      if (response.data.success && response.data.config) {
+        const parsedConfig = response.data.config;
+        
+        // 验证配置是否完整
+        if (!isValidSensingConfig(parsedConfig)) {
+          message.error('解析结果不完整，请尝试更明确的描述');
+          return;
+        }
+        
+        // 设置表单字段
+        const formValues = {
+          name: parsedConfig.name || '',
+          type: parsedConfig.type || 'data_change',
+          model_id: parsedConfig.model_id || '',
+          description: parsedConfig.description || '',
+          status: true
+        };
+        
+        // 根据类型设置配置字段
+        if (parsedConfig.type === 'data_change') {
+          formValues.trigger_conditions = parsedConfig.config?.trigger_conditions || [];
+          formValues.monitored_fields = parsedConfig.config?.monitored_fields || [];
+          formValues.check_interval = parsedConfig.config?.check_interval || 5;
+        } else if (parsedConfig.type === 'threshold') {
+          formValues.monitored_field = parsedConfig.config?.monitored_field || '';
+          formValues.operator = parsedConfig.config?.operator || 'gt';
+          formValues.threshold_value = parsedConfig.config?.threshold_value;
+          formValues.check_interval = parsedConfig.config?.check_interval || 5;
+          formValues.threshold_type = parsedConfig.config?.threshold_type || 'static';
+        }
+        
+        form.setFieldsValue(formValues);
+        setSelectedType(parsedConfig.type || 'data_change');
+        
+        // 如果有模型ID，获取字段信息
+        if (parsedConfig.model_id) {
+          const model = businessModels.find(m => m.id === parsedConfig.model_id);
+          if (model && model.fields) {
+            setModelFields(model.fields);
+          }
+        }
+        
+        message.success('AI智能生成配置成功');
+        setShowAILogicModal(false);
+        setAiInput('');
+      } else {
+        message.error('生成失败，请参考以下示例：\n• 当温度超过100度时告警\n• 监控订单表的所有变更\n• 当库存低于50时通知');
+      }
+    } catch (error) {
+      message.error('生成失败: ' + error.response?.data?.detail || error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (values) => {
     try {
       // 处理配置数据
@@ -161,6 +247,14 @@ function DataSensing() {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
+      render: (name, record) => {
+        const description = record.natural_language_description || '暂无自然语言描述';
+        return (
+          <Tooltip title={description} placement="top">
+            <span style={{ cursor: 'help' }}>{name}</span>
+          </Tooltip>
+        );
+      }
     },
     {
       title: '类型',
@@ -197,12 +291,19 @@ function DataSensing() {
       key: 'action',
       render: (_, record) => (
         <div>
-          <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
+          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button danger size="small" onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定要删除这个配置吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </div>
       ),
     },
@@ -212,7 +313,7 @@ function DataSensing() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>数据感知配置</h2>
-        <Button type="primary" onClick={handleAdd}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           添加配置
         </Button>
       </div>
@@ -227,7 +328,16 @@ function DataSensing() {
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input />
+            <Input 
+              suffix={
+                <Button 
+                  type="text" 
+                  icon={<ThunderboltOutlined style={{ color: '#faad14' }} />} 
+                  onClick={() => setShowAILogicModal(true)}
+                  title="AI智能生成配置"
+                />
+              }
+            />
           </Form.Item>
           <Form.Item name="type" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
             <Select onChange={handleTypeChange}>
@@ -319,6 +429,27 @@ function DataSensing() {
             <Switch checkedChildren="生效" unCheckedChildren="失效" />
           </Form.Item>
         </Form>
+      </Modal>
+      
+      {/* AI智能生成模态框 */}
+      <Modal
+        title="AI智能配置生成"
+        open={showAILogicModal}
+        onOk={handleGenerateWithAI}
+        onCancel={() => setShowAILogicModal(false)}
+        confirmLoading={loading}
+      >
+        <Input.TextArea 
+          value={aiInput}
+          onChange={(e) => setAiInput(e.target.value)}
+          placeholder="例如：当温度超过100度时触发告警"
+          rows={4}
+        />
+        <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
+          支持的场景：
+          <br/>• 数据变化感知："监控订单表的所有变更"
+          <br/>• 阈值触发感知："当库存低于50时通知"
+        </div>
       </Modal>
     </div>
   )

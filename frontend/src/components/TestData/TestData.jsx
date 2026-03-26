@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Card } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, message, Card, Popconfirm } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { testDataApi, dataSourceApi } from '../../services/api'
 
 const { Option } = Select
@@ -155,7 +156,7 @@ function TestData() {
               ))}
             </Select>
           </div>
-          <Button type="primary" onClick={handleAddData} disabled={!selectedTable}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAddData} disabled={!selectedTable}>
             添加数据
           </Button>
         </div>
@@ -179,12 +180,19 @@ function TestData() {
                 key: 'action',
                 render: (_, record) => (
                   <div>
-                    <Button type="primary" size="small" style={{ marginRight: 8 }} onClick={() => handleEditData(record)}>
+                    <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEditData(record)}>
                       编辑
                     </Button>
-                    <Button danger size="small" onClick={() => handleDelete(record)}>
-                      删除
-                    </Button>
+                    <Popconfirm
+                      title="确定要删除这条数据吗？"
+                      onConfirm={() => handleDelete(record)}
+                      okText="确定"
+                      cancelText="取消"
+                    >
+                      <Button danger size="small" icon={<DeleteOutlined />}>
+                        删除
+                      </Button>
+                    </Popconfirm>
                   </div>
                 )
               }

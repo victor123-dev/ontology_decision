@@ -33,6 +33,7 @@ class DriveLogic(Base):
     type = Column(String(50), nullable=False)  # first_order, script
     config = Column(JSON, nullable=False, default={})  # 可选的预处理配置
     description = Column(Text)
+    natural_language_description = Column(Text)  # 自然语言描述，用于前端展示
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
