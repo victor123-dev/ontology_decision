@@ -29,9 +29,8 @@ def get_db():
     finally:
         db.close()
 
-
-def log_event(level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None):
-    """记录驱动日志"""
+def log_event_with_parent(level: str, category: str, message: str, data: Dict[str, Any] = None, trace_id: str = None, parent_id: int = None):
+    """记录带父子关系的驱动日志"""
     try:
         import uuid
         from app.models.drive_log import DriveLog
@@ -43,11 +42,15 @@ def log_event(level: str, category: str, message: str, data: Dict[str, Any] = No
                 category=category,
                 message=message,
                 data=data,
-                trace_id=trace_id or str(uuid.uuid4())
+                trace_id=trace_id or str(uuid.uuid4()),
+                parent_id=parent_id
             )
             db.add(log)
             db.commit()
+            db.refresh(log)
+            return log.id
         finally:
             db.close()
     except Exception as e:
         logger.error(f"记录驱动日志失败: {str(e)}")
+        return None

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip } from 'antd'
 import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { dataSensingApi, businessModelApi } from '../../services/api'
-import nlRuleApi from '../../services/nlRuleApi'
+import { dataSensingApi, businessModelApi, nlRuleApi } from '../../services/api'
 
 const { Option } = Select
 

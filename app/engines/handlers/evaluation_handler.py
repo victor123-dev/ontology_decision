@@ -123,7 +123,7 @@ class EvaluationHandler:
             logger.error(f"检查物料价格波动和日期失败: {str(e)}")
             return True
     
-    def execute_evaluation_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+    def execute_evaluation_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None, creation_log_id: str = None) -> Dict[str, Any]:
         """估价核算Agent执行逻辑"""
         try:
             demand_data = event.get('record_data', {})
@@ -248,7 +248,9 @@ class EvaluationHandler:
                             inquiry_result = task_manager.assign_and_wait_for_task(
                                 inquiry_task, 
                                 inquiry_event, 
-                                trace_id, 
+                                "估价核算Agent",
+                                trace_id,
+                                creation_log_id,
                                 timeout=60  # 1分钟超时
                             )
                             

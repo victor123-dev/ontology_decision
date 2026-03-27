@@ -244,7 +244,7 @@ class ProductDevelopmentHandler:
             logger.error(f"查找匹配产品失败: {str(e)}")
             return None
     
-    def execute_product_development(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+    def execute_product_development(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None, creation_log_id: str = None) -> Dict[str, Any]:
         """产品研发Agent执行逻辑"""
 
         demand_data = event.get('record_data', {})
