@@ -501,7 +501,7 @@ const DocumentImport = () => {
   ];
 
   return (
-    <div>
+    <div style={{ width: '100%', height: '100%' }}>
       <div style={{ marginBottom: 16 }}>
         <h2>文档导入规则配置</h2>
         <p>通过上传业务文档，系统将自动解析并生成数据感知配置和驱动逻辑规则</p>

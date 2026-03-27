@@ -6,7 +6,7 @@ from app.models.drive_logic import Task, TaskInstance
 from app.models.agent import Agent
 from app.utils.logger import get_logger
 from .agent_assigner import AgentAssigner
-from app.utils.shared_utils import get_db_session, log_event
+from app.utils.shared_utils import get_db_session, log_event_with_parent
 
 import traceback
 
@@ -62,14 +62,16 @@ class TaskManager:
     
 
     
-    def assign_and_wait_for_task(self, task: Task, event: Dict[str, Any], trace_id: str = None, timeout: int = 300) -> Dict[str, Any]:
+    def assign_and_wait_for_task(self, task: Task, event: Dict[str, Any], source_name: str, trace_id: str = None, parent_id: str = None, timeout: int = 300) -> Dict[str, Any]:
         """
         下发任务并等待完成
         
         Args:
             task: 要执行的任务
             event: 任务事件数据
+            source_name: 任务来源名称
             trace_id: 追踪ID
+            parent_id: 父日志ID
             timeout: 超时时间（秒），默认300秒（5分钟）
             
         Returns:
@@ -97,10 +99,14 @@ class TaskManager:
             finally:
                 db.close()
             
-            logger.info(f"已创建同步任务实例 {task_instance_id}，等待执行完成...")
-            log_event('info', 'sync_task_create', f"同步任务创建: {task.name}", 
-                     {'task_name': task.name, 'task_instance_id': task_instance_id}, trace_id)
-            
+            logger.info(f"已创建任务实例 {task_instance_id}，等待执行完成...")
+            log_id = log_event_with_parent('info', 'agent_task', f"来自{source_name}创建任务: {task.name}已创建，等待调度", 
+                     {'task_name': task.name, 'source_name': source_name, 'task_instance_id': task_instance_id}, trace_id, parent_id)
+            # 更新 TaskInstance 的 result 字段，添加 log_id
+            if log_id:
+                task_instance.result['creation_log_id'] = log_id
+                db.commit()
+
             # 2. 等待任务完成
             start_time = time.time()
             while time.time() - start_time < timeout:
@@ -110,11 +116,6 @@ class TaskManager:
                     
                     if updated_task and updated_task.status in ['completed', 'failed']:
                         execution_result = updated_task.result.get('execution_result', {})
-                        
-                        # 记录任务完成日志
-                        status_text = '成功' if updated_task.status == 'completed' else '失败'
-                        log_event('info', 'sync_task_complete', f"同步任务完成: {task.name} - {status_text}", 
-                                 {'task_name': task.name, 'task_instance_id': task_instance_id, 'status': updated_task.status}, trace_id)
                         
                         if updated_task.status == 'completed':
                             self.stats['tasks_completed'] += 1
@@ -135,8 +136,6 @@ class TaskManager:
             
             # 超时处理
             logger.warning(f"任务 {task_instance_id} 执行超时 ({timeout}秒)")
-            log_event('warning', 'sync_task_timeout', f"同步任务超时: {task.name}", 
-                     {'task_name': task.name, 'task_instance_id': task_instance_id, 'timeout_seconds': timeout}, trace_id)
             return {
                 'success': False,
                 'error': f'Task timeout after {timeout} seconds',
@@ -147,8 +146,6 @@ class TaskManager:
         except Exception as e:
             logger.error(f"同步任务执行失败: {str(e)}")
             logger.error(traceback.format_exc())
-            log_event('error', 'sync_task_error', f"同步任务执行失败: {task.name}", 
-                     {'task_name': task.name, 'error': str(e)}, trace_id)
             self.stats['errors'] += 1
             return {
                 'success': False,
@@ -174,9 +171,6 @@ class TaskManager:
                     
                     # 按 group_id 分组任务实例
                     task_groups = self.agent_assigner.group_tasks_by_group_id(pending_tasks)
-                    
-                    log_event('info', 'task_scheduling', f"任务调度引擎检查到 {len(pending_tasks)} 个待处理任务，{len(task_groups)} 个任务组", 
-                                {'pending_task_count': len(pending_tasks), 'task_group_count': len(task_groups)})
                     
                     # 调度每个任务组
                     for group_id, group_tasks in task_groups.items():

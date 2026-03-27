@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip } from 'antd'
 import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { dataSensingApi, businessModelApi } from '../../services/api'
-import nlRuleApi from '../../services/nlRuleApi'
+import { dataSensingApi, businessModelApi, nlRuleApi } from '../../services/api'
 
 const { Option } = Select
 
@@ -310,7 +309,7 @@ function DataSensing() {
   ]
 
   return (
-    <div>
+    <div style={{ width: '100%', height: '100%' }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>数据感知配置</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>

@@ -50,7 +50,7 @@ class QuoteHandler:
         # 生成新编码
         return f"{prefix}{number:03d}"
     
-    def execute_quote_agents(self, agents: List[Agent], tasks: List[Task], event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+    def execute_quote_agents(self, agents: List[Agent], tasks: List[Task], event: Dict[str, Any], trace_id: str = None, creation_log_id: str = None) -> Dict[str, Any]:
         """报价Agent执行逻辑"""
         try:
             # 获取cost_calc事件数据

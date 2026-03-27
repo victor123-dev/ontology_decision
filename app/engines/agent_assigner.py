@@ -7,7 +7,7 @@ from app.models.drive_logic import Task, TaskInstance
 from app.models.agent import Agent
 from app.utils.logger import get_logger
 from app.engines.agent_executor import agent_executor
-from app.utils.shared_utils import get_db_session, log_event
+from app.utils.shared_utils import get_db_session, log_event_with_parent
 
 import traceback
 
@@ -56,6 +56,7 @@ class AgentAssigner:
             first_task_instance = group_tasks[0]
             event = first_task_instance.result.get('event', {})
             trace_id = first_task_instance.result.get('trace_id')
+            creation_log_id = first_task_instance.result.get('creation_log_id')
             
             # 为每个任务实例分配对应的Agent
             task_instance_map = {ti.task.id: ti for ti in group_tasks}
@@ -83,7 +84,7 @@ class AgentAssigner:
             # 在后台线程中执行整个任务组（传入多个Agent）
             execution_thread = threading.Thread(
                 target=self._execute_task_group_in_background,
-                args=(unique_agent_ids, task_ids, task_instance_ids, event, trace_id, group_id)
+                args=(unique_agent_ids, task_ids, task_instance_ids, event, trace_id, creation_log_id, group_id)
             )
             execution_thread.daemon = True
             execution_thread.start()
@@ -139,7 +140,7 @@ class AgentAssigner:
 
     def _execute_task_group_in_background(self, agent_ids: List[int], task_ids: List[int], 
                                         task_instance_ids: List[int], 
-                                        event: Dict[str, Any], trace_id: str, group_id: str):
+                                        event: Dict[str, Any], trace_id: str, creation_log_id: str, group_id: str):
         """在后台线程中执行任务组 - 支持多Agent"""
         try:
             db = get_db_session()
@@ -180,7 +181,7 @@ class AgentAssigner:
                 
                 # 执行任务组（传入多个Agent）
                 execution_result = agent_executor.execute_agent_task_group(
-                    agents, tasks, group_event, trace_id
+                    agents, tasks, group_event, trace_id, creation_log_id
                 )
                 
                 # 更新所有任务实例状态和结果
@@ -199,7 +200,7 @@ class AgentAssigner:
                 db.commit()
                 
                 # 记录任务组执行日志
-                log_event('info' if success else 'error','agent_task_group_execution',f"任务组 {group_id} 执行{'成功' if success else '失败'}",{'group_id': group_id,'task_names': [task.name for task in tasks],'agent_names': [agent.name for agent in agents],'success': success,'execution_result': execution_result},trace_id)
+                log_event_with_parent('info' if success else 'error','agent_task',f"任务组 {group_id} 执行{'成功' if success else '失败'}",{'group_id': group_id,'task_names': [task.name for task in tasks],'agent_names': [agent.name for agent in agents],'success': success,'execution_result': execution_result},trace_id)
                 
                 if success:
                     logger.info(f"任务组 {group_id} 执行成功")

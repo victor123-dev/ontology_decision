@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Tag, Card } from 'antd'
 import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { driveLogicApi, dataSensingApi, agentApi } from '../../services/api'
-import nlRuleApi from '../../services/nlRuleApi'
+import { driveLogicApi, dataSensingApi, agentApi, nlRuleApi } from '../../services/api'
 
 const { Option } = Select
 
@@ -412,7 +411,7 @@ function DriveLogic() {
   ]
 
   return (
-    <div>
+    <div style={{ width: '100%', height: '100%' }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>驱动逻辑配置</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>

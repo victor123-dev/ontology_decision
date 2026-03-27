@@ -11,7 +11,7 @@ from app.utils.logger import get_logger
 from app.engines.agent_executor import agent_executor
 from app.engines.task_manager import task_manager
 from .logic_executor import LogicExecutor
-from app.utils.shared_utils import get_db_session, log_event
+from app.utils.shared_utils import get_db_session, log_event_with_parent
 
 logger = get_logger(__name__)
 
@@ -74,7 +74,6 @@ class DriveEngine:
         
         trace_id = event.get('trace_id')
         logger.info(f"接收事件: {event['type']}, 模型: {event.get('model_id')}")
-        log_event('info', 'drive_logic', f"接收事件: {event['type']}", event, trace_id)
     
     def _process_events(self):
         """处理事件队列"""
@@ -86,11 +85,12 @@ class DriveEngine:
             time.sleep(0.1)
     
     def _process_event(self, event: Dict[str, Any]):
-        """处理单个事件"""
+        """处理单个事件（增强版）"""
         try:
             event_type = event.get('type')
             event_data = event.get('data', {})
             config_id = event_data.get('config_id')
+            parent_log_id = event.get('log_id')  # 获取父日志ID
             
             db = get_db_session()
             try:
@@ -110,10 +110,17 @@ class DriveEngine:
                 trace_id = event.get('trace_id')
                 logger.info(f"事件 {event['type']} 匹配到 {len(matched_logics)} 条驱动逻辑")
                 self.stats['logics_matched'] += len(matched_logics)
-                log_event('info', 'drive_logic', f"事件 {event['type']} 匹配到 {len(matched_logics)} 条驱动逻辑", {'event_type': event['type'], 'matched_count': len(matched_logics)}, trace_id)
+                
+                # 记录驱动逻辑匹配日志
+                drive_log_id = log_event_with_parent(
+                    'info', 'drive_logic', 
+                    f"事件 {event['type']} 匹配到 {len(matched_logics)} 条驱动逻辑", 
+                    {'event_type': event['type'], 'matched_count': len(matched_logics)}, 
+                    trace_id, parent_log_id
+                )
                 
                 for logic in matched_logics:
-                    self.logic_executor.execute_logic(logic, event, db, trace_id)
+                    self.logic_executor.execute_logic(logic, event, db, trace_id, drive_log_id)
                     
             finally:
                 db.close()
