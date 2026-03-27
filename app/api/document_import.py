@@ -319,7 +319,7 @@ def generate_configs_from_document(
                 "id": model.id,
                 "name": model.name,
                 "description": model.description,
-                "fields": [{"field_id": f.field_id, "name": f.name} for f in model.fields] if model.fields else []
+                "fields": [{"field_id": f.field_id, "name": f.name, "data_type": f.data_type} for f in model.fields] if model.fields else []
             })
         
         # 获取所有任务
