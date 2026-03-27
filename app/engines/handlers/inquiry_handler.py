@@ -45,7 +45,7 @@ class InquiryHandler:
         # 生成新编码
         return f"{prefix}{number:03d}"
     
-    def execute_inquiry_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+    def execute_inquiry_agent(self, agent: Agent, task: Task, event: Dict[str, Any], trace_id: str = None, creation_log_id: str = None) -> Dict[str, Any]:
         """询价Agent执行逻辑"""
         try:
             material_data = event.get('record_data', {})

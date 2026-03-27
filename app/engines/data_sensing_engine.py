@@ -11,7 +11,7 @@ from app.models.data_source import DataSource
 from app.utils.db_client import DBClient
 from app.utils.logger import get_logger
 from .cache_manager import CacheManager
-from app.utils.shared_utils import get_db_session, log_event
+from app.utils.shared_utils import get_db_session, log_event_with_parent
 
 logger = get_logger(__name__)
 
@@ -513,8 +513,8 @@ class DataSensingEngine:
             import traceback
             logger.error(traceback.format_exc())
     
-    def trigger_event(self, event_type: str, model_id: int, data: Dict[str, Any]):
-        """触发事件"""
+    def trigger_event(self, event_type: str, model_id: int, data: Dict[str, Any], parent_log_id: int = None):
+        """触发事件（增强版）"""
         import uuid
         trace_id = str(uuid.uuid4())
         event = {
@@ -522,8 +522,13 @@ class DataSensingEngine:
             "model_id": model_id,
             "data": data,
             "timestamp": time.time(),
-            "trace_id": trace_id
+            "trace_id": trace_id,
+            "parent_log_id": parent_log_id
         }
+        
+        # 记录数据感知日志，并获取日志ID
+        log_id = self._log_sensing_event(event_type, model_id, data, trace_id)
+        event["log_id"] = log_id
         
         self.stats['events_triggered'] += 1
         
@@ -533,8 +538,22 @@ class DataSensingEngine:
             except Exception as e:
                 logger.error(f"事件回调出错: {str(e)}")
         
-        logger.info(f"触发事件: {event_type}, 模型: {model_id}, 数据: {json.dumps(data, ensure_ascii=False, default=str)[:200]}")
-        log_event('info', 'data_sensing', f"触发事件: {event_type}, 模型: {model_id}", event, trace_id)
+        return log_id  # 返回日志ID供后续使用
+    
+    def _log_sensing_event(self, event_type: str, model_id: int, data: Dict[str, Any], trace_id: str):
+        """记录数据感知事件日志"""
+        log_id = log_event_with_parent(
+            'info', 'data_sensing', 
+            f"触发事件: {event_type}, 模型: {model_id}", 
+            {
+                "event_type": event_type,
+                "model_id": model_id,
+                "data": data
+            }, 
+            trace_id, 
+            None  # 数据感知是根节点，parent_id为None
+        )
+        return log_id
 
 
 # 全局引擎实例

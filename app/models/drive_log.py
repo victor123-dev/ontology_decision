@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.utils.db_client import Base
 
 class DriveLog(Base):
@@ -10,5 +11,9 @@ class DriveLog(Base):
     category = Column(String(100), nullable=False)  # data_sensing, drive_logic, agent_task
     message = Column(Text, nullable=False)
     data = Column(JSON)
-    trace_id = Column(String(100), index=True)  # 用于关联同一链路的日志
+    trace_id = Column(String(100), index=True)  # 全局链路标识符
+    parent_id = Column(Integer, ForeignKey("drive_logs.id"), nullable=True)  # 父日志ID
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # 自引用关系
+    parent = relationship("DriveLog", remote_side=[id])

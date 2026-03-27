@@ -201,7 +201,7 @@ function BusinessModel() {
   ]
 
   return (
-    <div>
+    <div style={{ width: '100%', height: '100%' }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>业务模型管理</h2>
         <div>

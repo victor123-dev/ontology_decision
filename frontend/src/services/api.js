@@ -81,12 +81,29 @@ export const testDataApi = {
 export const driveLogApi = {
   create: (data) => api.post('/drive-logs', data),
   getAll: (params) => api.get('/drive-logs', { params }),
-  get: (id) => api.get(`/drive-logs/${id}`),
+  
+  getTraceChain: (traceId) => api.get(`/drive-logs/trace/${traceId}`),
+  
+  getAllTraces: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return api.get(`/drive-logs/traces${queryParams ? '?' + queryParams : ''}`);
+  }
 };
 
 // 测试执行
 export const testExecutionApi = {
   simulateEvent: (data) => api.post('/test-execution/simulate-event', data),
+};
+
+// 自然语言规则接口
+export const nlRuleApi = {
+  parseSensingConfig: (naturalLanguage) => {
+    return api.post('/nl-rule-interface/parse-sensing-config', { natural_language: naturalLanguage });
+  },
+  
+  parseDriveLogic: (naturalLanguage) => {
+    return api.post('/nl-rule-interface/parse-drive-logic', { natural_language: naturalLanguage });
+  },
 };
 
 export default api;
