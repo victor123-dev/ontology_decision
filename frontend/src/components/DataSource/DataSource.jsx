@@ -115,7 +115,7 @@ function DataSource() {
   ]
 
   return (
-    <div>
+    <div style={{ width: '100%', height: '100%' }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>数据源管理</h2>
         <Button type="primary" onClick={handleAdd}>

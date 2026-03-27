@@ -310,7 +310,7 @@ function DataSensing() {
   ]
 
   return (
-    <div>
+    <div style={{ width: '100%', height: '100%' }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>数据感知配置</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
