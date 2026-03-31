@@ -69,9 +69,6 @@ const DriveVisualization = () => {
   const handleNodeClick = (node) => {
     // 根据节点类型跳转到对应的管理页面
     switch (node.type) {
-      case 'data_source':
-        navigate('/data-source');
-        break;
       case 'business_model':
         navigate('/business-model');
         break;
@@ -83,9 +80,6 @@ const DriveVisualization = () => {
         break;
       case 'task':
         navigate('/drive-logic');
-        break;
-      case 'agent':
-        navigate('/agent');
         break;
       default:
         break;

@@ -49,24 +49,89 @@ const GraphVisualization = ({ data, onNodeClick }) => {
 
     svg.call(zoom);
 
+    // 添加图例（legend）
+    const legend = svg.append('g')
+      .attr('class', 'legend')
+      .attr('transform', 'translate(20, 20)'); // 左上角位置
+
+    const nodeTypes = [
+      { type: 'business_model', name: '业务模型', color: '#2196F3' },
+      { type: 'sensing_config', name: '数据感知配置', color: '#FF9800' },
+      { type: 'drive_logic', name: '驱动逻辑', color: '#9C27B0' },
+      { type: 'task', name: '任务', color: '#E91E63' }
+    ];
+
+    const legendRow = legend.selectAll('.legend-row')
+      .data(nodeTypes)
+      .enter()
+      .append('g')
+      .attr('class', 'legend-row')
+      .attr('transform', (d, i) => `translate(0, ${i * 25})`);
+
+    // 添加彩色圆圈
+    legendRow.append('circle')
+      .attr('r', 8)
+      .attr('fill', d => d.color)
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1);
+
+    // 添加文字说明
+    legendRow.append('text')
+      .attr('x', 15)
+      .attr('y', 5)
+      .attr('font-size', '12px')
+      .attr('fill', '#333')
+      .text(d => d.name);
+
     const g = svg.append('g');
 
     // 创建力导向布局
+    const linkForce = d3.forceLink(data.edges)
+      .id(d => d.id)
+      .distance(150);
+
     const simulation = d3.forceSimulation(data.nodes)
-      .force('link', d3.forceLink(data.edges).id(d => d.id).distance(150))
+      .force('link', linkForce)
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide().radius(60));
 
-    // 创建连线
-    const link = g.append('g')
-      .selectAll('line')
+    // 定义箭头标记
+    svg.append("defs").append("marker")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 28)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+      .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#666");
+
+    // 创建连线组（包含线和文字）
+    const linkGroup = g.append('g')
+      .selectAll('.link-group')
       .data(data.edges)
       .enter()
-      .append('line')
+      .append('g')
+      .attr('class', 'link-group');
+
+    // 创建连线
+    const link = linkGroup.append('line')
       .attr('stroke', '#999')
       .attr('stroke-opacity', 0.6)
-      .attr('stroke-width', 2);
+      .attr('stroke-width', 2)
+      .attr("marker-end", "url(#arrow)");
+
+    // 添加连线文字标签
+    const linkText = linkGroup.append('text')
+      .attr('class', 'link-text')
+      .attr('font-size', '10px')
+      .attr('fill', '#666')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '-8px') // 文字在线上方
+      .text(d => d.description);
 
     // 创建节点组
     const node = g.append('g')
@@ -116,12 +181,6 @@ const GraphVisualization = ({ data, onNodeClick }) => {
       
       // 根据节点类型显示特定信息
       switch(d.type) {
-        case 'data_source':
-          tooltipContent += `<div style="margin-top: 4px; font-size: 11px;">
-            数据源ID: ${d.data.id}<br/>
-            类型: ${d.data.type}
-          </div>`;
-          break;
         case 'business_model':
           tooltipContent += `<div style="margin-top: 4px; font-size: 11px;">
             模型ID: ${d.data.id}<br/>
@@ -144,17 +203,6 @@ const GraphVisualization = ({ data, onNodeClick }) => {
         case 'task':
           tooltipContent += `<div style="margin-top: 4px; font-size: 11px;">
             任务ID: ${d.data.id}
-          </div>`;
-          break;
-        case 'capability':
-          tooltipContent += `<div style="margin-top: 4px; font-size: 11px;">
-            能力ID: ${d.data.id}
-          </div>`;
-          break;
-        case 'agent':
-          tooltipContent += `<div style="margin-top: 4px; font-size: 11px;">
-            Agent ID: ${d.data.id}<br/>
-            状态: ${d.data.status}
           </div>`;
           break;
       }
@@ -203,6 +251,11 @@ const GraphVisualization = ({ data, onNodeClick }) => {
         .attr('x2', d => d.target.x)
         .attr('y2', d => d.target.y);
 
+      // 更新连线文字位置（在线的中点）
+      linkGroup.select('text')
+        .attr('x', d => (d.source.x + d.target.x) / 2)
+        .attr('y', d => (d.source.y + d.target.y) / 2);
+
       node
         .attr('transform', d => `translate(${d.x}, ${d.y})`);
     });
@@ -235,13 +288,10 @@ const GraphVisualization = ({ data, onNodeClick }) => {
     // 节点颜色映射
     function getNodeColor(nodeType) {
       const colorMap = {
-        'data_source': '#4CAF50',
         'business_model': '#2196F3',
         'sensing_config': '#FF9800',
         'drive_logic': '#9C27B0',
-        'task': '#E91E63',
-        'capability': '#607D8B',
-        'agent': '#795548'
+        'task': '#E91E63'
       };
       return colorMap[nodeType] || '#9E9E9E';
     }
@@ -249,13 +299,10 @@ const GraphVisualization = ({ data, onNodeClick }) => {
     // 节点类型显示名称映射
     function getTypeDisplayName(nodeType) {
       const typeMap = {
-        'data_source': '数据源',
         'business_model': '业务模型',
         'sensing_config': '数据感知配置',
         'drive_logic': '驱动逻辑',
-        'task': '任务',
-        'capability': '能力',
-        'agent': 'Agent'
+        'task': '任务'
       };
       return typeMap[nodeType] || nodeType;
     }
