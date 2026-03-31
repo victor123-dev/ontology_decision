@@ -53,6 +53,9 @@ dist/
 # 忽略数据库文件
 *.db
 *.sqlite3
+# 但不忽略 sqllite_bak 目录下所有日期子目录中的数据库文件
+!sqllite_bak/*/*.db
+!sqllite_bak/*/*.sqlite3
 
 # 忽略前端构建文件
 frontend/node_modules/
