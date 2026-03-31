@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { Layout, Menu, theme } from 'antd'
+
 import './App.css'
 
 // 导入组件
@@ -13,6 +14,7 @@ import TestData from './components/TestData/TestData'
 import DriveLog from './components/DriveLog/DriveLog'
 import TestExecution from './components/TestExecution/TestExecution'
 import DocumentImport from './components/DocumentImport/DocumentImport'
+import DriveVisualization from './components/DriveVisualization/DriveVisualization'
 
 const { Header, Sider, Content } = Layout
 
@@ -107,6 +109,18 @@ function App() {
                     label: <Link to="/drive-log">驱动日志</Link>,
                   }
                 ]
+              },
+              {
+                key: 'group-5',
+                label: '可视化分析',
+                type: 'group',
+                children: [
+                  {
+                    key: 'drive-visualization',
+                    icon: <span>📈</span>,
+                    label: <Link to="/drive-visualization">驱动可视化</Link>,
+                  }
+                ]
               }
             ]}
           />
@@ -153,6 +167,7 @@ function App() {
               <Route path="/drive-logic" element={<DriveLogic />} />
               <Route path="/test-execution" element={<TestExecution />} />
               <Route path="/drive-log" element={<DriveLog />} />
+              <Route path="/drive-visualization" element={<DriveVisualization />} />
               <Route path="/" element={<DataSource />} />
             </Routes>
           </Content>
