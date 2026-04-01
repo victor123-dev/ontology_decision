@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Select, Spin, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
@@ -25,7 +25,7 @@ const DriveVisualization = () => {
     try {
       const response = await api.get('/business-models');
       setBusinessModels(response.data);
-    } catch (error) {
+    } catch (_error) {
       message.error('获取业务模型失败');
     }
   };
@@ -35,7 +35,7 @@ const DriveVisualization = () => {
     try {
       const response = await api.get('/drive-visualization/full-graph');
       setGraphData(response.data);
-    } catch (error) {
+    } catch (_error) {
       message.error('获取全景图失败');
     } finally {
       setLoading(false);
@@ -47,7 +47,7 @@ const DriveVisualization = () => {
     try {
       const response = await api.get(`/drive-visualization/model/${modelId}`);
       setGraphData(response.data);
-    } catch (error) {
+    } catch (_error) {
       message.error('获取模型驱动图失败');
     } finally {
       setLoading(false);

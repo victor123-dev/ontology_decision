@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Card, List, Typography, Popconfirm } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, message, List, Popconfirm } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined } from '@ant-design/icons'
 import { businessModelApi, dataSourceApi } from '../../services/api'
 
 const { Option } = Select
-const { Title, Text } = Typography
+// const { Text } = Typography
 
 function BusinessModel() {
   const [businessModels, setBusinessModels] = useState([])
@@ -37,7 +37,7 @@ function BusinessModel() {
         fields: model.fields || []
       }))
       setBusinessModels(modelsWithFields)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取业务模型失败')
     } finally {
       setLoading(false)

@@ -3,7 +3,7 @@ import { Button, Form, Input, Select, message, Card, Typography } from 'antd'
 import { testExecutionApi, dataSensingApi } from '../../services/api'
 
 const { Option } = Select
-const { Title, Text } = Typography
+const { Text } = Typography
 
 function TestExecution() {
   const [configs, setConfigs] = useState([])
@@ -19,7 +19,7 @@ function TestExecution() {
     try {
       const response = await dataSensingApi.getAll()
       setConfigs(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取数据感知配置失败')
     }
   }
@@ -33,7 +33,7 @@ function TestExecution() {
       })
       setResult(response.data)
       message.success('事件模拟成功')
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败')
     } finally {
       setLoading(false)

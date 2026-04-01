@@ -26,7 +26,7 @@ function Agent() {
     try {
       const response = await agentApi.getAll()
       setAgents(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取Agent失败')
     } finally {
       setLoading(false)
@@ -37,8 +37,8 @@ function Agent() {
     try {
       const response = await agentApi.getAllCapabilities()
       setCapabilities(response.data)
-    } catch (error) {
-      message.error('获取能力清单失败')
+    } catch (_error) {
+      message.error('获取能力失败')
     }
   }
 
@@ -64,7 +64,7 @@ function Agent() {
       await agentApi.delete(id)
       message.success('删除成功')
       fetchAgents()
-    } catch (error) {
+    } catch (_error) {
       message.error('删除失败')
     }
   }
@@ -88,7 +88,7 @@ function Agent() {
       }
       setModalVisible(false)
       fetchAgents()
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败')
     }
   }
@@ -126,7 +126,7 @@ function Agent() {
       }
       setCapabilityModalVisible(false)
       fetchCapabilities()
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败')
     }
   }

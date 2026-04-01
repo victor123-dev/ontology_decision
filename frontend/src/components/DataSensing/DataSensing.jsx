@@ -26,8 +26,8 @@ function DataSensing() {
     try {
       const response = await dataSensingApi.getAll()
       setConfigs(response.data)
-    } catch (error) {
-      message.error('获取数据感知配置失败')
+    } catch (_error) {
+      message.error('获取数据源失败')
     } finally {
       setLoading(false)
     }
@@ -37,7 +37,7 @@ function DataSensing() {
     try {
       const response = await businessModelApi.getAll()
       setBusinessModels(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取业务模型失败')
     }
   }
@@ -91,7 +91,7 @@ function DataSensing() {
       await dataSensingApi.delete(id)
       message.success('删除成功')
       fetchConfigs()
-    } catch (error) {
+    } catch (_error) {
       message.error('删除失败')
     }
   }
@@ -236,7 +236,7 @@ function DataSensing() {
       }
       setModalVisible(false)
       fetchConfigs()
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败')
     }
   }
@@ -446,8 +446,8 @@ function DataSensing() {
         />
         <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
           支持的场景：
-          <br/>• 数据变化感知："监控订单表的所有变更"
-          <br/>• 阈值触发感知："当库存低于50时通知"
+          <br/>• 数据变化感知：&quot;监控订单表的所有变更&quot;
+          <br/>• 阈值触发感知：&quot;当库存低于50时通知&quot;
         </div>
       </Modal>
     </div>

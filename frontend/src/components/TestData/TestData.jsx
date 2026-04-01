@@ -24,7 +24,7 @@ function TestData() {
     try {
       const response = await dataSourceApi.getAll()
       setDataSources(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取数据源失败')
     }
   }
@@ -36,7 +36,7 @@ function TestData() {
     try {
       const response = await dataSourceApi.getTables(value)
       setTables(response.data.tables)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取表列表失败')
     }
   }
@@ -49,7 +49,7 @@ function TestData() {
       try {
         const response = await testDataApi.get(selectedDataSource, value)
         setTestData(response.data.data)
-      } catch (error) {
+      } catch (_error) {
         message.error('获取测试数据失败')
       } finally {
         setLoading(false)
@@ -64,7 +64,7 @@ function TestData() {
     try {
       const response = await testDataApi.get(selectedDataSource, selectedTable)
       setTestData(response.data.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取测试数据失败')
     } finally {
       setLoading(false)
@@ -101,7 +101,7 @@ function TestData() {
       }
       setModalVisible(false)
       fetchTestData()
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败')
     }
   }
@@ -116,7 +116,7 @@ function TestData() {
       await testDataApi.delete(selectedDataSource, selectedTable, record)
       message.success('数据删除成功')
       fetchTestData()
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败')
     }
   }

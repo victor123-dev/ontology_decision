@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Tag, Card } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Tooltip, Tag, Card } from 'antd'
 import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { driveLogicApi, dataSensingApi, agentApi, nlRuleApi } from '../../services/api'
 
@@ -10,7 +10,6 @@ function DriveLogic() {
   const [tasks, setTasks] = useState([])
 
   const [sensingConfigs, setSensingConfigs] = useState([])
-  const [agents, setAgents] = useState([])
   const [capabilities, setCapabilities] = useState([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -28,7 +27,6 @@ function DriveLogic() {
     fetchLogics()
     fetchTasks()
     fetchSensingConfigs()
-    fetchAgents()
     fetchCapabilities()
   }, [])
 
@@ -37,7 +35,7 @@ function DriveLogic() {
     try {
       const response = await driveLogicApi.getAll()
       setLogics(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取驱动逻辑失败')
     } finally {
       setLoading(false)
@@ -48,7 +46,7 @@ function DriveLogic() {
     try {
       const response = await driveLogicApi.getAllTasks()
       setTasks(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取任务失败')
     }
   }
@@ -59,17 +57,8 @@ function DriveLogic() {
     try {
       const response = await dataSensingApi.getAll()
       setSensingConfigs(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取数据感知配置失败')
-    }
-  }
-
-  const fetchAgents = async () => {
-    try {
-      const response = await agentApi.getAll()
-      setAgents(response.data)
-    } catch (error) {
-      message.error('获取Agent失败')
     }
   }
 
@@ -77,7 +66,7 @@ function DriveLogic() {
     try {
       const response = await agentApi.getAllCapabilities()
       setCapabilities(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取能力失败')
     }
   }
@@ -181,8 +170,8 @@ function DriveLogic() {
       } else {
         message.error('生成失败，请参考以下示例：\n• 如果订单金额大于10000，则需要经理审批\n• 当温度异常时发送邮件通知\n• 计算风险评分并根据结果分配不同处理流程');
       }
-    } catch (error) {
-      message.error('生成失败: ' + error.response?.data?.detail || error.message);
+    } catch (_error) {
+      message.error('生成失败');
     } finally {
       setLoading(false);
     }
@@ -193,7 +182,7 @@ function DriveLogic() {
       await driveLogicApi.delete(id)
       message.success('删除成功')
       fetchLogics()
-    } catch (error) {
+    } catch (_error) {
       message.error('删除失败')
     }
   }
@@ -230,8 +219,8 @@ function DriveLogic() {
       }
       setModalVisible(false)
       fetchLogics()
-    } catch (error) {
-      message.error('操作失败: ' + error.message)
+    } catch (_error) {
+      message.error('操作失败')
     }
   }
 
@@ -275,8 +264,8 @@ function DriveLogic() {
       }
       setTaskModalVisible(false)
       fetchTasks()
-    } catch (error) {
-      message.error('操作失败: ' + error.message)
+    } catch (_error) {
+      message.error('操作失败')
     }
   }
 
@@ -285,7 +274,7 @@ function DriveLogic() {
       await driveLogicApi.deleteTask(id)
       message.success('任务删除成功')
       fetchTasks()
-    } catch (error) {
+    } catch (_error) {
       message.error('删除失败')
     }
   }
@@ -575,8 +564,8 @@ function DriveLogic() {
         />
         <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
           支持的场景：
-          <br/>• 一阶函数："如果订单金额大于10000，则需要经理审批"
-          <br/>• 脚本函数："计算风险评分并根据结果分配不同处理流程"
+          <br/>• 一阶函数：&quot;如果订单金额大于10000，则需要经理审批&quot;
+          <br/>• 脚本函数：&quot;计算风险评分并根据结果分配不同处理流程&quot;
         </div>
       </Modal>
 

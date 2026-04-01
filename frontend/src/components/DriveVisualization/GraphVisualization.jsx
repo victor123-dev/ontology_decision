@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 
 const GraphVisualization = ({ data, onNodeClick }) => {
   const svgRef = useRef();
 
   // 处理窗口大小变化
-  const handleResize = () => {
+  const handleResize = useCallback(() => {
     if (svgRef.current && data && data.nodes && data.edges) {
       const container = svgRef.current.parentElement;
       const newWidth = container ? container.clientWidth : 1200;
@@ -24,7 +24,7 @@ const GraphVisualization = ({ data, onNodeClick }) => {
       // 重启模拟
       simulation.alpha(1).restart();
     }
-  };
+  }, [data]);
 
   useEffect(() => {
     if (!data || !data.nodes || !data.edges) return;
@@ -125,7 +125,7 @@ const GraphVisualization = ({ data, onNodeClick }) => {
       .attr("marker-end", "url(#arrow)");
 
     // 添加连线文字标签
-    const linkText = linkGroup.append('text')
+    linkGroup.append('text')
       .attr('class', 'link-text')
       .attr('font-size', '10px')
       .attr('fill', '#666')
@@ -314,7 +314,7 @@ const GraphVisualization = ({ data, onNodeClick }) => {
       // 清理tooltip
       d3.select('body').select('.graph-tooltip').remove();
     };
-  }, [data, onNodeClick]);
+  }, [data, onNodeClick, handleResize]);
 
   return (
     <div style={{ overflow: 'hidden', border: '1px solid #e8e8e8', borderRadius: 4, width: '100%' }}>

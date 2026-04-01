@@ -20,7 +20,7 @@ function DataSource() {
     try {
       const response = await dataSourceApi.getAll()
       setDataSources(response.data)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取数据源失败')
     } finally {
       setLoading(false)
@@ -44,7 +44,7 @@ function DataSource() {
       await dataSourceApi.delete(id)
       message.success('删除成功')
       fetchDataSources()
-    } catch (error) {
+    } catch (_error) {
       message.error('删除失败')
     }
   }
@@ -53,8 +53,8 @@ function DataSource() {
     try {
       await dataSourceApi.testConnection(id)
       message.success('连接成功')
-    } catch (error) {
-      message.error('连接失败: ' + error.response.data.detail)
+    } catch (_error) {
+      message.error('连接失败')
     }
   }
 
@@ -69,7 +69,7 @@ function DataSource() {
       }
       setModalVisible(false)
       fetchDataSources()
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败')
     }
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Table, Button, Select, message, Input, Card, Tag, Space } from 'antd'
+import { Table, Button, Select, message, Input, Card, Tag } from 'antd'
 import { ReactFlow, Controls, Background, useNodesState, useEdgesState, MiniMap, Handle, Position } from 'reactflow'
 import 'reactflow/dist/style.css'
 import dagre from 'dagre'
@@ -156,12 +156,10 @@ const nodeTypes = {
 };
 
 function DriveLog() {
-  const [logs, setLogs] = useState([])
   const [traces, setTraces] = useState([])
   const [selectedTrace, setSelectedTrace] = useState(null)
   const [loading, setLoading] = useState(false)
   const [traceView, setTraceView] = useState('list') // 'list' or 'chain'
-  const [hoveredLogId, setHoveredLogId] = useState(null)
   const [filters, setFilters] = useState({
     level: null,
     search: ''
@@ -173,7 +171,7 @@ function DriveLog() {
     }
   }, [traceView, filters])
 
-  const fetchTraces = async () => {
+  const fetchTraces = useCallback(async () => {
     setLoading(true)
     try {
       const params = {}
@@ -182,12 +180,12 @@ function DriveLog() {
       
       const response = await driveLogApi.getAllTraces(params)
       setTraces(response.data.traces)
-    } catch (error) {
+    } catch (_error) {
       message.error('获取链路列表失败')
     } finally {
       setLoading(false)
     }
-  }
+  }, [filters]);
 
   const fetchTraceChain = async (traceId) => {
     setLoading(true)
@@ -195,7 +193,7 @@ function DriveLog() {
       const response = await driveLogApi.getTraceChain(traceId)
       setSelectedTrace(response.data.chain)
       setTraceView('chain')
-    } catch (error) {
+    } catch (_error) {
       message.error('获取链路详情失败')
     } finally {
       setLoading(false)
@@ -296,7 +294,6 @@ function DriveLog() {
   const convertForestToFlow = (forest) => {
     const nodes = [];
     const edges = [];
-    let stepNumber = 1;
     
     // 先扁平化森林结构以获得正确的步骤编号
     const flattenForest = (logs, result = []) => {
@@ -357,8 +354,8 @@ function DriveLog() {
   // ReactFlow组件
   const FlowChart = ({ forest }) => {
     const { nodes: initialNodes, edges: initialEdges } = convertForestToFlow(forest);
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    const [nodes, , onNodesChange] = useNodesState(initialNodes);
+    const [edges, , onEdgesChange] = useEdgesState(initialEdges);
     
     // 计算图的实际边界
     const bounds = {
@@ -391,29 +388,6 @@ function DriveLog() {
       </div>
     );
   };
-
-  const renderTraceTree = (logs, level = 0) => {
-    return logs.map((log) => (
-      <div key={log.id} style={{ marginLeft: level * 20, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', backgroundColor: level === 0 ? '#f0f9ff' : '#fafafa', borderLeft: `3px solid ${getLevelColor(log.level)}` }}>
-          <Tag color={getLevelColor(log.level)}>{log.level.toUpperCase()}</Tag>
-          <Tag color="blue">{getCategoryText(log.category)}</Tag>
-          <span style={{ flex: 1 }}>{log.message}</span>
-          <span style={{ fontSize: '12px', color: '#666' }}>{formatDateTime(log.created_at)}</span>
-        </div>
-        {log.data && (
-          <div style={{ marginLeft: 12, fontSize: '12px', backgroundColor: '#f9f9f9', padding: 8, borderRadius: 4, overflow: 'auto' }}>
-            <pre>{JSON.stringify(log.data, null, 2)}</pre>
-          </div>
-        )}
-        {log.children && log.children.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            {renderTraceTree(log.children, level + 1)}
-          </div>
-        )}
-      </div>
-    ))
-  }
 
   return (
     <div style={{ width: '100%', height: '100%' }}>

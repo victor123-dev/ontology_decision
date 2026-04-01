@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Upload, Button, message, Spin, Steps, Modal, Table, Tag, Form, Input, Select, Popconfirm, Typography } from 'antd';
 import { InboxOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import api from '../../services/api';
@@ -25,7 +25,6 @@ const DocumentImport = () => {
   // 新增状态：业务模型和任务数据
   const [businessModels, setBusinessModels] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [sensingConfigs, setSensingConfigs] = useState([]); // 用于驱动逻辑的事件选择
   
   // 类型相关的状态
   const [selectedSensingType, setSelectedSensingType] = useState('data_change');
@@ -47,8 +46,8 @@ const DocumentImport = () => {
       setTasks(taskResponse.data || []);
       
       // 设置当前的感知配置用于驱动逻辑选择
-      setSensingConfigs(configs.sensing_configs || []);
-    } catch (error) {
+        // setSensingConfigs(configs.sensing_configs || []);
+    } catch (_error) {
       message.error('获取业务模型或任务数据失败');
     }
   };
@@ -67,8 +66,8 @@ const DocumentImport = () => {
       setFileName(response.data.filename);
       setCurrentStep(1);
       message.success('文档解析成功');
-    } catch (error) {
-      message.error('文档解析失败: ' + error.response?.data?.detail || error.message);
+    } catch (_error) {
+      message.error('文档解析失败');
     } finally {
       setLoading(false);
     }
@@ -86,8 +85,8 @@ const DocumentImport = () => {
       setConfigs(response.data);
       setCurrentStep(2);
       message.success('配置生成成功');
-    } catch (error) {
-      message.error('配置生成失败: ' + error.response?.data?.detail || error.message);
+    } catch (_error) {
+      message.error('配置生成失败');
     } finally {
       setLoading(false);
     }
@@ -107,8 +106,8 @@ const DocumentImport = () => {
       setDocumentContent('');
       setFileName('');
       setConfigs({ sensing_configs: [], drive_logics: [] });
-    } catch (error) {
-      message.error('配置应用失败: ' + error.response?.data?.detail || error.message);
+    } catch (_error) {
+      message.error('配置应用失败');
     } finally {
       setLoading(false);
     }
@@ -124,7 +123,7 @@ const DocumentImport = () => {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
-      render: (text, record) => (
+      render: (text) => (
         <span>{text || '-'}</span>
       )
     },
@@ -187,7 +186,7 @@ const DocumentImport = () => {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
-      render: (text, record) => (
+      render: (text) => (
         <span>{text || '-'}</span>
       )
     },
