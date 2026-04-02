@@ -91,6 +91,152 @@ class LLMTranslator:
         _description_cache[cache_key] = result
         return result
     
+    def infer_relationships(self, tables_info: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """基于表结构信息推断业务关系"""
+        if not self.llm_client:
+            raise Exception("LLM client is not initialized")
+        
+        # 格式化表信息用于提示词
+        formatted_tables = self._format_tables_for_prompt(tables_info)
+        
+        prompt = f"""
+你是一位资深的数据架构师和业务分析师，请基于以下数据库表结构信息，分析并推断表之间的业务关系。
+
+## 数据库表结构信息
+
+{formatted_tables}
+
+## 分析要求
+
+1. **关系识别**: 仔细分析字段名、表名的语义，识别潜在的业务关系
+2. **基数判断**: 根据业务逻辑判断正确的基数类型
+3. **多对多检测**: 特别注意识别中间表（包含两个外键引用的表）
+4. **业务语义**: 使用清晰、准确的中文描述业务含义
+
+## 基数类型定义
+
+- **one-to-one (一对一)**: 一个记录对应另一个表的一个记录（如：用户 ↔ 用户详情）
+- **one-to-many (一对多)**: 一个记录对应另一个表的多个记录（如：客户 → 多个订单）
+- **many-to-one (多对一)**: 多个记录对应另一个表的一个记录（如：多个订单 → 一个客户）
+- **many-to-many (多对多)**: 多个记录对应另一个表的多个记录，通过中间表实现（如：产品 ↔ 物料）
+
+## 输出格式要求
+
+请严格按照以下JSON格式输出，不要包含任何其他内容：
+
+{{
+  "relationships": [
+    {{
+      "source_table": "源表名",
+      "source_field": "源字段名",
+      "target_table": "目标表名", 
+      "target_field": "目标字段名",
+      "cardinality": "基数类型",
+      "name": "关系中文名称",
+      "description": "关系详细业务说明",
+      "intermediate_table": "中间表名（仅many-to-many时提供）",
+      "intermediate_source_key": "中间表中指向源表的外键字段（仅many-to-many时提供）",
+      "intermediate_target_key": "中间表中指向目标表的外键字段（仅many-to-many时提供）"
+    }}
+  ]
+}}
+
+## 输出示例
+
+{{
+  "relationships": [
+    {{
+      "source_table": "md_partner",
+      "source_field": "id", 
+      "target_table": "demand_order",
+      "target_field": "customer_id",
+      "cardinality": "one-to-many",
+      "name": "客户发起需求单",
+      "description": "`md_partner`表中类型为\"CUSTOMER\"的合作伙伴作为客户，发起`demand_order`表中的需求单；一个客户可发起多个需求单，一个需求单仅属于一个客户。"
+    }},
+    {{
+      "source_table": "product",
+      "source_field": "id",
+      "target_table": "md_material", 
+      "target_field": "id",
+      "cardinality": "many-to-many",
+      "name": "产品由物料组成",
+      "description": "`product`表中的产品通过`product_bom`表（中间载体）与`md_material`表中的物料关联；一个产品由多个物料组成，一个物料可用于多个产品。",
+      "intermediate_table": "product_bom",
+      "intermediate_source_key": "product_id",
+      "intermediate_target_key": "material_id"
+    }}
+  ]
+}}
+
+## 特别注意事项
+
+1. **字段匹配**: 优先匹配字段名相似的字段（如 customer_id → id）
+2. **业务逻辑**: 考虑实际业务场景，不要仅依赖技术约束
+3. **完整性**: 尽可能发现所有合理的业务关系
+4. **准确性**: 确保基数类型符合业务实际
+5. **中间表识别**: 如果发现某个表包含两个外键引用，考虑它是否是中间表
+
+现在请基于上述表结构信息，输出完整的业务关系分析结果。
+"""
+        
+        try:
+            response = self.llm_client.chat.completions.create(
+                model=self.llm_client.model_name,
+                messages=[
+                    {"role": "system", "content": "你是一个专业的数据架构师和业务分析师"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                extra_body={"enable_thinking": False}
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            
+            # 提取JSON部分（处理可能的markdown代码块）
+            if result_text.startswith("```json"):
+                result_text = result_text[7:]  # 移除 ```json
+                if result_text.endswith("```"):
+                    result_text = result_text[:-3]  # 移除 ```
+            
+            result_json = json.loads(result_text)
+            return result_json.get("relationships", [])
+            
+        except Exception as e:
+            logger.error(f"Failed to infer relationships: {e}")
+            return []
+    
+    def _format_tables_for_prompt(self, tables_info: Dict[str, Any]) -> str:
+        """将表信息格式化为提示词友好的格式"""
+        formatted = []
+        
+        for table_name, table_info in tables_info.items():
+            columns = table_info.get('columns', [])
+            pk = table_info.get('primary_key')
+            fk_info = table_info.get('foreign_keys', [])
+            
+            table_str = f"### 表: {table_name}\n"
+            table_str += f"- **主键**: {pk if pk else '无'}\n"
+            table_str += "- **字段列表**:\n"
+            
+            for col in columns:
+                col_info = f"  - `{col}`"
+                # 添加外键信息（如果有）
+                fk_target = None
+                for fk in fk_info:
+                    if col in fk.get('constrained_columns', []):
+                        referred_table = fk.get('referred_table', '未知')
+                        fk_target = f" → {referred_table}"
+                        break
+                
+                if fk_target:
+                    col_info += f" {fk_target}"
+                table_str += f"{col_info}\n"
+            
+            formatted.append(table_str)
+        
+        return "\n".join(formatted)
+    
     def batch_translate(self, texts: List[str]) -> Dict[str, str]:
         """批量翻译多个英文术语为中文（带缓存）"""
         if not self.llm_client:

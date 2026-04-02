@@ -32,6 +32,16 @@ export const businessModelApi = {
   updateField: (modelId, fieldId, data) => api.put(`/business-models/${modelId}/fields/${fieldId}`, data),
 };
 
+// 业务模型关系管理
+export const businessModelLinkApi = {
+  create: (data) => api.post('/business-model-links', data),
+  getAll: () => api.get('/business-model-links'),
+  get: (id) => api.get(`/business-model-links/${id}`),
+  update: (id, data) => api.put(`/business-model-links/${id}`, data),
+  delete: (id) => api.delete(`/business-model-links/${id}`),
+  getByModel: (modelId) => api.get(`/business-models/${modelId}/links`),
+};
+
 // 数据感知配置
 export const dataSensingApi = {
   create: (data) => api.post('/data-sensing-configs', data),

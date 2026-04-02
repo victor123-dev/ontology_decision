@@ -44,6 +44,19 @@ class DBClient:
         pk_constraint = inspector.get_pk_constraint(table_name)
         return pk_constraint.get('constrained_columns', [])
     
+    def get_foreign_keys(self, table_name: str) -> List[Dict]:
+        """获取表的外键约束信息"""
+        if not self.engine:
+            self.connect()
+        inspector = inspect(self.engine)
+        try:
+            foreign_keys = inspector.get_foreign_keys(table_name)
+            return foreign_keys
+        except Exception as e:
+            # 某些数据库可能不支持外键检测，返回空列表
+            print(f"Warning: Could not get foreign keys for table {table_name}: {e}")
+            return []
+    
     def execute_query(self, query: str, params=None) -> List[Dict]:
         if self.db_type == 'sqlite':
             conn = sqlite3.connect(self.connection_string.replace('sqlite:///', ''))
