@@ -76,7 +76,16 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
       .attr("cursor", "pointer")
       .on("click", (event, d) => {
         event.stopPropagation();
-        onSelect({ type: 'link', data: d });
+        // 还原原始链接对象，保持 source 和 target 为字符串 ID
+        const originalLink = {
+          id: d.id,
+          source: d.source?.id || d.source,  // 如果是对象就取 id，否则保持原值
+          target: d.target?.id || d.target,  // 如果是对象就取 id，否则保持原值
+          name: d.name,
+          description: d.description,
+          data: d.data
+        };
+        onSelect({ type: 'link', data: originalLink });
       })
       .merge(links);
 
@@ -141,7 +150,15 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
 
     nodeEnter.on("click", (event, d) => {
       event.stopPropagation();
-      onSelect({ type: 'node', data: d });
+      // 还原原始节点对象，排除 D3 添加的 x/y/fx/fy 等属性
+      const originalNode = {
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        description: d.description,
+        data: d.data
+      };
+      onSelect({ type: 'business_model', data: originalNode });
     });
 
     nodeGroups.exit().remove();

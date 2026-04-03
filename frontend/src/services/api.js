@@ -29,7 +29,9 @@ export const businessModelApi = {
   update: (id, data) => api.put(`/business-models/${id}`, data),
   delete: (id) => api.delete(`/business-models/${id}`),
   import: (data) => api.post('/business-models/import', data),
+  createField: (modelId, fieldData) => api.post(`/business-models/${modelId}/fields`, fieldData),
   updateField: (modelId, fieldId, data) => api.put(`/business-models/${modelId}/fields/${fieldId}`, data),
+  deleteField: (modelId, fieldId) => api.delete(`/business-models/${modelId}/fields/${fieldId}`),
 };
 
 // 业务模型关系管理

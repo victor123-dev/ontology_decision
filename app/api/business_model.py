@@ -63,6 +63,35 @@ def delete_business_model(model_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "BusinessModel deleted successfully"}
 
+@router.post("/business-models/{model_id}/fields")
+def create_business_model_field(model_id: str, field_data: dict, db: Session = Depends(get_db)):
+    """创建业务模型字段"""
+    # 检查模型是否存在
+    business_model = db.query(BusinessModel).filter(BusinessModel.id == model_id).first()
+    if not business_model:
+        raise HTTPException(status_code=404, detail="BusinessModel not found")
+    
+    # 检查字段ID是否已存在
+    existing_field = db.query(BusinessModelField).filter(
+        BusinessModelField.model_id == model_id,
+        BusinessModelField.field_id == field_data.get("field_id")
+    ).first()
+    if existing_field:
+        raise HTTPException(status_code=400, detail="Field ID already exists")
+    
+    # 创建新字段
+    field = BusinessModelField(
+        model_id=model_id,
+        field_id=field_data.get("field_id"),
+        name=field_data.get("name", field_data.get("field_id")),
+        description=field_data.get("description", ""),
+        data_type=field_data.get("data_type", "string")
+    )
+    db.add(field)
+    db.commit()
+    db.refresh(field)
+    return field
+
 @router.put("/business-models/{model_id}/fields/{field_id}")
 def update_business_model_field(model_id: str, field_id: str, field_data: dict, db: Session = Depends(get_db)):
     # 检查模型是否存在
@@ -87,6 +116,27 @@ def update_business_model_field(model_id: str, field_id: str, field_data: dict, 
     db.commit()
     db.refresh(field)
     return field
+
+@router.delete("/business-models/{model_id}/fields/{field_id}")
+def delete_business_model_field(model_id: str, field_id: str, db: Session = Depends(get_db)):
+    """删除业务模型字段"""
+    # 检查模型是否存在
+    business_model = db.query(BusinessModel).filter(BusinessModel.id == model_id).first()
+    if not business_model:
+        raise HTTPException(status_code=404, detail="BusinessModel not found")
+    
+    # 检查字段是否存在
+    field = db.query(BusinessModelField).filter(
+        BusinessModelField.model_id == model_id,
+        BusinessModelField.field_id == field_id
+    ).first()
+    if not field:
+        raise HTTPException(status_code=404, detail="Field not found")
+    
+    # 删除字段
+    db.delete(field)
+    db.commit()
+    return {"message": "Field deleted successfully"}
 
 @router.post("/business-models/import")
 def import_model(data: dict, db: Session = Depends(get_db)):

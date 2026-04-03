@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Radio, message, List, Popconfirm, Card, Divider, Tabs } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, LinkOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, LinkOutlined, PlusCircleOutlined } from '@ant-design/icons'
 import { businessModelApi, businessModelLinkApi, dataSourceApi } from '../../services/api'
 import OntologyView from './OntologyView/OntologyView'
+import { modelEventBus } from '../../utils/modelEventBus'
 
 const { Option } = Select
 
@@ -32,6 +33,120 @@ function BusinessModel() {
     fetchModelLinks()
     fetchDataSources()
   }, [])
+
+  // 监听模型和关系的变更事件
+  useEffect(() => {
+    // 模型创建
+    const handleModelCreated = ({ model }) => {
+      setBusinessModels(prev => [
+        ...prev,
+        { ...model, fields: model.fields || [] }
+      ]);
+    };
+
+    // 模型更新
+    const handleModelUpdated = ({ modelId, updatedFields }) => {
+      setBusinessModels(prev => 
+        prev.map(model => 
+          model.id === modelId ? { ...model, ...updatedFields } : model
+        )
+      );
+    };
+
+    // 模型删除
+    const handleModelDeleted = ({ modelId }) => {
+      setBusinessModels(prev => prev.filter(model => model.id !== modelId));
+    };
+
+    // 关系创建
+    const handleLinkCreated = ({ link }) => {
+      setModelLinks(prev => [...prev, link]);
+    };
+
+    // 关系更新
+    const handleLinkUpdated = ({ linkId, updatedFields }) => {
+      setModelLinks(prev => 
+        prev.map(link => 
+          link.id === linkId ? { ...link, ...updatedFields } : link
+        )
+      );
+    };
+
+    // 关系删除
+    const handleLinkDeleted = ({ linkId }) => {
+      setModelLinks(prev => prev.filter(link => link.id !== linkId));
+    };
+
+    // 字段创建
+    const handleFieldCreated = ({ modelId, field }) => {
+      setBusinessModels(prev => 
+        prev.map(model => 
+          model.id === modelId 
+            ? { ...model, fields: [...(model.fields || []), field] }
+            : model
+        )
+      );
+    };
+
+    // 字段更新
+    const handleFieldUpdated = ({ modelId, fieldId, updatedFields }) => {
+      setBusinessModels(prev => 
+        prev.map(model => {
+          if (model.id === modelId && model.fields) {
+            return {
+              ...model,
+              fields: model.fields.map(field => 
+                field.field_id === fieldId ? { ...field, ...updatedFields } : field
+              )
+            };
+          }
+          return model;
+        })
+      );
+    };
+
+    // 字段删除
+    const handleFieldDeleted = ({ modelId, fieldId }) => {
+      setBusinessModels(prev => 
+        prev.map(model => {
+          if (model.id === modelId && model.fields) {
+            const updatedFields = model.fields.filter(field => field.field_id !== fieldId);
+            // 如果删除的是主键，需要更新主键ID
+            let updatedModel = { ...model, fields: updatedFields };
+            if (model.primary_key_id === fieldId) {
+              updatedModel.primary_key_id = null;
+            }
+            return updatedModel;
+          }
+          return model;
+        })
+      );
+    };
+
+    // 订阅所有事件
+    modelEventBus.on('model_created', handleModelCreated);
+    modelEventBus.on('model_updated', handleModelUpdated);
+    modelEventBus.on('model_deleted', handleModelDeleted);
+    modelEventBus.on('link_created', handleLinkCreated);
+    modelEventBus.on('link_updated', handleLinkUpdated);
+    modelEventBus.on('link_deleted', handleLinkDeleted);
+    modelEventBus.on('field_created', handleFieldCreated);
+    modelEventBus.on('field_updated', handleFieldUpdated);
+    modelEventBus.on('field_deleted', handleFieldDeleted);
+
+    // 清理订阅
+    return () => {
+      modelEventBus.off('model_created', handleModelCreated);
+      modelEventBus.off('model_updated', handleModelUpdated);
+      modelEventBus.off('model_deleted', handleModelDeleted);
+      modelEventBus.off('link_created', handleLinkCreated);
+      modelEventBus.off('link_updated', handleLinkUpdated);
+      modelEventBus.off('link_deleted', handleLinkDeleted);
+      modelEventBus.off('field_created', handleFieldCreated);
+      modelEventBus.off('field_updated', handleFieldUpdated);
+      modelEventBus.off('field_deleted', handleFieldDeleted);
+    };
+  }, []);
 
   const fetchBusinessModels = async () => {
     setLoading(true)
@@ -88,7 +203,9 @@ function BusinessModel() {
     try {
       await businessModelApi.delete(id)
       message.success('删除成功')
-      fetchBusinessModels()
+      // 触发事件通知其他页面
+      modelEventBus.emitModelDeleted(id);
+      // 不需要重新获取数据，因为事件会自动同步
     } catch (error) {
       message.error('删除失败')
     }
@@ -99,12 +216,74 @@ function BusinessModel() {
       if (editingModel) {
         await businessModelApi.update(editingModel.id, values)
         message.success('更新成功')
+        // 触发事件通知其他页面
+        modelEventBus.emitModelUpdated(editingModel.id, values);
       } else {
-        await businessModelApi.create(values)
+        const response = await businessModelApi.create(values);
         message.success('创建成功')
+        // 触发事件通知其他页面
+        modelEventBus.emitModelCreated(response.data);
       }
       setModalVisible(false)
-      fetchBusinessModels()
+      // 不需要重新获取数据，因为事件会自动同步
+    } catch (error) {
+      message.error('操作失败')
+    }
+  }
+
+  // 字段操作处理函数
+  const handleAddField = (modelId) => {
+    const model = businessModels.find(m => m.id === modelId);
+    if (model) {
+      setEditingModel(model);
+      setEditingField(null);
+      setFieldModalVisible(true);
+    }
+  };
+
+  const handleEditField = (model, field) => {
+    setEditingModel(model);
+    setEditingField(field);
+    if (field) {
+      fieldForm.setFieldsValue(field);
+    }
+    setFieldModalVisible(true);
+  };
+
+  const handleDeleteField = async (modelId, fieldId) => {
+    try {
+      await businessModelApi.deleteField(modelId, fieldId);
+      message.success('字段删除成功');
+      
+      // 触发事件通知其他页面
+      modelEventBus.emitFieldDeleted(modelId, fieldId);
+      
+    } catch (error) {
+      message.error('删除字段失败');
+    }
+  };
+
+  const handleSubmitField = async (values) => {
+    try {
+      if (editingModel && editingField) {
+        // 更新现有字段
+        await businessModelApi.updateField(editingModel.id, editingField.field_id, values)
+        message.success('字段更新成功')
+        
+        // 触发事件通知其他页面
+        modelEventBus.emitFieldUpdated(editingModel.id, editingField.field_id, values);
+      } else if (editingModel) {
+        // 创建新字段
+        const response = await businessModelApi.createField(editingModel.id, values);
+        message.success('字段创建成功');
+        
+        // 触发事件通知其他页面
+        modelEventBus.emitFieldCreated(editingModel.id, response.data);
+      }
+      
+      setFieldModalVisible(false);
+      setEditingField(null);
+      fieldForm.resetFields();
     } catch (error) {
       message.error('操作失败')
     }
@@ -133,35 +312,24 @@ function BusinessModel() {
       const response = await businessModelApi.import(values)
       message.success('导入成功')
       setImportModalVisible(false)
-      fetchBusinessModels()
+      
+      // 触发事件通知其他页面（假设 response.data 包含导入的模型列表）
+      if (Array.isArray(response.data)) {
+        response.data.forEach(model => {
+          modelEventBus.emitModelCreated(model);
+        });
+      } else if (response.data && response.data.models) {
+        response.data.models.forEach(model => {
+          modelEventBus.emitModelCreated(model);
+        });
+      }
+      
       // 导入后重新获取关系（可能有新创建的关系）
       fetchModelLinks()
     } catch (error) {
       message.error('导入失败')
     } finally {
       setImportLoading(false)
-    }
-  }
-
-  const handleEditField = (model, field) => {
-    setEditingModel(model)
-    setEditingField(field)
-    if (field) {
-      fieldForm.setFieldsValue(field)
-    }
-    setFieldModalVisible(true)
-  }
-
-  const handleSubmitField = async (values) => {
-    try {
-      if (editingModel && editingField) {
-        await businessModelApi.updateField(editingModel.id, editingField.field_id, values)
-        message.success('字段更新成功')
-        setFieldModalVisible(false)
-        fetchBusinessModels()
-      }
-    } catch (error) {
-      message.error('操作失败')
     }
   }
 
@@ -191,7 +359,9 @@ function BusinessModel() {
     try {
       await businessModelLinkApi.delete(id)
       message.success('关系删除成功')
-      fetchModelLinks()
+      // 触发事件通知其他页面
+      modelEventBus.emitLinkDeleted(id);
+      // 不需要重新获取数据，因为事件会自动同步
     } catch (error) {
       message.error('删除关系失败')
     }
@@ -202,12 +372,16 @@ function BusinessModel() {
       if (editingLink) {
         await businessModelLinkApi.update(editingLink.id, values)
         message.success('关系更新成功')
+        // 触发事件通知其他页面
+        modelEventBus.emitLinkUpdated(editingLink.id, values);
       } else {
-        await businessModelLinkApi.create(values)
+        const response = await businessModelLinkApi.create(values);
         message.success('关系创建成功')
+        // 触发事件通知其他页面
+        modelEventBus.emitLinkCreated(response.data);
       }
       setLinkModalVisible(false)
-      fetchModelLinks()
+      // 不需要重新获取数据，因为事件会自动同步
     } catch (error) {
       message.error('操作失败')
     }
@@ -280,9 +454,6 @@ function BusinessModel() {
           <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button size="small" style={{ marginRight: 8 }} onClick={() => handleEditField(record, null)}>
-            编辑字段
-          </Button>
           <Popconfirm
             title="确定要删除这个业务模型吗？"
             onConfirm={() => handleDelete(record.id)}
@@ -303,50 +474,81 @@ function BusinessModel() {
   const expandedBusinessModelRowRender = (record) => {
     const fields = record.fields || [];
     
-    if (fields.length === 0) {
-      return <div style={{ padding: '16px', color: '#8c8c8c' }}>暂无字段信息</div>;
-    }
-    
     return (
       <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
-        <h4>字段列表 ({fields.length} 个字段)</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-          {fields.map((field) => (
-            <div key={field.field_id} style={{ 
-              border: '1px solid #e8e8e8', 
-              borderRadius: '4px', 
-              padding: '12px',
-              backgroundColor: 'white'
-            }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                {field.name}
-                {field.field_id === record.primary_key_id && (
-                  <span style={{ 
-                    marginLeft: '8px', 
-                    backgroundColor: '#ffe58f', 
-                    color: '#595959', 
-                    padding: '2px 6px', 
-                    borderRadius: '4px', 
-                    fontSize: '12px'
-                  }}>
-                    主键
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
-                <strong>字段ID:</strong> {field.field_id}
-              </div>
-              <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
-                <strong>数据类型:</strong> {field.data_type}
-              </div>
-              {field.description && (
-                <div style={{ fontSize: '12px', color: '#595959', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
-                  {field.description}
-                </div>
-              )}
-            </div>
-          ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h4>字段列表 ({fields.length} 个字段)</h4>
+          <Button 
+            type="primary" 
+            size="small" 
+            icon={<PlusOutlined />} 
+            onClick={() => handleAddField(record.id)}
+          >
+            添加字段
+          </Button>
         </div>
+        
+        {fields.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#8c8c8c', padding: '16px' }}>
+            暂无字段
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+            {fields.map((field) => (
+              <div key={field.field_id} style={{ 
+                border: '1px solid #e8e8e8', 
+                borderRadius: '4px', 
+                padding: '12px',
+                backgroundColor: 'white'
+              }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                  {field.name}
+                  {field.field_id === record.primary_key_id && (
+                    <span style={{ 
+                      marginLeft: '8px', 
+                      backgroundColor: '#ffe58f', 
+                      color: '#595959', 
+                      padding: '2px 6px', 
+                      borderRadius: '4px', 
+                      fontSize: '12px'
+                    }}>
+                      主键
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
+                  <strong>字段ID:</strong> {field.field_id}
+                </div>
+                <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
+                  <strong>数据类型:</strong> {field.data_type}
+                </div>
+                {field.description && (
+                  <div style={{ fontSize: '12px', color: '#595959', whiteSpace: 'pre-wrap', lineHeight: 1.4, marginBottom: '8px' }}>
+                    {field.description}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <Button 
+                    size="small" 
+                    onClick={() => handleEditField(record, field)}
+                  >
+                    编辑
+                  </Button>
+                  <Popconfirm
+                    title="确定要删除这个字段吗？"
+                    onConfirm={() => handleDeleteField(record.id, field.field_id)}
+                    okText="确定"
+                    cancelText="取消"
+                  >
+                    <Button size="small" danger>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -709,59 +911,50 @@ function BusinessModel() {
 
       {/* 字段编辑模态框 */}
       <Modal
-        title={editingField ? '编辑字段' : '编辑模型字段'}
+        title={editingField ? '编辑字段' : '添加字段'}
         open={fieldModalVisible}
         onOk={fieldForm.submit}
-        onCancel={() => setFieldModalVisible(false)}
+        onCancel={() => {
+          setFieldModalVisible(false);
+          setEditingField(null);
+          fieldForm.resetFields();
+        }}
         width={600}
       >
-        {editingModel && (
-          <div>
-            <h3>{editingModel.name} - 字段列表</h3>
-            <List
-              dataSource={editingModel.fields || []}
-              renderItem={(field) => (
-                <List.Item
-                  actions={[
-                    <Button key="edit" size="small" onClick={() => handleEditField(editingModel, field)}>
-                      编辑
-                    </Button>
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={field.name}
-                    description={
-                      <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                        <div>字段ID: {field.field_id} | 数据类型: {field.data_type}</div>
-                        <div>{field.description}</div>
-                      </div>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-
-            {editingField && (
-              <div style={{ marginTop: 24 }}>
-                <h4>编辑字段</h4>
-                <Form form={fieldForm} layout="vertical" onFinish={handleSubmitField}>
-                  <Form.Item name="field_id" label="字段ID">
-                    <Input disabled />
-                  </Form.Item>
-                  <Form.Item name="name" label="中文名称" rules={[{ required: true, message: '请输入中文名称' }]}>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="data_type" label="数据类型">
-                    <Input disabled />
-                  </Form.Item>
-                  <Form.Item name="description" label="中文说明">
-                    <Input.TextArea />
-                  </Form.Item>
-                </Form>
-              </div>
-            )}
-          </div>
-        )}
+        <Form form={fieldForm} layout="vertical" onFinish={handleSubmitField}>
+          <Form.Item 
+            name="field_id" 
+            label="字段ID" 
+            rules={[{ required: true, message: '请输入字段ID' }]}
+          >
+            <Input disabled={!!editingField} />
+          </Form.Item>
+          <Form.Item 
+            name="name" 
+            label="中文名称" 
+            rules={[{ required: true, message: '请输入中文名称' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item 
+            name="data_type" 
+            label="数据类型" 
+            rules={[{ required: true, message: '请选择数据类型' }]}
+          >
+            <Select>
+              <Option value="string">字符串</Option>
+              <Option value="integer">整数</Option>
+              <Option value="float">浮点数</Option>
+              <Option value="boolean">布尔值</Option>
+              <Option value="date">日期</Option>
+              <Option value="datetime">日期时间</Option>
+              <Option value="text">文本</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="description" label="中文说明">
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
       </Modal>
 
       {/* 关系编辑模态框 */}

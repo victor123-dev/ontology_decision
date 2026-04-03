@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Popconfirm, message, Select, Radio } from 'antd';
+import { Form, Input, Button, Popconfirm, message, Select, Radio, Collapse } from 'antd';
 import { dataSourceApi, businessModelApi } from '../../../../services/api';
+
+const { Panel } = Collapse;
 
 const { Option } = Select;
 
-const PropertyPanel = ({ element, onUpdate, onDelete }) => {
+const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, onDeleteField }) => {
   const [form] = Form.useForm();
   const [isEdit, setIsEdit] = useState(false);
   const [dataSources, setDataSources] = useState([]);
   const [businessModels, setBusinessModels] = useState([]);
+  const [fields, setFields] = useState([]);
+  const [primaryKeyId, setPrimaryKeyId] = useState(null);
 
   // 选中元素变化时重置
   useEffect(() => {
@@ -16,6 +20,15 @@ const PropertyPanel = ({ element, onUpdate, onDelete }) => {
       // 使用完整的 data 字段进行初始化
       const initialValues = element.data.data;
       form.setFieldsValue(initialValues);
+      
+      // 提取字段信息和主键ID
+      if (element.type === 'business_model' && element.data.data?.fields) {
+        setFields(element.data.data.fields || []);
+        setPrimaryKeyId(element.data.data.primary_key_id || null);
+      } else {
+        setFields([]);
+        setPrimaryKeyId(null);
+      }
     }
     setIsEdit(false);
   }, [element, form]);
@@ -77,7 +90,7 @@ const PropertyPanel = ({ element, onUpdate, onDelete }) => {
     message.success('删除成功');
   };
 
-  const isNode = element.type === 'node';
+  const isNode = element.type === 'business_model';
 
   return (
     <div style={{ 
@@ -86,7 +99,7 @@ const PropertyPanel = ({ element, onUpdate, onDelete }) => {
       background: '#FFFFFF', 
       display: 'flex',
       flexDirection: 'column',
-      height: '100vh'
+      height: '100%'
     }}>
       <div style={{ 
         padding: '16px 20px', 
@@ -135,6 +148,101 @@ const PropertyPanel = ({ element, onUpdate, onDelete }) => {
                   ))}
                 </Select>
               </Form.Item>
+              
+              {/* 字段列表 */}
+              {isNode && (
+                <div style={{ marginTop: '16px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                  <div 
+                    style={{ 
+                      padding: '8px 12px', 
+                      backgroundColor: '#f5f5f5', 
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <span>字段列表 ({fields.length} 个字段)</span>
+                    <Button 
+                      type="link" 
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddField && onAddField(element.data.id);
+                      }}
+                      disabled={!isEdit}
+                    >
+                      + 添加字段
+                    </Button>
+                  </div>
+                  
+                  <div style={{ padding: '12px', maxHeight: '300px', overflowY: 'auto' }}>
+                    {fields.map((field) => (
+                      <div 
+                        key={field.field_id}
+                        style={{ 
+                          padding: '8px', 
+                          marginBottom: '8px', 
+                          border: '1px solid #e8e8e8', 
+                          borderRadius: '4px',
+                          backgroundColor: field.field_id === primaryKeyId ? '#fffbe6' : 'white'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <strong>{field.name}</strong>
+                            {field.field_id === primaryKeyId && (
+                              <span style={{ 
+                                marginLeft: '8px', 
+                                backgroundColor: '#ffe58f', 
+                                color: '#595959', 
+                                padding: '2px 6px', 
+                                borderRadius: '4px', 
+                                fontSize: '12px'
+                              }}>
+                                主键
+                              </span>
+                            )}
+                            <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                              ID: {field.field_id} | 类型: {field.data_type}
+                            </div>
+                            {field.description && (
+                              <div style={{ fontSize: '12px', color: '#595959', marginTop: '4px' }}>
+                                {field.description}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <Button 
+                              type="link" 
+                              size="small"
+                              onClick={() => onEditField && onEditField(element.data.id, field)}
+                              disabled={!isEdit}
+                            >
+                              编辑
+                            </Button>
+                            <Popconfirm
+                              title="确定要删除这个字段吗？"
+                              onConfirm={() => onDeleteField && onDeleteField(element.data.id, field.field_id)}
+                              okText="确定"
+                              cancelText="取消"
+                              disabled={!isEdit}
+                            >
+                              <Button type="link" size="small" danger disabled={!isEdit}>
+                                删除
+                              </Button>
+                            </Popconfirm>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {fields.length === 0 && (
+                      <div style={{ textAlign: 'center', color: '#8c8c8c', padding: '16px' }}>
+                        暂无字段
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             // 模型关系属性 - 完全复刻 BusinessModel 中的关系编辑功能
