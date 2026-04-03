@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Table, Button, Modal, Form, Input, Select, Radio, message, List, Popconfirm, Card, Divider } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Radio, message, List, Popconfirm, Card, Divider, Tabs } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, LinkOutlined } from '@ant-design/icons'
 import { businessModelApi, businessModelLinkApi, dataSourceApi } from '../../services/api'
+import OntologyView from './OntologyView/OntologyView'
 
 const { Option } = Select
 
@@ -36,16 +37,13 @@ function BusinessModel() {
     setLoading(true)
     try {
       const response = await businessModelApi.getAll()
-      console.log('Fetched business models:', response.data);
       // 确保每个模型都有fields属性
       const modelsWithFields = response.data.map(model => ({
         ...model,
         fields: model.fields || []
       }))
-      console.log('Processed business models with fields:', modelsWithFields);
       setBusinessModels(modelsWithFields)
     } catch (_error) {
-      console.error('Error fetching business models:', _error);
       message.error('获取业务模型失败')
     } finally {
       setLoading(false)
@@ -134,14 +132,12 @@ function BusinessModel() {
     try {
       const response = await businessModelApi.import(values)
       message.success('导入成功')
-      console.log('导入的模型:', response.data)
       setImportModalVisible(false)
       fetchBusinessModels()
       // 导入后重新获取关系（可能有新创建的关系）
       fetchModelLinks()
     } catch (error) {
       message.error('导入失败')
-      console.error('导入失败:', error)
     } finally {
       setImportLoading(false)
     }
@@ -166,7 +162,6 @@ function BusinessModel() {
       }
     } catch (error) {
       message.error('操作失败')
-      console.error('字段更新失败:', error)
     }
   }
 
@@ -177,8 +172,6 @@ function BusinessModel() {
     // 设置默认基数关系值
     setTimeout(() => {
       linkForm.setFieldsValue({
-        source_cardinality: 'one',
-        target_cardinality: 'many',
         cardinality: 'one-to-many'
       });
     }, 0);
@@ -190,29 +183,6 @@ function BusinessModel() {
     
     // 设置基数类型
     const formValues = { ...link };
-    
-    if (link.cardinality === 'many-to-many') {
-      // many-to-many 关系不需要 source/target cardinality
-    } else {
-      // 根据基数类型设置单选按钮值（用于旧的基数类型）
-      let sourceCardinality = 'one';
-      let targetCardinality = 'one';
-      
-      if (link.cardinality === 'one-to-many') {
-        sourceCardinality = 'one';
-        targetCardinality = 'many';
-      } else if (link.cardinality === 'many-to-one') {
-        sourceCardinality = 'many';
-        targetCardinality = 'one';
-      } else if (link.cardinality === 'one-to-one') {
-        sourceCardinality = 'one';
-        targetCardinality = 'one';
-      }
-      
-      formValues.source_cardinality = sourceCardinality;
-      formValues.target_cardinality = targetCardinality;
-    }
-    
     linkForm.setFieldsValue(formValues);
     setLinkModalVisible(true)
   }
@@ -240,7 +210,6 @@ function BusinessModel() {
       fetchModelLinks()
     } catch (error) {
       message.error('操作失败')
-      console.error('关系操作失败:', error)
     }
   }
 
@@ -255,16 +224,13 @@ function BusinessModel() {
 
   // 根据选择的模型获取字段选项
   const getFieldOptions = (modelId) => {
-    console.log('getFieldOptions called with modelId:', modelId);
     
     const model = businessModels.find(m => m.id === modelId)
     if (!model) {
-      console.log('Model not found for ID:', modelId);
       return []
     }
     
     const fields = model.fields || [];
-    console.log(`Found ${fields.length} fields for model ${modelId}:`, fields);
     
     return fields.map(field => (
       <Option key={field.field_id} value={field.field_id}>
@@ -274,80 +240,37 @@ function BusinessModel() {
     ));
   }
 
-  // 验证基数约束的自定义验证器
-  const validateCardinalityConstraints = () => ({
-    validator(_, cardinality) {
-      if (!cardinality) return Promise.resolve()
-      
-      const sourceModelId = linkForm.getFieldValue('source_model')
-      const targetModelId = linkForm.getFieldValue('target_model')
-      const sourceKey = linkForm.getFieldValue('source_key')
-      const targetKey = linkForm.getFieldValue('target_key')
-      
-      if (!sourceModelId || !targetModelId || !sourceKey || !targetKey) {
-        return Promise.resolve()
-      }
-      
-      const sourceModel = businessModels.find(m => m.id === sourceModelId)
-      const targetModel = businessModels.find(m => m.id === targetModelId)
-      
-      if (!sourceModel || !targetModel) {
-        return Promise.resolve()
-      }
-      
-      let isValid = true
-      let errorMessage = ''
-      
-      if (cardinality === 'one-to-many') {
-        if (sourceModel.primary_key_id !== sourceKey) {
-          isValid = false
-          errorMessage = '一对多关系中，"一"侧（源模型）必须使用主键'
-        }
-      } else if (cardinality === 'many-to-one') {
-        if (targetModel.primary_key_id !== targetKey) {
-          isValid = false
-          errorMessage = '多对一关系中，"一"侧（目标模型）必须使用主键'
-        }
-      } else if (cardinality === 'one-to-one') {
-        if (sourceModel.primary_key_id !== sourceKey && targetModel.primary_key_id !== targetKey) {
-          isValid = false
-          errorMessage = '一对一关系中，至少一侧必须使用主键'
-        }
-      }
-      
-      if (isValid) {
-        return Promise.resolve()
-      } else {
-        return Promise.reject(new Error(errorMessage))
-      }
-    }
-  })
-
   const columns = [
     {
       title: '模型ID',
       dataIndex: 'id',
       key: 'id',
-      width: 150,
+      width: 100,
     },
     {
       title: '中文名称',
       dataIndex: 'name',
       key: 'name',
-      width: 150,
+      width: 100,
+    },
+    {
+      title: '中文说明',
+      dataIndex: 'description',
+      key: 'description',
+      width: 250,
     },
     {
       title: '主键ID',
       dataIndex: 'primary_key_id',
       key: 'primary_key_id',
-      width: 120,
+      width: 100,
     },
     {
       title: '字段数',
       dataIndex: 'fields',
       key: 'fields',
       render: (fields) => fields ? fields.length : 0,
-      width: 80,
+      width: 40,
     },
     {
       title: '操作',
@@ -643,52 +566,85 @@ function BusinessModel() {
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      {/* 业务模型管理 */}
-      <Card title="业务模型管理" style={{ marginBottom: 24 }}>
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3>业务模型列表</h3>
-          <div>
-            <Button type="primary" icon={<PlusOutlined />} style={{ marginRight: 8 }} onClick={handleAdd}>
-              添加模型
-            </Button>
-            <Button icon={<ImportOutlined />} onClick={handleImportModal}>
-              导入模型
-            </Button>
-          </div>
-        </div>
-        <Table 
-          columns={columns} 
-          dataSource={businessModels} 
-          rowKey="id" 
-          loading={loading}
-          expandable={{
-            expandedRowRender: expandedBusinessModelRowRender,
-            rowExpandable: (record) => (record.fields && record.fields.length > 0),
-          }}
-        />
-      </Card>
-
-      <Divider />
-
-      {/* 模型关系管理 */}
-      <Card title="模型关系管理">
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3>模型关系列表</h3>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAddLink}>
-            添加关系
-          </Button>
-        </div>
-        <Table 
-          columns={linkColumns} 
-          dataSource={modelLinks} 
-          rowKey="id" 
-          loading={linksLoading}
-          expandable={{
-            expandedRowRender: expandedRowRender,
-            rowExpandable: (record) => true,
-          }}
-        />
-      </Card>
+      <Tabs
+        defaultActiveKey="1"
+        items={[
+          {
+            key: '1',
+            label: '📋 业务模型',
+            children: (
+              <Card style={{ marginTop: 16 }}>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3>业务模型列表</h3>
+                  <div>
+                    <Button type="primary" icon={<PlusOutlined />} style={{ marginRight: 8 }} onClick={handleAdd}>
+                      添加模型
+                    </Button>
+                    <Button icon={<ImportOutlined />} onClick={handleImportModal}>
+                      导入模型
+                    </Button>
+                  </div>
+                </div>
+                <Table 
+                  columns={columns} 
+                  dataSource={businessModels} 
+                  rowKey="id" 
+                  loading={loading}
+                  expandable={{
+                    expandedRowRender: expandedBusinessModelRowRender,
+                    rowExpandable: (record) => (record.fields && record.fields.length > 0),
+                  }}
+                />
+              </Card>
+            ),
+          },
+          {
+            key: '2',
+            label: '🔗 模型关系',
+            children: (
+              <Card style={{ marginTop: 16 }}>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3>模型关系列表</h3>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={handleAddLink}>
+                    添加关系
+                  </Button>
+                </div>
+                <Table 
+                  columns={linkColumns} 
+                  dataSource={modelLinks} 
+                  rowKey="id" 
+                  loading={linksLoading}
+                  expandable={{
+                    expandedRowRender: expandedRowRender,
+                    rowExpandable: (record) => true,
+                  }}
+                />
+              </Card>
+            ),
+          },
+          {
+            key: '3',
+            label: '🚀 行动管理',
+            disabled: true,
+            children: (
+              <Card style={{ marginTop: 16 }}>
+                <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                  行动管理功能正在开发中...
+                </div>
+              </Card>
+            ),
+          },
+          {
+            key: '4',
+            label: '🧠 本体视图',
+            children: (
+              <div style={{ height: 'calc(100vh - 80px)' }}>
+                <OntologyView />
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {/* 编辑/添加模型模态框 */}
       <Modal
@@ -819,8 +775,6 @@ function BusinessModel() {
           if (open && !editingLink) {
             // 新建关系时设置默认值
             linkForm.setFieldsValue({
-              source_cardinality: 'one',
-              target_cardinality: 'many',
               cardinality: 'one-to-many'
             });
           }
@@ -830,33 +784,6 @@ function BusinessModel() {
           form={linkForm} 
           layout="vertical" 
           onFinish={handleSubmitLink}
-          onValuesChange={(changedValues) => {
-            console.log('Form values changed:', changedValues);
-            console.log('Current form values:', {
-              source_model: linkForm.getFieldValue('source_model'),
-              target_model: linkForm.getFieldValue('target_model'),
-              source_key: linkForm.getFieldValue('source_key'),
-              target_key: linkForm.getFieldValue('target_key')
-            });
-            
-            // 处理基数关系变化
-            if (changedValues.source_cardinality || changedValues.target_cardinality) {
-              const sourceCard = linkForm.getFieldValue('source_cardinality') || 'one';
-              const targetCard = linkForm.getFieldValue('target_cardinality') || 'many';
-              
-              // 计算实际的基数类型
-              let cardinality = 'one-to-one';
-              if (sourceCard === 'one' && targetCard === 'many') {
-                cardinality = 'one-to-many';
-              } else if (sourceCard === 'many' && targetCard === 'one') {
-                cardinality = 'many-to-one';
-              }
-              
-              linkForm.setFieldsValue({ cardinality });
-            }
-            // 重新验证基数约束
-            linkForm.validateFields(['cardinality']);
-          }}
         >
           <Form.Item name="id" label="关系ID" rules={[{ required: true, message: '请输入关系ID' }]}>
             <Input />
@@ -868,34 +795,10 @@ function BusinessModel() {
             <Input.TextArea />
           </Form.Item>
           
-          {/* 基数关系选择 - 使用隐藏字段存储实际值 */}
-          <Form.Item name="cardinality" hidden>
-            <Input />
-          </Form.Item>
-          
           {/* 基数关系选择 */}
           <Form.Item label="基数关系">
             <Form.Item name="cardinality" noStyle>
-              <Radio.Group 
-                onChange={(e) => {
-                  const cardinality = e.target.value;
-                  // 重置相关字段
-                  if (cardinality === 'many-to-many') {
-                    linkForm.setFieldsValue({
-                      source_cardinality: 'many',
-                      target_cardinality: 'many'
-                    });
-                  } else {
-                    // 根据现有值设置默认
-                    const currentSource = linkForm.getFieldValue('source_cardinality') || 'one';
-                    const currentTarget = linkForm.getFieldValue('target_cardinality') || 'many';
-                    linkForm.setFieldsValue({
-                      source_cardinality: currentSource,
-                      target_cardinality: currentTarget
-                    });
-                  }
-                }}
-              >
+              <Radio.Group>
                 <Radio value="one-to-one">一对一 (One-to-One)</Radio>
                 <Radio value="one-to-many">一对多 (One-to-Many)</Radio>
                 <Radio value="many-to-one">多对一 (Many-to-One)</Radio>
@@ -927,13 +830,36 @@ function BusinessModel() {
                       </Form.Item>
                       
                       <Form.Item 
-                        name="source_key" 
-                        label="源字段" 
-                        rules={[{ required: true, message: '请选择源字段' }]}
+                        noStyle
+                        shouldUpdate={(prevValues, currentValues) => 
+                          prevValues.source_model !== currentValues.source_model
+                        }
                       >
-                        <Select disabled>
-                          {getFieldOptions(getFieldValue('source_model'))}
-                        </Select>
+                        {({ getFieldValue: innerGetFieldValue, setFieldsValue }) => {
+                          const sourceModelId = innerGetFieldValue('source_model');
+                          const sourceModel = businessModels.find(m => m.id === sourceModelId);
+                          const primaryKey = sourceModel?.primary_key_id;
+                          
+                          // 多对多关系中，源字段必须使用主键
+                          if (primaryKey) {
+                            const currentSourceKey = innerGetFieldValue('source_key');
+                            if (currentSourceKey !== primaryKey) {
+                              setFieldsValue({ source_key: primaryKey });
+                            }
+                          }
+                          
+                          return (
+                            <Form.Item 
+                              name="source_key" 
+                              label="源字段" 
+                              rules={[{ required: true, message: '请选择源字段' }]}
+                            >
+                              <Select disabled>
+                                {getFieldOptions(sourceModelId)}
+                              </Select>
+                            </Form.Item>
+                          );
+                        }}
                       </Form.Item>
                     </div>
                     
@@ -997,13 +923,36 @@ function BusinessModel() {
                       </Form.Item>
                       
                       <Form.Item 
-                        name="target_key" 
-                        label="目标字段" 
-                        rules={[{ required: true, message: '请选择目标字段' }]}
+                        noStyle
+                        shouldUpdate={(prevValues, currentValues) => 
+                          prevValues.target_model !== currentValues.target_model
+                        }
                       >
-                        <Select disabled>
-                          {getFieldOptions(getFieldValue('target_model'))}
-                        </Select>
+                        {({ getFieldValue: innerGetFieldValue, setFieldsValue }) => {
+                          const targetModelId = innerGetFieldValue('target_model');
+                          const targetModel = businessModels.find(m => m.id === targetModelId);
+                          const primaryKey = targetModel?.primary_key_id;
+                          
+                          // 多对多关系中，目标字段必须使用主键
+                          if (primaryKey) {
+                            const currentTargetKey = innerGetFieldValue('target_key');
+                            if (currentTargetKey !== primaryKey) {
+                              setFieldsValue({ target_key: primaryKey });
+                            }
+                          }
+                          
+                          return (
+                            <Form.Item 
+                              name="target_key" 
+                              label="目标字段" 
+                              rules={[{ required: true, message: '请选择目标字段' }]}
+                            >
+                              <Select disabled>
+                                {getFieldOptions(targetModelId)}
+                              </Select>
+                            </Form.Item>
+                          );
+                        }}
                       </Form.Item>
                     </div>
                   </div>
@@ -1041,7 +990,7 @@ function BusinessModel() {
                           // 判断是否需要自动选择主键
                           let shouldAutoSelectPrimaryKey = false;
                           let shouldDisableField = false;
-                          
+
                           if (cardinality === 'one-to-many') {
                             // 一对多：源模型是"one"侧，必须使用主键
                             shouldAutoSelectPrimaryKey = true;

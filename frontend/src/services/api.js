@@ -100,6 +100,11 @@ export const driveLogApi = {
   }
 };
 
+// 本体视图
+export const ontologyViewApi = {
+  getGraph: () => api.get('/ontology-view/graph'),
+};
+
 // 测试执行
 export const testExecutionApi = {
   simulateEvent: (data) => api.post('/test-execution/simulate-event', data),
