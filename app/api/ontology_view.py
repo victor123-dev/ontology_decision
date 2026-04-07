@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.business_model import BusinessModel
 from app.models.business_model_link import BusinessModelLink
 from app.utils.shared_utils import get_db
+from app.dao.action_dao import get_action_dao
 
 router = APIRouter()
 
@@ -17,6 +18,10 @@ def get_ontology_graph(db: Session = Depends(get_db)):
     
     # 获取所有业务模型关系
     model_links = db.query(BusinessModelLink).all()
+    
+    # 获取所有行动
+    action_dao = get_action_dao()
+    actions = action_dao.get_actions()
     
     # 创建业务模型ID集合，用于验证边的引用
     model_ids = {model.id for model in business_models}
@@ -36,14 +41,15 @@ def get_ontology_graph(db: Session = Depends(get_db)):
         valid_links.append(link)
     
     return {
-        "nodes": _build_nodes(business_models),
-        "edges": _build_edges(valid_links)
+        "nodes": _build_nodes(business_models, actions),
+        "edges": _build_edges(valid_links, actions)
     }
 
-def _build_nodes(business_models):
-    """构建业务模型节点列表"""
+def _build_nodes(business_models, actions):
+    """构建业务模型和行动节点列表"""
     nodes = []
     
+    # 添加业务模型节点
     for bm in business_models:
         nodes.append({
             "id": bm.id,
@@ -69,12 +75,34 @@ def _build_nodes(business_models):
             }
         })
     
+    # 添加行动节点
+    for action in actions:
+        nodes.append({
+            "id": action["id"],
+            "type": "action",
+            "name": action.get("name", "Unnamed Action"),
+            "description": action.get("description", ""),
+            "data": {
+                "id": action["id"],
+                "name": action.get("name"),
+                "description": action.get("description"),
+                "action_type": action.get("action_type"),
+                "operation": action.get("operation"),
+                "target_model_id": action.get("target_model_id"),
+                "target_link_id": action.get("target_link_id"),
+                "parameters": action.get("parameters"),
+                "submission_criteria": action.get("submission_criteria"),
+                "function_code": action.get("function_code")
+            }
+        })
+    
     return nodes
 
-def _build_edges(model_links):
-    """构建模型关系边列表"""
+def _build_edges(model_links, actions):
+    """构建模型关系边列表和行动-模型关系边"""
     edges = []
     
+    # 添加模型关系边
     for link in model_links:
         edges.append({
             "id": link.id,
@@ -96,5 +124,24 @@ def _build_edges(model_links):
                 "intermediate_target_key": link.intermediate_target_key
             }
         })
+    
+    # 添加行动-模型关系边
+    for action in actions:
+        action_id = action["id"]
+        target_model_id = action.get("target_model_id")
+        
+        if target_model_id:
+            edges.append({
+                "id": f"action_{action_id}_to_{target_model_id}",
+                "source": action_id,
+                "target": target_model_id,
+                "name": "作用于",
+                "description": f"{action.get('name', 'Action')} 作用于 {target_model_id}",
+                "data": {
+                    "type": "action_to_model",
+                    "action_id": action_id,
+                    "model_id": target_model_id
+                }
+            })
     
     return edges

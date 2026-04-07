@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     
     # SQLite数据库配置
     DATABASE_URL: str = "sqlite:///data.db"
+    
+    # MongoDB配置
+    MONGO_URL: str = "mongodb://localhost:27017"
+    MONGO_DB_NAME: str = "commander_actions"
 
     class Config:
         env_file = ".env"

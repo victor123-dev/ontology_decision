@@ -11,6 +11,8 @@ const GRAPH_CONFIG = {
   NODE_DEFAULT_FILL: '#FFFFFF',
   NODE_SELECTED_FILL: '#EFF6FF',
   NODE_STROKE: '#2563EB',
+  ACTION_NODE_FILL: '#FFF7ED',
+  ACTION_NODE_STROKE: '#EA580C',
   LABEL_FONT_SIZE: 12,
 };
 
@@ -73,9 +75,13 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
       .attr("stroke", GRAPH_CONFIG.DEFAULT_STROKE)
       .attr("stroke-width", 2)
       .attr("marker-end", "url(#arrowhead-static)")
-      .attr("cursor", "pointer")
+      .attr("cursor", (d) => d.data?.type === 'action_to_model' ? 'default' : 'pointer')
       .on("click", (event, d) => {
         event.stopPropagation();
+        // 行动相关的边不可选中
+        if (d.data?.type === 'action_to_model') {
+          return;
+        }
         // 还原原始链接对象，保持 source 和 target 为字符串 ID
         const originalLink = {
           id: d.id,
@@ -138,8 +144,8 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
 
     nodeEnter.append("circle")
       .attr("r", GRAPH_CONFIG.NODE_RADIUS)
-      .attr("fill", GRAPH_CONFIG.NODE_DEFAULT_FILL)
-      .attr("stroke", GRAPH_CONFIG.NODE_STROKE)
+      .attr("fill", d => d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_FILL : GRAPH_CONFIG.NODE_DEFAULT_FILL)
+      .attr("stroke", d => d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_STROKE : GRAPH_CONFIG.NODE_STROKE)
       .attr("stroke-width", 2);
 
     nodeEnter.append("text")
@@ -158,7 +164,7 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
         description: d.description,
         data: d.data
       };
-      onSelect({ type: 'business_model', data: originalNode });
+      onSelect({ type: d.type === 'action' ? 'action' : 'business_model', data: originalNode });
     });
 
     nodeGroups.exit().remove();
@@ -212,8 +218,18 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
 
     // 更新节点的样式
     nodeGroup.selectAll("g").select("circle")
-      .attr("fill", d => d.id === selectedId ? GRAPH_CONFIG.NODE_SELECTED_FILL : GRAPH_CONFIG.NODE_DEFAULT_FILL)
-      .attr("stroke", d => d.id === selectedId ? GRAPH_CONFIG.SELECTED_STROKE : GRAPH_CONFIG.NODE_STROKE)
+      .attr("fill", d => {
+        if (d.id === selectedId) {
+          return GRAPH_CONFIG.NODE_SELECTED_FILL;
+        }
+        return d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_FILL : GRAPH_CONFIG.NODE_DEFAULT_FILL;
+      })
+      .attr("stroke", d => {
+        if (d.id === selectedId) {
+          return GRAPH_CONFIG.SELECTED_STROKE;
+        }
+        return d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_STROKE : GRAPH_CONFIG.NODE_STROKE;
+      })
       .attr("stroke-width", d => d.id === selectedId ? 4 : 2);
 
   }, [selectedId]);

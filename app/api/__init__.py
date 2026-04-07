@@ -1,4 +1,4 @@
-from . import agent, business_model, data_sensing, data_source, document_import, drive_log, drive_logic, nl_rule_interface, test_data, test_execution
+from . import agent, business_model, data_sensing, data_source, document_import, drive_log, drive_logic, nl_rule_interface, test_data, test_execution, action
 
 __all__ = [
     "agent",
@@ -10,5 +10,6 @@ __all__ = [
     "drive_logic",
     "nl_rule_interface",
     "test_data",
-    "test_execution"
+    "test_execution",
+    "action"
 ]

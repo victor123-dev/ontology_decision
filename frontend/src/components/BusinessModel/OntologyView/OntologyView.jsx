@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import GraphCanvas from './components/GraphCanvas';
 import Toolbar from './components/Toolbar';
 import PropertyPanel from './components/PropertyPanel';
-import { ontologyViewApi, businessModelApi, businessModelLinkApi } from '../../../services/api';
+import { ontologyViewApi, businessModelApi, businessModelLinkApi, actionApi } from '../../../services/api';
 import { message, Modal, Form, Input, Select } from 'antd';
 import { modelEventBus } from '../../../utils/modelEventBus';
 
@@ -50,7 +50,7 @@ const OntologyView = () => {
     fetchOntologyData();
   }, []);
 
-  // 监听模型和关系的变更事件
+  // 监听模型和关系和行动的变更事件
   useEffect(() => {
     // 模型创建
     const handleModelCreated = ({ model }) => {
@@ -313,6 +313,146 @@ const OntologyView = () => {
       });
     };
 
+    // 行动创建
+    const handleActionCreated = ({ action }) => {
+      console.log('handleActionCreated', action);
+      setGraphData(prev => ({
+        ...prev,
+        nodes: [...prev.nodes, { 
+          id: action.id, 
+          name: action.name, 
+          type: 'action',
+          description: action.description, 
+          data: action 
+        }]
+      }));
+    };
+
+    // 行动更新
+    const handleActionUpdated = ({ actionId, updatedFields }) => {
+      setGraphData(prev => {
+      const newNodes = [...prev.nodes];
+      const nodeIndex = newNodes.findIndex(n => n.id === actionId);
+      if (nodeIndex !== -1) {
+        // 直接修改原对象，保持 D3 引用
+        Object.assign(newNodes[nodeIndex], updatedFields);
+        // 更新 data 字段
+        if (newNodes[nodeIndex].data) {
+        newNodes[nodeIndex].data = { ...newNodes[nodeIndex].data, ...updatedFields };
+        }
+      }
+      
+      const newLinks = [...prev.links];
+      // 处理行动-模型连线的更新（当目标模型发生变化时）
+      const actionNode = newNodes.find(n => n.id === actionId);
+      const newTargetModelId = updatedFields.target_model_id;
+      
+      if (newTargetModelId) {
+        // 找到现有的行动-模型连线
+        const existingLinkIndex = newLinks.findIndex(link => 
+          (String(link.source) === String(actionId) || String(link.source?.id) === String(actionId)) &&
+          link.data?.type === 'action_to_model'
+        );
+        
+        if (existingLinkIndex !== -1) {
+          const existingLink = newLinks[existingLinkIndex];
+          const existingTargetModelId = existingLink.target || existingLink.target?.id;
+          
+          // 如果目标模型发生了变化，需要更新连线
+          if (String(existingTargetModelId) !== String(newTargetModelId)) {
+            // 1. 移除旧的连线
+            newLinks.splice(existingLinkIndex, 1);
+            
+            // 2. 添加新的连线
+            const newActionLink = {
+              id: `action_${actionId}_to_${newTargetModelId}`,
+              source: actionId,
+              target: newTargetModelId,
+              name: "作用于",
+              description: `${actionNode?.name || 'Action'} 作用于 ${newTargetModelId}`,
+              data: {
+                type: "action_to_model",
+                action_id: actionId,
+                model_id: newTargetModelId
+              }
+            };
+            newLinks.push(newActionLink);
+          }
+        } else {
+          // 如果没有现有的连线，但有新的目标模型，创建新的连线
+          const newActionLink = {
+            id: `action_${actionId}_to_${newTargetModelId}`,
+            source: actionId,
+            target: newTargetModelId,
+            name: "作用于",
+            description: `${actionNode?.name || 'Action'} 作用于 ${newTargetModelId}`,
+            data: {
+              type: "action_to_model",
+              action_id: actionId,
+              model_id: newTargetModelId
+            }
+          };
+          newLinks.push(newActionLink);
+        }
+      } else {
+        // 如果没有目标模型，移除所有相关的行动-模型连线
+        const linksToRemove = newLinks.filter(link => 
+          (String(link.source) === String(actionId) || String(link.source?.id) === String(actionId)) &&
+          link.data?.type === 'action_to_model'
+        );
+        
+        linksToRemove.forEach(linkToRemove => {
+          const index = newLinks.findIndex(link => link.id === linkToRemove.id);
+          if (index !== -1) {
+            newLinks.splice(index, 1);
+          }
+        });
+      }
+      
+      return { ...prev, links: newLinks, nodes: newNodes };
+      });
+      // 如果当前选中的元素是这个行动，也需要更新 selectedElement
+      setSelectedElement(prev => {
+      // 判断是否需要更新
+      if (prev?.data.id === actionId) {
+        return {
+        ...prev,
+        data: {
+          ...prev.data,
+          // 更新行动的基本信息
+          name: updatedFields.name || prev.data.name,
+          description: updatedFields.description || prev.data.description,
+          // 更新模型的完整数据
+          data: {
+          ...prev.data.data,
+          ...updatedFields
+          }
+        }
+        };
+      }
+      // 不需要更新，返回原状态（保持不变）
+      return prev;
+      });
+    };
+
+    // 行动删除
+    const handleActionDeleted = ({ actionId }) => {
+      setGraphData(prev => ({
+        nodes: prev.nodes.filter(node => node.id !== actionId),
+        links: prev.links.filter(l => 
+          String(l.source.id) !== String(actionId) && 
+          String(l.target.id) !== String(actionId)
+        )
+      }));
+      // 如果删除的是当前选中的行动，关闭属性栏
+      setSelectedElement(prev => {
+        if (prev?.data.id === actionId) {
+          return null;
+        }
+        return prev;
+      });
+    };
+
     // 订阅所有事件
     modelEventBus.on('model_created', handleModelCreated);
     modelEventBus.on('model_updated', handleModelUpdated);
@@ -323,6 +463,9 @@ const OntologyView = () => {
     modelEventBus.on('field_created', handleFieldCreated);
     modelEventBus.on('field_updated', handleFieldUpdated);
     modelEventBus.on('field_deleted', handleFieldDeleted);
+    modelEventBus.on('action_created', handleActionCreated);
+    modelEventBus.on('action_updated', handleActionUpdated);
+    modelEventBus.on('action_deleted', handleActionDeleted);
 
     // 清理订阅
     return () => {
@@ -335,6 +478,9 @@ const OntologyView = () => {
       modelEventBus.off('field_created', handleFieldCreated);
       modelEventBus.off('field_updated', handleFieldUpdated);
       modelEventBus.off('field_deleted', handleFieldDeleted);
+      modelEventBus.off('action_created', handleActionCreated);
+      modelEventBus.off('action_updated', handleActionUpdated);
+      modelEventBus.off('action_deleted', handleActionDeleted);
     };
   }, []);
 
@@ -535,6 +681,55 @@ const OntologyView = () => {
     }
   }, []);
 
+  const handleUpdateAction = useCallback(async (actionId, newData) => {    
+    try {
+      await actionApi.update(actionId, newData);
+      
+      // 发布行动更新事件
+      modelEventBus.emitActionUpdated(actionId, newData);
+      
+      // 更新图数据（本体视图内部处理）
+      setGraphData(prev => {
+        const newNodes = [...prev.nodes];
+        const nodeIndex = newNodes.findIndex(n => n.id === actionId);
+        if (nodeIndex !== -1) {
+          // 直接修改原对象，而不是创建新对象
+          const nodeToUpdate = newNodes[nodeIndex];
+          nodeToUpdate.name = newData.name || nodeToUpdate.name;
+          nodeToUpdate.description = newData.description || nodeToUpdate.description;
+          // 更新其他字段...
+          Object.assign(nodeToUpdate.data, newData);
+        }
+        return { ...prev, nodes: newNodes };
+      });
+      
+      setSelectedElement(prev => {
+        // 如果是当前要更新的关系
+        if (prev?.data.id === actionId) {
+          const newSelectedElement = {
+            ...prev,
+            data: {
+              ...prev.data,
+              // 更新 prev.data 中的 name 和 description
+              name: newData.name || prev.data.name,
+              description: newData.description || prev.data.description,
+              // 更新 prev.data.data 中的内容（用 newData 覆盖）
+              data: {
+                ...prev.data.data,
+                ...newData
+              }
+            }
+          };
+          return newSelectedElement;
+        }
+        // 如果不是当前关系，保持原样
+        return prev;
+      });
+    } catch (error) {
+      message.error('更新行动失败');
+    }
+  }, []);
+
   const handleDeleteElement = useCallback(async () => {
     if (!selectedElement) return;
     
@@ -552,7 +747,7 @@ const OntologyView = () => {
             String(l.target) !== String(selectedElement.data.id)
           ),
         }));
-      } else {
+      } else if (selectedElement.type === 'link') {
         await businessModelLinkApi.delete(selectedElement.data.id);
         
         // 触发事件通知其他页面
@@ -561,6 +756,16 @@ const OntologyView = () => {
         setGraphData(prev => ({
           ...prev,
           links: prev.links.filter(l => l.id !== selectedElement.data.id),
+        }));
+      } else if (selectedElement.type === 'action') {
+        await actionApi.delete(selectedElement.data.id);
+        
+        // 触发事件通知其他页面
+        modelEventBus.emitActionDeleted(selectedElement.data.id);
+        
+        setGraphData(prev => ({
+          ...prev,
+          nodes: prev.nodes.filter(n => n.id !== selectedElement.data.id),
         }));
       }
       setSelectedElement(null);
@@ -690,7 +895,7 @@ const OntologyView = () => {
       {selectedElement && (
         <PropertyPanel 
           element={selectedElement}
-          onUpdate={selectedElement.type === 'business_model' ? handleUpdateNode : handleUpdateLink}
+          onUpdate={selectedElement.type === 'business_model' ? handleUpdateNode : selectedElement.type === 'link' ? handleUpdateLink : handleUpdateAction}
           onDelete={handleDeleteElement}
           onAddField={handleAddField}
           onEditField={handleEditField}

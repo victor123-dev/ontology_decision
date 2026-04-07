@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, Select, Radio, message, List, Popcon
 import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, LinkOutlined, PlusCircleOutlined } from '@ant-design/icons'
 import { businessModelApi, businessModelLinkApi, dataSourceApi } from '../../services/api'
 import OntologyView from './OntologyView/OntologyView'
+import ActionManager from './ActionManager'
 import { modelEventBus } from '../../utils/modelEventBus'
 
 const { Option } = Select
@@ -827,13 +828,8 @@ function BusinessModel() {
           {
             key: '3',
             label: '🚀 行动管理',
-            disabled: true,
             children: (
-              <Card style={{ marginTop: 16 }}>
-                <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-                  行动管理功能正在开发中...
-                </div>
-              </Card>
+              <ActionManager businessModels={businessModels} modelLinks={modelLinks} />
             ),
           },
           {
@@ -943,12 +939,12 @@ function BusinessModel() {
           >
             <Select>
               <Option value="string">字符串</Option>
+              <Option value="text">文本</Option>
               <Option value="integer">整数</Option>
               <Option value="float">浮点数</Option>
               <Option value="boolean">布尔值</Option>
               <Option value="date">日期</Option>
               <Option value="datetime">日期时间</Option>
-              <Option value="text">文本</Option>
             </Select>
           </Form.Item>
           <Form.Item name="description" label="中文说明">

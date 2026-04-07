@@ -89,6 +89,16 @@ export const testDataApi = {
   update: (dataSourceId, tableName, data) => api.put(`/test-data/${dataSourceId}/${tableName}`, data),
 };
 
+// 行动管理
+export const actionApi = {
+  create: (data) => api.post('/actions', data),
+  getAll: (modelId) => api.get('/actions', { params: modelId ? { model_id: modelId } : {} }),
+  get: (id) => api.get(`/actions/${id}`),
+  update: (id, data) => api.put(`/actions/${id}`, data),
+  delete: (id) => api.delete(`/actions/${id}`),
+  execute: (data) => api.post('/actions/execute', data),
+};
+
 // 驱动日志管理
 export const driveLogApi = {
   create: (data) => api.post('/drive-logs', data),

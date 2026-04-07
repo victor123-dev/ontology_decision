@@ -101,6 +101,33 @@ class ModelEventBus {
     this.emit('link_deleted', { linkId });
   }
 
+  // =============== 行动相关事件 ===============
+
+  /**
+   * 触发行动创建事件
+   * @param {Object} action - 新创建的行动
+   */
+  emitActionCreated(action) {
+    this.emit('action_created', { action });
+  }
+
+  /**
+   * 触发行动更新事件
+   * @param {string} actionId - 行动ID
+   * @param {Object} updatedFields - 更新的字段
+   */
+  emitActionUpdated(actionId, updatedFields) {
+    this.emit('action_updated', { actionId, updatedFields });
+  }
+
+  /**
+   * 触发行动删除事件
+   * @param {string} actionId - 被删除的行动ID
+   */
+  emitActionDeleted(actionId) {
+    this.emit('action_deleted', { actionId });
+  }
+
   // =============== 字段相关事件 ===============
 
   /**

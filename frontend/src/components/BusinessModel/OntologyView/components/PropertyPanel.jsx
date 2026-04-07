@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Popconfirm, message, Select, Radio, Collapse } from 'antd';
-import { dataSourceApi, businessModelApi } from '../../../../services/api';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Form, Input, Button, Popconfirm, message, Select, Switch, Radio, Collapse, Steps, Divider, Space, List, Tag, Card, Typography } from 'antd';
+import { dataSourceApi, businessModelApi, businessModelLinkApi } from '../../../../services/api';
+import { modelEventBus } from '../../../../utils/modelEventBus';
+import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 
 const { Panel } = Collapse;
 
@@ -9,8 +11,10 @@ const { Option } = Select;
 const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, onDeleteField }) => {
   const [form] = Form.useForm();
   const [isEdit, setIsEdit] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const [dataSources, setDataSources] = useState([]);
   const [businessModels, setBusinessModels] = useState([]);
+  const [modelLinks, setModelLinks] = useState([]);
   const [fields, setFields] = useState([]);
   const [primaryKeyId, setPrimaryKeyId] = useState(null);
 
@@ -33,10 +37,11 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
     setIsEdit(false);
   }, [element, form]);
 
-  // 获取数据源和业务模型列表
+  // 获取数据源、业务模型和模型关系列表
   useEffect(() => {
     fetchDataSources();
     fetchBusinessModels();
+    fetchModelLinks();
   }, []);
 
   const fetchDataSources = async () => {
@@ -54,6 +59,15 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
       setBusinessModels(response.data);
     } catch (error) {
       message.error('获取业务模型失败');
+    }
+  };
+
+  const fetchModelLinks = async () => {
+    try {
+      const response = await businessModelLinkApi.getAll();
+      setModelLinks(response.data);
+    } catch (error) {
+      message.error('获取模型关系失败');
     }
   };
 
@@ -77,6 +91,143 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
     ));
   };
 
+  // 行动相关辅助函数
+  const generateObjectParameters = (model, operation) => {
+    if (!model) return [];
+    
+    if (operation === 'delete_object') {
+      // 删除操作只包含主键
+      const primaryKeyField = model.fields.find(field => field.field_id === model.primary_key_id);
+      if (primaryKeyField) {
+        return [{
+          name: primaryKeyField.field_id,
+          type: mapDataTypeToParamType(primaryKeyField.data_type),
+          required: true,
+          default_value: '',
+          description: `删除${model.name}的主键`
+        }];
+      }
+      return [];
+    } else if (operation === 'update_object') {
+      // 更新操作包含所有字段，但主键设为必填
+      return model.fields.map(field => {
+        const isPrimaryKey = field.field_id === model.primary_key_id;
+        return {
+          name: field.field_id,
+          type: mapDataTypeToParamType(field.data_type),
+          required: isPrimaryKey, // 主键必填，其他字段可选
+          default_value: '',
+          description: field.description || field.name + (isPrimaryKey ? ' (主键，必填)' : '')
+        };
+      });
+    } else {
+      // 创建操作包含所有字段（都可选）
+      return model.fields.map(field => ({
+        name: field.field_id,
+        type: mapDataTypeToParamType(field.data_type),
+        required: false,
+        default_value: '',
+        description: field.description || field.name
+      }));
+    }
+  };
+
+  const generateLinkParameters = (link, operation) => {
+    if (!link) return [];
+    
+    if (operation === 'delete_link') {
+      // 删除操作只包含主键（中间表的主键）
+      if (link.cardinality === 'many-to-many' && link.intermediate_model) {
+        // 对于多对多关系，需要找到中间表模型
+        const intermediateModel = businessModels.find(m => m.id === link.intermediate_model);
+        if (intermediateModel) {
+          const primaryKeyField = intermediateModel.fields.find(field => field.field_id === intermediateModel.primary_key_id);
+          if (primaryKeyField) {
+            return [{
+              name: primaryKeyField.field_id,
+              type: mapDataTypeToParamType(primaryKeyField.data_type),
+              required: true,
+              default_value: '',
+              description: `删除${link.name}关系的主键`
+            }];
+          }
+        }
+      }
+      // 其他关系类型，使用源键和目标键
+      return [
+        {
+          name: link.source_key,
+          type: 'string',
+          required: true,
+          default_value: '',
+          description: '源模型主键'
+        },
+        {
+          name: link.target_key,
+          type: 'string',
+          required: true,
+          default_value: '',
+          description: '目标模型主键'
+        }
+      ];
+    } else {
+      // 创建操作包含中间表的所有字段（多对多）或其他必要字段
+      if (link.cardinality === 'many-to-many' && link.intermediate_model) {
+        const intermediateModel = businessModels.find(m => m.id === link.intermediate_model);
+        if (intermediateModel) {
+          return intermediateModel.fields.map(field => ({
+            name: field.field_id,
+            type: mapDataTypeToParamType(field.data_type),
+            required: false,
+            default_value: '',
+            description: field.description || field.name
+          }));
+        }
+      }
+      // 其他关系类型
+      return [
+        {
+          name: link.source_key,
+          type: 'string',
+          required: true,
+          default_value: '',
+          description: '源模型主键'
+        },
+        {
+          name: link.target_key,
+          type: 'string',
+          required: true,
+          default_value: '',
+          description: '目标模型主键'
+        }
+      ];
+    }
+  };
+
+  const mapDataTypeToParamType = (dataType) => {
+    const typeMap = {
+      'string': 'string',
+      'text': 'string',
+      'integer': 'integer', 
+      'int': 'integer',
+      'bigint': 'integer',
+      'float': 'float',
+      'double': 'float',
+      'decimal': 'float',
+      'boolean': 'boolean',
+      'bool': 'boolean',
+      'bit': 'boolean',
+      'date': 'date',
+      'datetime': 'datetime',
+      'timestamp': 'datetime',
+      'time': 'string',
+      'json': 'object',
+      'jsonb': 'object',
+      'array': 'array'
+    };
+    return typeMap[dataType?.toLowerCase()] || 'string';
+  };
+
   const handleSave = () => {
     form.validateFields().then(values => {
       onUpdate(element.data.id, values);
@@ -91,6 +242,7 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
   };
 
   const isNode = element.type === 'business_model';
+  const isAction = element.type === 'action';
 
   return (
     <div style={{ 
@@ -109,9 +261,14 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
         alignItems: 'center'
       }}>
         <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
-          {isNode ? '业务模型属性' : '模型关系属性'}
+          {isAction ? '行动属性' : isNode ? '业务模型属性' : '模型关系属性'}
         </h3>
-        <Button type="link" onClick={() => setIsEdit(!isEdit)}>
+        <Button type="link" onClick={() => {
+          setIsEdit(!isEdit);
+          if (!isEdit) {
+            setCurrentStep(0);
+          }
+        }}>
           {isEdit ? '取消编辑' : '编辑'}
         </Button>
       </div>
@@ -122,7 +279,264 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
           layout="vertical"
           initialValues={element.data.data}
         >
-          {isNode ? (
+          {isAction ? (
+            // 行动属性 - 垂直滚动布局
+            <>
+              <Form.Item name="id" label="行动ID">
+                <Input disabled />
+              </Form.Item>
+              
+              <Divider>基础配置</Divider>
+              <Form.Item
+                name="name"
+                label="名称"
+                rules={[{ required: true, message: '请输入名称' }]}
+              >
+                <Input disabled={!isEdit} />
+              </Form.Item>
+              <Form.Item name="description" label="说明">
+                <Input.TextArea disabled={!isEdit} />
+              </Form.Item>
+              
+              <Divider>行动类型</Divider>
+              <Form.Item name="action_type" label="行动类型" rules={[{ required: true, message: '请选择行动类型' }]}>
+                <Select disabled={!isEdit} onChange={(value) => {
+                  if (isEdit) {
+                    // 清除相关字段
+                    if (value === 'object') {
+                      form.setFieldsValue({ 
+                        operation: undefined, 
+                        target_model_id: undefined, 
+                        target_link_id: undefined,
+                        function_code: undefined,
+                        parameters: []
+                      });
+                    } else if (value === 'link') {
+                      form.setFieldsValue({ 
+                        operation: undefined, 
+                        target_model_id: undefined, 
+                        target_link_id: undefined,
+                        function_code: undefined,
+                        parameters: []
+                      });
+                    } else if (value === 'function') {
+                      form.setFieldsValue({ 
+                        operation: undefined, 
+                        target_model_id: undefined, 
+                        target_link_id: undefined,
+                        parameters: []
+                      });
+                    }
+                  }
+                }}>
+                  <Option value="object">对象行动</Option>
+                  <Option value="link">关系行动</Option>
+                  <Option value="function">函数行动</Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
+                prevValues.action_type !== currentValues.action_type || 
+                (prevValues.action_type === currentValues.action_type && prevValues.operation !== currentValues.operation)
+              }>
+                {({ getFieldValue }) => {
+                  const actionType = getFieldValue('action_type');
+                  
+                  if (actionType === 'object') {
+                    return (
+                      <>
+                        <Form.Item name="operation" label="操作" rules={[{ required: true, message: '请选择操作' }]}>
+                          <Select disabled={!isEdit} onChange={(value) => {
+                            if (isEdit) {
+                              form.setFieldsValue({ target_model_id: undefined });
+                              // 清除参数
+                              form.setFieldsValue({ parameters: [] });
+                            }
+                          }}>
+                            <Option value="create_object">创建对象</Option>
+                            <Option value="update_object">更新对象</Option>
+                            <Option value="delete_object">删除对象</Option>
+                          </Select>
+                        </Form.Item>
+                        <Form.Item name="target_model_id" label="目标模型" rules={[{ required: true, message: '请选择目标模型' }]}>
+                          <Select disabled={!isEdit} onChange={(value) => {
+                            if (isEdit) {
+                              const selectedModel = businessModels.find(m => m.id === value);
+                              const operation = getFieldValue('operation');
+                              if (selectedModel && operation) {
+                                const params = generateObjectParameters(selectedModel, operation);
+                                form.setFieldsValue({ parameters: params });
+                              }
+                            }
+                          }}>
+                            {businessModels.map(model => (
+                              <Option key={model.id} value={model.id}>
+                                {model.name} ({model.id})
+                              </Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                      </>
+                    );
+                  }
+                  
+                  if (actionType === 'link') {
+                    // 过滤出多对多关系
+                    const manyToManyLinks = modelLinks.filter(link => link.cardinality === 'many-to-many');
+                    
+                    return (
+                      <>
+                        <Form.Item name="operation" label="操作" rules={[{ required: true, message: '请选择操作' }]}>
+                          <Select disabled={!isEdit} onChange={(value) => {
+                            if (isEdit) {
+                              form.setFieldsValue({ target_link_id: undefined });
+                              // 清除参数
+                              form.setFieldsValue({ parameters: [] });
+                            }
+                          }}>
+                            <Option value="create_link">创建关系</Option>
+                            <Option value="delete_link">删除关系</Option>
+                          </Select>
+                        </Form.Item>
+                        <Form.Item name="target_link_id" label="目标关系" rules={[{ required: true, message: '请选择目标关系' }]}>
+                          <Select disabled={!isEdit} onChange={(value) => {
+                            if (isEdit) {
+                              const selectedLink = modelLinks.find(l => l.id === value);
+                              const operation = getFieldValue('operation');
+                              if (selectedLink && operation) {
+                                const params = generateLinkParameters(selectedLink, operation);
+                                form.setFieldsValue({ parameters: params });
+                              }
+                            }
+                          }}>
+                            {manyToManyLinks.map(link => (
+                              <Option key={link.id} value={link.id}>
+                                {link.name} ({link.id})
+                              </Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                      </>
+                    );
+                  }
+                  
+                  if (actionType === 'function') {
+                    return (
+                      <Form.Item name="function_code" label="函数代码" rules={[{ required: true, message: '请输入函数代码' }]}>
+                        <Input.TextArea 
+                          disabled={!isEdit} 
+                          rows={10} 
+                          placeholder={`# 函数行动示例
+# 可以访问 parameters 变量（用户提交的参数）
+# 必须返回包含 result 键的对象
+
+# 示例1: 简单的数据处理
+result = {
+  "message": "处理成功",
+  "data": {
+    "processed_name": parameters.name?.toUpperCase(),
+    "age_group": parameters.age >= 18 ? "adult" : "minor"
+  }
+}
+
+# 示例2: 条件逻辑
+if parameters.email and "@" in parameters.email:
+  result = {"success": True, "message": "邮箱格式正确"}
+else:
+  result = {"success": False, "message": "邮箱格式错误"}
+
+# 示例3: 数学计算  
+total = parameters.quantity * parameters.price
+discount = total * 0.1 if total > 100 else 0
+result = {
+  "total": total,
+  "discount": discount,
+  "final_amount": total - discount
+}`}
+                        />
+                      </Form.Item>
+                    );
+                  }
+                  
+                  return null;
+                }}
+              </Form.Item>
+              
+              <Divider>参数配置</Divider>
+              <Form.Item name="parameters" label="参数列表">
+                {isEdit ? (
+                  <ParameterEditorForPropertyPanel 
+                    value={form.getFieldValue('parameters') || []}
+                    onChange={(value) => form.setFieldsValue({ parameters: value })}
+                  />
+                ) : (
+                  <List
+                    dataSource={form.getFieldValue('parameters') || []}
+                    renderItem={(param, index) => (
+                      <List.Item>
+                        <Card size="small" style={{ width: '100%' }}>
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <Typography.Text strong>参数 {index + 1}</Typography.Text>
+                            <Typography.Text type="secondary">名称: {param.name}</Typography.Text>
+                            <Typography.Text type="secondary">类型: {param.type}</Typography.Text>
+                            <Typography.Text type="secondary">必填: {param.required ? '是' : '否'}</Typography.Text>
+                            {param.description && (
+                              <Typography.Text type="secondary">说明: {param.description}</Typography.Text>
+                            )}
+                          </Space>
+                        </Card>
+                      </List.Item>
+                    )}
+                  />
+                )}
+              </Form.Item>
+              
+              <Divider>提交条件</Divider>
+              <Form.Item name="submission_criteria" label="条件列表">
+                {isEdit ? (
+                  <CriteriaEditorForPropertyPanel 
+                    value={form.getFieldValue('submission_criteria') || []}
+                    onChange={(value) => form.setFieldsValue({ submission_criteria: value })}
+                  />
+                ) : (
+                  <List
+                    dataSource={form.getFieldValue('submission_criteria') || []}
+                    renderItem={(criterion, index) => (
+                      <List.Item>
+                        <Card size="small" style={{ width: '100%' }}>
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <Typography.Text strong>条件 {index + 1}</Typography.Text>
+                            <Typography.Text type="secondary">类型: {criterion.type}</Typography.Text>
+                            {criterion.field_name && (
+                              <Typography.Text type="secondary">字段: {criterion.field_name}</Typography.Text>
+                            )}
+                            {criterion.rule && (
+                              <Typography.Text type="secondary">规则: {criterion.rule}</Typography.Text>
+                            )}
+                            {criterion.expression && (
+                              <Typography.Text type="secondary">表达式: {criterion.expression}</Typography.Text>
+                            )}
+                            {criterion.description && (
+                              <Typography.Text type="secondary">说明: {criterion.description}</Typography.Text>
+                            )}
+                          </Space>
+                        </Card>
+                      </List.Item>
+                    )}
+                  />
+                )}
+              </Form.Item>
+              
+              {/* 保存按钮 */}
+              {isEdit && (
+                <div style={{ marginTop: 24, textAlign: 'right' }}>
+                  <Button type="primary" onClick={handleSave}>
+                    保存
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : isNode ? (
             // 业务模型属性
             <>
               <Form.Item name="id" label="模型ID">
@@ -574,24 +988,308 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
         display: 'flex',
         gap: '12px'
       }}>
-        {isEdit && (
+        {isEdit && !isAction && (
           <Button type="primary" onClick={handleSave} style={{ flex: 1 }}>
             保存修改
           </Button>
         )}
-        <Popconfirm
-          title={`确定要删除该${isNode ? '业务模型' : '模型关系'}吗？`}
-          onConfirm={handleDeleteConfirm}
-          okText="确认"
-          cancelText="取消"
-        >
-          <Button danger>
-            删除
-          </Button>
-        </Popconfirm>
+        {!isAction && (
+          <Popconfirm
+            title={`确定要删除该${isNode ? '业务模型' : '模型关系'}吗？`}
+            onConfirm={handleDeleteConfirm}
+            okText="确认"
+            cancelText="取消"
+          >
+            <Button danger>
+              删除
+            </Button>
+          </Popconfirm>
+        )}
       </div>
     </div>
   );
 };
+
+// 参数编辑器组件（用于属性面板）
+const ParameterEditorForPropertyPanel = ({ value = [], onChange }) => {
+  // 确保 value 始终是数组
+  const safeValue = Array.isArray(value) ? value : [];
+  const [parameters, setParameters] = useState(safeValue)
+
+  useEffect(() => {
+    const safeValue = Array.isArray(value) ? value : [];
+    setParameters(safeValue)
+  }, [value])
+
+  const handleAddParameter = () => {
+    const newParam = {
+      name: '',
+      type: 'string',
+      required: false,
+      default_value: '',
+      description: ''
+    }
+    const newParams = [...parameters, newParam]
+    setParameters(newParams)
+    onChange?.(newParams)
+  }
+
+  const handleRemove = (index) => {
+    const newParams = parameters.filter((_, i) => i !== index)
+    setParameters(newParams)
+    onChange?.(newParams)
+  }
+
+  const handleChange = (index, field, value) => {
+    const newParams = [...parameters]
+    newParams[index][field] = value
+    setParameters(newParams)
+    onChange?.(newParams)
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <Button type="dashed" onClick={handleAddParameter} block icon={<PlusOutlined />}>
+          添加参数
+        </Button>
+      </div>
+      
+      {parameters.map((param, index) => (
+        <Card key={index} size="small" style={{ marginBottom: 12 }}>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Form.Item
+              label="参数名称"
+              required
+              validateStatus={param.name ? '' : 'error'}
+              help={!param.name ? '参数名称不能为空' : ''}
+            >
+              <Input
+                value={param.name}
+                onChange={(e) => handleChange(index, 'name', e.target.value)}
+              />
+            </Form.Item>
+            
+            <Form.Item label="参数类型" required>
+              <Select
+                value={param.type}
+                onChange={(value) => handleChange(index, 'type', value)}
+                style={{ width: '100%' }}
+              >
+                <Option value="string">字符串</Option>
+                <Option value="text">文本</Option>
+                <Option value="integer">整数</Option>
+                <Option value="float">浮点数</Option>
+                <Option value="boolean">布尔值</Option>
+                <Option value="object">对象</Option>
+                <Option value="array">数组</Option>
+                <Option value="date">日期</Option>
+                <Option value="datetime">日期时间</Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item label="参数说明">
+              <Input.TextArea
+                value={param.description}
+                onChange={(e) => handleChange(index, 'description', e.target.value)}
+                rows={2}
+                placeholder="描述此参数的用途和业务含义"
+              />
+            </Form.Item>
+            
+            <Form.Item label="默认值">
+              <Input
+                value={param.default_value}
+                onChange={(e) => handleChange(index, 'default_value', e.target.value)}
+              />
+            </Form.Item>
+            
+            <Form.Item label="是否必填">
+              <Switch
+                checked={param.required}
+                onChange={(checked) => handleChange(index, 'required', checked)}
+              />
+            </Form.Item>
+            
+            <Button
+              type="text"
+              danger
+              icon={<MinusCircleOutlined />}
+              onClick={() => handleRemove(index)}
+            >
+              删除参数
+            </Button>
+          </Space>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+// 提交条件编辑器组件（用于属性面板）
+const CriteriaEditorForPropertyPanel = ({ value = [], onChange }) => {
+  // 确保 value 始终是数组
+  const safeValue = Array.isArray(value) ? value : [];
+  const [criteria, setCriteria] = useState(safeValue)
+
+  useEffect(() => {
+    const safeValue = Array.isArray(value) ? value : [];
+    setCriteria(safeValue)
+  }, [value])
+
+  const handleAddCriterion = () => {
+    const newCriterion = {
+      type: 'field_validation',
+      field_name: '',
+      rule: 'not_empty',
+      description: ''
+    }
+    const newCriteria = [...criteria, newCriterion]
+    setCriteria(newCriteria)
+    onChange?.(newCriteria)
+  }
+
+  const handleRemove = (index) => {
+    const newCriteria = criteria.filter((_, i) => i !== index)
+    setCriteria(newCriteria)
+    onChange?.(newCriteria)
+  }
+
+  const handleChange = (index, field, value) => {
+    const newCriteria = [...criteria]
+    newCriteria[index][field] = value
+    setCriteria(newCriteria)
+    onChange?.(newCriteria)
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <Button type="dashed" onClick={handleAddCriterion} block icon={<PlusOutlined />}>
+          添加条件
+        </Button>
+      </div>
+      
+      {criteria.map((criterion, index) => (
+        <Card key={index} size="small" style={{ marginBottom: 12 }}>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Form.Item label="条件类型" required>
+              <Select
+                value={criterion.type}
+                onChange={(value) => handleChange(index, 'type', value)}
+                style={{ width: '100%' }}
+              >
+                <Option value="field_validation">字段验证</Option>
+                <Option value="custom_condition">自定义条件</Option>
+              </Select>
+            </Form.Item>
+            
+            {criterion.type === 'field_validation' && (
+              <>
+                <Form.Item
+                  label="字段名称"
+                  required
+                  validateStatus={criterion.field_name ? '' : 'error'}
+                  help={!criterion.field_name ? '字段名称不能为空' : ''}
+                >
+                  <Input
+                    value={criterion.field_name}
+                    onChange={(e) => handleChange(index, 'field_name', e.target.value)}
+                  />
+                </Form.Item>
+                
+                <Form.Item label="验证规则" required>
+                  <Select
+                    value={criterion.rule}
+                    onChange={(value) => handleChange(index, 'rule', value)}
+                    style={{ width: '100%' }}
+                  >
+                    <Option value="not_empty">非空</Option>
+                    <Option value="email">邮箱格式</Option>
+                    <Option value="phone">手机号格式</Option>
+                    <Option value="min_length">最小长度</Option>
+                    <Option value="max_length">最大长度</Option>
+                    <Option value="positive">正数</Option>
+                  </Select>
+                </Form.Item>
+                
+                {criterion.rule === 'min_length' && (
+                  <Form.Item label="最小长度" required>
+                    <InputNumber
+                      value={criterion.min_length}
+                      onChange={(value) => handleChange(index, 'min_length', value)}
+                      min={0}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                )}
+                
+                {criterion.rule === 'max_length' && (
+                  <Form.Item label="最大长度" required>
+                    <InputNumber
+                      value={criterion.max_length}
+                      onChange={(value) => handleChange(index, 'max_length', value)}
+                      min={1}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                )}
+              </>
+            )}
+            
+            {criterion.type === 'custom_condition' && (
+              <>
+                <Form.Item label="自定义表达式" required>
+                  <Input.TextArea
+                    value={criterion.expression}
+                    onChange={(e) => handleChange(index, 'expression', e.target.value)}
+                    rows={3}
+                    placeholder={`# 自定义条件示例（返回布尔值）
+# 可以访问所有参数作为变量
+
+# 示例1: 年龄和姓名验证
+age >= 18 and len(name) > 0
+
+# 示例2: 邮箱和手机号格式
+"@" in email and phone.startswith("1") and len(phone) == 11
+
+# 示例3: 数量和价格验证  
+quantity > 0 and price > 0 and quantity * price <= 10000
+
+# 示例4: 复杂条件组合
+(age >= 18 or parent_consent) and (email.endswith("@company.com") or is_vip)`}
+                  />
+                </Form.Item>
+                <div style={{ color: '#999', fontSize: '12px', marginBottom: '8px' }}>
+                  支持的变量：参数名称（如 name, age）
+                  <br />
+                  支持的函数：len(), str(), int(), float(), bool(), max(), min(), abs(), sum(), all(), any()
+                </div>
+              </>
+            )}
+            
+            <Form.Item label="条件说明">
+              <Input.TextArea
+                value={criterion.description}
+                onChange={(e) => handleChange(index, 'description', e.target.value)}
+                rows={2}
+                placeholder="描述此条件的用途和验证规则"
+              />
+            </Form.Item>
+            
+            <Button
+              type="text"
+              danger
+              icon={<MinusCircleOutlined />}
+              onClick={() => handleRemove(index)}
+            >
+              删除条件
+            </Button>
+          </Space>
+        </Card>
+      ))}
+    </div>
+  )
+}
 
 export default PropertyPanel;
