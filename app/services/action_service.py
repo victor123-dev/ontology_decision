@@ -270,7 +270,6 @@ class ActionService:
                     ]
                 },
                 "parameters": parameters,
-                "db": db,
                 "data_source_manager": data_source_manager
             }
             

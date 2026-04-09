@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     
     # MongoDB配置
     MONGO_URL: str = "mongodb://localhost:27017"
-    MONGO_DB_NAME: str = "commander_actions"
+    MONGO_DB_NAME: str = "commander"
 
     class Config:
         env_file = ".env"
