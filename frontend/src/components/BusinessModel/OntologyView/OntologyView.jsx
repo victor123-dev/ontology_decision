@@ -316,54 +316,87 @@ const OntologyView = () => {
     // 行动创建
     const handleActionCreated = ({ action }) => {
       console.log('handleActionCreated', action);
-      setGraphData(prev => ({
-        ...prev,
-        nodes: [...prev.nodes, { 
+      setGraphData(prev => {
+        // 处理行动-模型连线的更新，有目标模型，创建新的连线
+        const newLinks = [...prev.links];
+        const targetModelId = action.target_model_id;
+        if (targetModelId) {
+          const newActionLink = {
+            id: `action_${action.id}_to_${targetModelId}`,
+            source: action.id,
+            target: targetModelId,
+            name: "作用于",
+            description: `${action.name || 'Action'} 作用于 ${targetModelId}`,
+            data: {
+              type: "action_to_model",
+              action_id: action.id,
+              model_id: targetModelId
+            }
+          };
+          newLinks.push(newActionLink);
+        }
+        return { ...prev, links: newLinks, nodes: [...prev.nodes, { 
           id: action.id, 
           name: action.name, 
           type: 'action',
           description: action.description, 
           data: action 
-        }]
-      }));
+        }] };
+      });
     };
 
     // 行动更新
     const handleActionUpdated = ({ actionId, updatedFields }) => {
       setGraphData(prev => {
-      const newNodes = [...prev.nodes];
-      const nodeIndex = newNodes.findIndex(n => n.id === actionId);
-      if (nodeIndex !== -1) {
-        // 直接修改原对象，保持 D3 引用
-        Object.assign(newNodes[nodeIndex], updatedFields);
-        // 更新 data 字段
-        if (newNodes[nodeIndex].data) {
-        newNodes[nodeIndex].data = { ...newNodes[nodeIndex].data, ...updatedFields };
+        const newNodes = [...prev.nodes];
+        const nodeIndex = newNodes.findIndex(n => n.id === actionId);
+        if (nodeIndex !== -1) {
+          // 直接修改原对象，保持 D3 引用
+          Object.assign(newNodes[nodeIndex], updatedFields);
+          // 更新 data 字段
+          if (newNodes[nodeIndex].data) {
+          newNodes[nodeIndex].data = { ...newNodes[nodeIndex].data, ...updatedFields };
+          }
         }
-      }
-      
-      const newLinks = [...prev.links];
-      // 处理行动-模型连线的更新（当目标模型发生变化时）
-      const actionNode = newNodes.find(n => n.id === actionId);
-      const newTargetModelId = updatedFields.target_model_id;
-      
-      if (newTargetModelId) {
-        // 找到现有的行动-模型连线
-        const existingLinkIndex = newLinks.findIndex(link => 
-          (String(link.source) === String(actionId) || String(link.source?.id) === String(actionId)) &&
-          link.data?.type === 'action_to_model'
-        );
         
-        if (existingLinkIndex !== -1) {
-          const existingLink = newLinks[existingLinkIndex];
-          const existingTargetModelId = existingLink.target || existingLink.target?.id;
+        const newLinks = [...prev.links];
+        // 处理行动-模型连线的更新（当目标模型发生变化时）
+        const actionNode = newNodes.find(n => n.id === actionId);
+        const newTargetModelId = updatedFields.target_model_id;
+        
+        if (newTargetModelId) {
+          // 找到现有的行动-模型连线
+          const existingLinkIndex = newLinks.findIndex(link => 
+            (String(link.source) === String(actionId) || String(link.source?.id) === String(actionId)) &&
+            link.data?.type === 'action_to_model'
+          );
           
-          // 如果目标模型发生了变化，需要更新连线
-          if (String(existingTargetModelId) !== String(newTargetModelId)) {
-            // 1. 移除旧的连线
-            newLinks.splice(existingLinkIndex, 1);
+          if (existingLinkIndex !== -1) {
+            const existingLink = newLinks[existingLinkIndex];
+            const existingTargetModelId = existingLink.target || existingLink.target?.id;
             
-            // 2. 添加新的连线
+            // 如果目标模型发生了变化，需要更新连线
+            if (String(existingTargetModelId) !== String(newTargetModelId)) {
+              // 1. 移除旧的连线
+              newLinks.splice(existingLinkIndex, 1);
+              
+              // 2. 添加新的连线
+              const newActionLink = {
+                id: `action_${actionId}_to_${newTargetModelId}`,
+                source: actionId,
+                target: newTargetModelId,
+                name: "作用于",
+                description: `${actionNode?.name || 'Action'} 作用于 ${newTargetModelId}`,
+                data: {
+                  type: "action_to_model",
+                  action_id: actionId,
+                  model_id: newTargetModelId
+                }
+              };
+              newLinks.push(newActionLink);
+            }
+          } else {
+            // 如果没有现有的连线，但有新的目标模型，创建新的连线
             const newActionLink = {
               id: `action_${actionId}_to_${newTargetModelId}`,
               source: actionId,
@@ -379,59 +412,43 @@ const OntologyView = () => {
             newLinks.push(newActionLink);
           }
         } else {
-          // 如果没有现有的连线，但有新的目标模型，创建新的连线
-          const newActionLink = {
-            id: `action_${actionId}_to_${newTargetModelId}`,
-            source: actionId,
-            target: newTargetModelId,
-            name: "作用于",
-            description: `${actionNode?.name || 'Action'} 作用于 ${newTargetModelId}`,
-            data: {
-              type: "action_to_model",
-              action_id: actionId,
-              model_id: newTargetModelId
+          // 如果没有目标模型，移除所有相关的行动-模型连线
+          const linksToRemove = newLinks.filter(link => 
+            (String(link.source) === String(actionId) || String(link.source?.id) === String(actionId)) &&
+            link.data?.type === 'action_to_model'
+          );
+          
+          linksToRemove.forEach(linkToRemove => {
+            const index = newLinks.findIndex(link => link.id === linkToRemove.id);
+            if (index !== -1) {
+              newLinks.splice(index, 1);
             }
-          };
-          newLinks.push(newActionLink);
+          });
         }
-      } else {
-        // 如果没有目标模型，移除所有相关的行动-模型连线
-        const linksToRemove = newLinks.filter(link => 
-          (String(link.source) === String(actionId) || String(link.source?.id) === String(actionId)) &&
-          link.data?.type === 'action_to_model'
-        );
         
-        linksToRemove.forEach(linkToRemove => {
-          const index = newLinks.findIndex(link => link.id === linkToRemove.id);
-          if (index !== -1) {
-            newLinks.splice(index, 1);
-          }
-        });
-      }
-      
-      return { ...prev, links: newLinks, nodes: newNodes };
+        return { ...prev, links: newLinks, nodes: newNodes };
       });
       // 如果当前选中的元素是这个行动，也需要更新 selectedElement
       setSelectedElement(prev => {
-      // 判断是否需要更新
-      if (prev?.data.id === actionId) {
-        return {
-        ...prev,
-        data: {
-          ...prev.data,
-          // 更新行动的基本信息
-          name: updatedFields.name || prev.data.name,
-          description: updatedFields.description || prev.data.description,
-          // 更新模型的完整数据
+        // 判断是否需要更新
+        if (prev?.data.id === actionId) {
+          return {
+          ...prev,
           data: {
-          ...prev.data.data,
-          ...updatedFields
+            ...prev.data,
+            // 更新行动的基本信息
+            name: updatedFields.name || prev.data.name,
+            description: updatedFields.description || prev.data.description,
+            // 更新模型的完整数据
+            data: {
+            ...prev.data.data,
+            ...updatedFields
+            }
           }
+          };
         }
-        };
-      }
-      // 不需要更新，返回原状态（保持不变）
-      return prev;
+        // 不需要更新，返回原状态（保持不变）
+        return prev;
       });
     };
 
