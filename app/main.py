@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api import data_source, business_model, business_model_link, data_sensing, drive_logic, agent, test_data, drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action
+from app.api import data_source, business_model, business_model_link, data_sensing, drive_logic, agent, test_data, drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk
 from app.config import settings
 from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
@@ -74,6 +74,7 @@ app.include_router(nl_rule_interface.router, prefix="/api/v1", tags=["Natural La
 app.include_router(drive_visualization.router, prefix="/api/v1", tags=["Drive Visualization"])
 app.include_router(ontology_view.router, prefix="/api/v1", tags=["Ontology View"])
 app.include_router(action.router, prefix="/api/v1", tags=["Action"])
+app.include_router(sdk.router, prefix="/api/v1", tags=["SDK"])
 
 # 根路径
 @app.get("/")

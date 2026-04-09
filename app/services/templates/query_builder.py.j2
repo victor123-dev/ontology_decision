@@ -1,0 +1,196 @@
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
+from .executor import QueryExecutor
+from ..core.types import FilterCondition, SortOrder
+
+if TYPE_CHECKING:
+    from ..core.client import OntologyClient
+
+
+class QueryBuilder:
+    """查询构建器，支持链式调用"""
+
+    def __init__(self, client: 'OntologyClient'):
+        self.client = client
+        self._model_name: Optional[str] = None
+        self._filters: List[FilterCondition] = []
+        self._sort_field: Optional[str] = None
+        self._sort_direction: str = SortOrder.ASC
+        self._limit: Optional[int] = None
+        self._offset: int = 0
+
+    def from_model(self, model_name: str) -> 'QueryBuilder':
+        """指定查询的模型"""
+        self._model_name = model_name
+        return self
+
+    def where(self, field: str, operator: str, value) -> 'QueryBuilder':
+        """添加过滤条件"""
+        self._filters.append(FilterCondition(field, operator, value))
+        return self
+
+    def where_eq(self, field: str, value) -> 'QueryBuilder':
+        """添加等于条件"""
+        return self.where(field, "eq", value)
+
+    def where_ne(self, field: str, value) -> 'QueryBuilder':
+        """添加不等于条件"""
+        return self.where(field, "ne", value)
+
+    def where_gt(self, field: str, value) -> 'QueryBuilder':
+        """添加大于条件"""
+        return self.where(field, "gt", value)
+
+    def where_gte(self, field: str, value) -> 'QueryBuilder':
+        """添加大于等于条件"""
+        return self.where(field, "gte", value)
+
+    def where_lt(self, field: str, value) -> 'QueryBuilder':
+        """添加小于条件"""
+        return self.where(field, "lt", value)
+
+    def where_lte(self, field: str, value) -> 'QueryBuilder':
+        """添加小于等于条件"""
+        return self.where(field, "lte", value)
+
+    def where_contains(self, field: str, value: str) -> 'QueryBuilder':
+        """添加包含条件"""
+        return self.where(field, "contains", value)
+
+    def where_in(self, field: str, values: List[Any]) -> 'QueryBuilder':
+        """添加IN条件"""
+        return self.where(field, "in", values)
+
+    def where_between(self, field: str, min_val: Any, max_val: Any) -> 'QueryBuilder':
+        """添加范围条件"""
+        self._filters.append(FilterCondition(field, "gte", min_val))
+        self._filters.append(FilterCondition(field, "lte", max_val))
+        return self
+
+    def order_by(self, field: str, direction: str = SortOrder.ASC) -> 'QueryBuilder':
+        """添加排序（使用 order_by 避免与属性名冲突）"""
+        self._sort_field = field
+        self._sort_direction = direction
+        return self
+
+    def asc(self) -> 'QueryBuilder':
+        """设置升序排序（链式调用）"""
+        self._sort_direction = SortOrder.ASC
+        return self
+
+    def desc(self) -> 'QueryBuilder':
+        """设置降序排序（链式调用）"""
+        self._sort_direction = SortOrder.DESC
+        return self
+
+    def take(self, n: int) -> 'QueryBuilder':
+        """限制返回数量（使用 take 避免与属性名冲突）"""
+        self._limit = n
+        return self
+
+    def skip(self, n: int) -> 'QueryBuilder':
+        """设置偏移量（使用 skip 避免与属性名冲突）"""
+        self._offset = n
+        return self
+
+    def page(self, page_num: int, page_size: int) -> 'QueryBuilder':
+        """分页查询"""
+        self._limit = page_size
+        self._offset = (page_num - 1) * page_size
+        return self
+
+    def execute(self) -> 'QueryResult':
+        """执行查询"""
+        if not self._model_name:
+            raise ValueError("Model name must be specified. Use from_model() first.")
+
+        executor = QueryExecutor(self.client)
+        items = executor.execute(
+            model_name=self._model_name,
+            filters=self._filters,
+            sort_by=self._sort_field,
+            sort_direction=self._sort_direction,
+            limit=self._limit,
+            offset=self._offset
+        )
+
+        return QueryResult(items, self._model_name, self.client)
+
+    def count(self) -> int:
+        """获取符合条件的记录数"""
+        if not self._model_name:
+            raise ValueError("Model name must be specified")
+
+        executor = QueryExecutor(self.client)
+        return executor.count(
+            model_name=self._model_name,
+            filters=self._filters
+        )
+
+    def first(self) -> Optional[Any]:
+        """获取第一条记录"""
+        self.take(1)
+        result = self.execute()
+        return result.first()
+
+    def exists(self) -> bool:
+        """检查是否存在符合条件的记录"""
+        return self.count() > 0
+
+
+class QueryResult:
+    """查询结果集，支持进一步操作"""
+
+    def __init__(self, items: List[Any], model_name: str, client: 'OntologyClient'):
+        self._items = items
+        self._model_name = model_name
+        self._client = client
+
+    def __iter__(self):
+        """支持迭代"""
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        """支持 len()"""
+        return len(self._items)
+
+    def __getitem__(self, index):
+        """支持索引访问"""
+        return self._items[index]
+
+    def __bool__(self) -> bool:
+        """支持布尔判断"""
+        return len(self._items) > 0
+
+    @property
+    def items(self) -> List[Any]:
+        """获取所有项目"""
+        return self._items
+
+    def first(self) -> Optional[Any]:
+        """获取第一条记录"""
+        return self._items[0] if self._items else None
+
+    def last(self) -> Optional[Any]:
+        """获取最后一条记录"""
+        return self._items[-1] if self._items else None
+
+    def filter(self, predicate) -> 'QueryResult':
+        """在内存中进一步过滤"""
+        filtered = [item for item in self._items if predicate(item)]
+        return QueryResult(filtered, self._model_name, self._client)
+
+    def map(self, transform) -> List[Any]:
+        """映射转换"""
+        return [transform(item) for item in self._items]
+
+    def pluck(self, field: str) -> List[Any]:
+        """提取指定字段值"""
+        return [getattr(item, field, None) for item in self._items]
+
+    def to_list(self) -> List[Any]:
+        """转换为列表"""
+        return self._items
+
+    def to_dict(self) -> List[Dict[str, Any]]:
+        """转换为字典列表"""
+        return [item.to_dict() if hasattr(item, 'to_dict') else item for item in self._items]

@@ -1,0 +1,49 @@
+from typing import Dict, Any, List, Optional, Union
+
+
+class FilterCondition:
+    """过滤条件"""
+    
+    def __init__(self, field: str, operator: str, value):
+        self.field = field
+        self.operator = operator
+        self.value = value
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "field": self.field,
+            "operator": self.operator,
+            "value": self.value
+        }
+
+
+class SortOrder:
+    """排序顺序"""
+    
+    ASC = "asc"
+    DESC = "desc"
+
+
+class QueryOptions:
+    """查询选项"""
+    
+    def __init__(self,
+                 filters: Optional[List[FilterCondition]] = None,
+                 sort_by: Optional[str] = None,
+                 sort_direction: str = SortOrder.ASC,
+                 limit: Optional[int] = None,
+                 offset: int = 0):
+        self.filters = filters or []
+        self.sort_by = sort_by
+        self.sort_direction = sort_direction
+        self.limit = limit
+        self.offset = offset
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "filters": [f.to_dict() for f in self.filters],
+            "sort_by": self.sort_by,
+            "sort_direction": self.sort_direction,
+            "limit": self.limit,
+            "offset": self.offset
+        }

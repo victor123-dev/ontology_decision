@@ -774,6 +774,15 @@ function BusinessModel() {
         items={[
           {
             key: '1',
+            label: '🧠 本体视图',
+            children: (
+              <div style={{ height: 'calc(100vh - 80px)' }}>
+                <OntologyView />
+              </div>
+            ),
+          },
+          {
+            key: '2',
             label: '📋 业务模型',
             children: (
               <Card style={{ marginTop: 16 }}>
@@ -802,7 +811,7 @@ function BusinessModel() {
             ),
           },
           {
-            key: '2',
+            key: '3',
             label: '🔗 模型关系',
             children: (
               <Card style={{ marginTop: 16 }}>
@@ -826,19 +835,10 @@ function BusinessModel() {
             ),
           },
           {
-            key: '3',
+            key: '4',
             label: '🚀 行动管理',
             children: (
               <ActionManager businessModels={businessModels} modelLinks={modelLinks} />
-            ),
-          },
-          {
-            key: '4',
-            label: '🧠 本体视图',
-            children: (
-              <div style={{ height: 'calc(100vh - 80px)' }}>
-                <OntologyView />
-              </div>
             ),
           },
         ]}

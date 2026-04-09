@@ -1,0 +1,65 @@
+from typing import Optional, Dict, Any
+{% macro python_type_for_param(param) -%}
+{%- if param.type == "string" or param.type == "text" -%}
+str
+{%- elif param.type == "integer" -%}
+int
+{%- elif param.type == "float" or param.type == "decimal" -%}
+float
+{%- elif param.type == "boolean" -%}
+bool
+{%- elif param.type == "date" or param.type == "datetime" -%}
+str
+{%- elif param.type == "object" -%}
+Dict[str, Any]
+{%- elif param.type == "array" -%}
+list
+{%- else -%}
+Any
+{%- endif -%}
+{%- endmacro %}
+
+
+class {{ action_name }}Parameters:
+    """{{ action.description or action.name }} 参数"""
+    
+    def __init__(self,
+        {%- for param in action.parameters if param.required %}
+        {{ param.name }}: {{ python_type_for_param(param) }},
+        {%- endfor %}
+        {%- for param in action.parameters if not param.required %}
+        {{ param.name }}: Optional[{{ python_type_for_param(param) }}] = None{% if not loop.last %},{% endif %}
+        {%- endfor %}
+    ):
+        {%- for param in action.parameters %}
+        self.{{ param.name }} = {{ param.name }}
+        {%- endfor %}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        result = {}
+        {%- for param in action.parameters %}
+        if self.{{ param.name }} is not None:
+            result["{{ param.name }}"] = self.{{ param.name }}
+        {%- endfor %}
+        return result
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> '{{ action_name }}Parameters':
+        """从字典创建实例"""
+        return cls(
+            {%- for param in action.parameters %}
+            {{ param.name }}=data.get("{{ param.name }}"){% if not loop.last %},{% endif %}
+            {%- endfor %}
+        )
+    
+    def validate(self) -> tuple[bool, list]:
+        """验证参数"""
+        errors = []
+        {%- for param in action.parameters %}
+        {%- if param.required %}
+        if self.{{ param.name }} is None:
+            errors.append("Required parameter '{{ param.name }}' is missing")
+        {%- endif %}
+        {%- endfor %}
+        return len(errors) == 0, errors

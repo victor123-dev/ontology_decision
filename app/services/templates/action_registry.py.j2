@@ -1,0 +1,35 @@
+from typing import Dict, Any, Callable
+{% for action in actions %}
+from .{{ action.id }} import {{ action.class_name }}Action
+{% endfor %}
+
+
+class ActionRegistry:
+    """行动注册表"""
+    
+    def __init__(self, client):
+        self.client = client
+        {% for action in actions %}
+        self.{{ action.attribute_name }} = {{ action.class_name }}Action(client)
+        {% endfor %}
+    
+    def execute(self, action_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """执行行动（向后兼容）"""
+        # 尝试执行动态行动
+        return self._execute_dynamic_action(action_name, parameters)
+    
+    def _execute_dynamic_action(self, action_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """执行动态行动"""
+        session = self.client.get_session()
+        response = session.post("/api/v1/actions/execute", json={
+            "action_id": action_name,
+            "parameters": parameters
+        })
+        
+        if response.status_code == 200:
+            return response.json()
+        
+        return {
+            "success": False,
+            "error": f"Failed to execute action: {response.text}"
+        }

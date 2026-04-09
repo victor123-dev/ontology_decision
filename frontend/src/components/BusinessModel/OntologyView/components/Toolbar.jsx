@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, Form, Input, Select, Button, Radio, message, Steps, Tabs, Space, Card, Divider, InputNumber, Switch, Typography, List, Tag, Popover } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, MinusCircleOutlined } from '@ant-design/icons';
-import { dataSourceApi, businessModelApi, businessModelLinkApi, actionApi } from '../../../../services/api';
+import { Modal, Form, Input, Select, Button, Radio, message, Steps, Tabs, Space, Card, Divider, InputNumber, Switch, Typography, List, Tag, Popover, Spin } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, MinusCircleOutlined, CodeOutlined } from '@ant-design/icons';
+import { dataSourceApi, businessModelApi, businessModelLinkApi, actionApi, sdkApi } from '../../../../services/api';
 import { modelEventBus } from '../../../../utils/modelEventBus';
 
 const { Option } = Select;
@@ -10,6 +10,8 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
   const [modelModalVisible, setModelModalVisible] = useState(false);
   const [linkModalVisible, setLinkModalVisible] = useState(false);
   const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [sdkModalVisible, setSdkModalVisible] = useState(false);
+  const [isGeneratingSdk, setIsGeneratingSdk] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [initialFormValues, setInitialFormValues] = useState({});
   const [modelForm] = Form.useForm();
@@ -18,6 +20,7 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
   const [dataSources, setDataSources] = useState([]);
   const [businessModels, setBusinessModels] = useState([]);
   const [modelLinks, setModelLinks] = useState([]);
+  const [sdkForm] = Form.useForm();
 
   useEffect(() => {
     fetchDataSources();
@@ -269,6 +272,38 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
     setActionModalVisible(true);
   }
 
+  const handleGenerateSdk = async () => {
+    try {
+      await sdkForm.validateFields();
+      const values = sdkForm.getFieldsValue();
+      
+      // 确保输出路径正确
+      if (!values.output_path) {
+        values.output_path = `./sdk/${values.package_name}`;
+      }
+      
+      setIsGeneratingSdk(true);
+      message.loading('正在生成SDK，请稍候...', 0);
+      
+      const response = await sdkApi.generate(values);
+      
+      message.destroy();
+      if (response.data.success) {
+        message.success('SDK生成成功！');
+        setSdkModalVisible(false);
+        sdkForm.resetFields();
+      } else {
+        message.error(`SDK生成失败: ${response.data.message || '未知错误'}`);
+      }
+    } catch (error) {
+      message.destroy();
+      console.error('SDK生成错误:', error);
+      message.error(`SDK生成失败: ${error.response?.data?.detail || error.message || '未知错误'}`);
+    } finally {
+      setIsGeneratingSdk(false);
+    }
+  };
+
   const handleModelSubmit = () => {
     modelForm.validateFields().then(values => {
       onAddModel(values);
@@ -309,6 +344,9 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
         </Button>
         <Button size="small" onClick={handleAddAction}>
           + 新增行动
+        </Button>
+        <Button size="small" icon={<CodeOutlined />} onClick={() => setSdkModalVisible(true)}>
+          生成SDK
         </Button>
       </div>
 
@@ -892,6 +930,63 @@ result = {
             )}
           </div>
         </Form>
+      </Modal>
+    
+      {/* 生成SDK模态框 */}
+      <Modal
+        title="生成Python Ontology SDK"
+        open={sdkModalVisible}
+        onOk={handleGenerateSdk}
+        onCancel={() => setSdkModalVisible(false)}
+        confirmLoading={isGeneratingSdk}
+        okText="生成SDK"
+        cancelText="取消"
+        width={600}
+      >
+        <Spin spinning={isGeneratingSdk} tip="正在生成SDK...">
+          <Form 
+            form={sdkForm} 
+            layout="vertical"
+            onValuesChange={(changedValues) => {
+              if (changedValues.package_name !== undefined) {
+                // 当包名改变时，自动更新输出路径
+                const outputPath = `./sdk/${changedValues.package_name}`;
+                sdkForm.setFieldsValue({ output_path: outputPath });
+              }
+            }}
+          >
+            <Form.Item 
+              name="package_name" 
+              label="包名" 
+              initialValue="my_ontology_sdk"
+              rules={[{ required: true, message: '请输入包名' }]}
+            >
+              <Input placeholder="例如: my_ontology_sdk" />
+            </Form.Item>
+            
+            <Form.Item 
+              name="version" 
+              label="版本号" 
+              initialValue="1.0.0"
+              rules={[{ required: true, message: '请输入版本号' }]}
+            >
+              <Input placeholder="例如: 1.0.0" />
+            </Form.Item>
+            
+            <Form.Item 
+              name="output_path" 
+              label="输出路径" 
+              initialValue="./sdk/my_ontology_sdk"
+            >
+              <Input disabled />
+            </Form.Item>
+            
+            <div style={{ backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '4px', fontSize: '12px' }}>
+              <p><strong>注意：</strong>SDK生成可能需要较长时间，请耐心等待。</p>
+              <p>生成的SDK将包含所有业务模型、关系和行动，并支持面向对象的编程接口。</p>
+            </div>
+          </Form>
+        </Spin>
       </Modal>
     </>
   );

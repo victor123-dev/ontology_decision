@@ -1,0 +1,70 @@
+from typing import Dict, Any, List, Optional
+from ..core.types import FilterCondition
+from ..models import *
+
+
+class QueryExecutor:
+    """查询执行器"""
+
+    def __init__(self, client):
+        self.client = client
+
+    def execute(self,
+                model_name: str,
+                filters: List[FilterCondition],
+                sort_by: Optional[str] = None,
+                sort_direction: str = "asc",
+                limit: Optional[int] = None,
+                offset: int = 0) -> List[Any]:
+        """执行查询"""
+        # 构建查询参数
+        params = {
+            "filters": [f.to_dict() for f in filters],
+            "sort_by": sort_by,
+            "sort_direction": sort_direction,
+            "limit": limit,
+            "offset": offset
+        }
+
+        # 根据模型名称获取对应的模型类
+        model_class = self._get_model_class(model_name)
+        if not model_class:
+            raise ValueError(f"Model {model_name} not found")
+
+        # 执行查询
+        session = self.client.get_session()
+        response = session.post(f"/api/v1/business-models/{model_name}/query", json=params)
+
+        if response.status_code == 200:
+            result = response.json()
+            items = result.get("data", [])
+            return [model_class(self.client, item) for item in items]
+
+        return []
+
+    def count(self,
+              model_name: str,
+              filters: List[FilterCondition]) -> int:
+        """获取符合条件的记录数"""
+        params = {
+            "filters": [f.to_dict() for f in filters],
+            "count_only": True
+        }
+
+        session = self.client.get_session()
+        response = session.post(f"/api/v1/business-models/{model_name}/count", json=params)
+
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("count", 0)
+
+        return 0
+
+    def _get_model_class(self, model_name: str):
+        """根据模型名称获取模型类"""
+        model_map = {
+            {% for model in models %}
+            "{{ model.id }}": {{ model.name }},
+            {% endfor %}
+        }
+        return model_map.get(model_name)

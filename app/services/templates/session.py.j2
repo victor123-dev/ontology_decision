@@ -1,0 +1,35 @@
+import requests
+from typing import Dict, Any, Optional
+
+
+class Session:
+    """会话管理类"""
+    
+    def __init__(self, api_url: str, api_key: str):
+        self.api_url = api_url.rstrip('/')
+        self.api_key = api_key
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        self.session = requests.Session()
+    
+    def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """发送GET请求"""
+        url = f"{self.api_url}{endpoint}"
+        return self.session.get(url, headers=self.headers, params=params)
+    
+    def post(self, endpoint: str, json: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """发送POST请求"""
+        url = f"{self.api_url}{endpoint}"
+        return self.session.post(url, headers=self.headers, json=json)
+    
+    def put(self, endpoint: str, json: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """发送PUT请求"""
+        url = f"{self.api_url}{endpoint}"
+        return self.session.put(url, headers=self.headers, json=json)
+    
+    def delete(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """发送DELETE请求"""
+        url = f"{self.api_url}{endpoint}"
+        return self.session.delete(url, headers=self.headers, params=params)

@@ -1,0 +1,112 @@
+from typing import Dict, Any, Optional
+from .session import Session
+from .business_model import BusinessModel
+from ..query.builder import QueryBuilder
+from ..actions.registry import ActionRegistry
+
+
+class ModelNamespace:
+    """模型命名空间，支持通过属性访问模型
+
+    使用方式：
+        client.models.work_order.find(...)
+        client.models.customer.get_by_id("123")
+    """
+
+    def __init__(self, client: 'OntologyClient'):
+        self._client = client
+        self._model_classes: Dict[str, type] = {}
+        self._model_instances: Dict[str, BusinessModel] = {}
+        self._register_models()
+
+    def _register_models(self):
+        """注册所有业务模型"""
+        {% for model in models %}
+        from ..models.{{ model.id }} import {{ model.name }}
+        self._register_model("{{ model.id }}", {{ model.name }})
+        {% endfor %}
+
+    def _register_model(self, model_id: str, model_class: type):
+        """注册单个模型"""
+        self._model_classes[model_id] = model_class
+        # 创建模型实例并设置为属性
+        instance = model_class(self._client)
+        self._model_instances[model_id] = instance
+        # 设置属性，使得可以通过 self.work_order 访问
+        setattr(self, model_id, instance)
+
+    def __getattr__(self, name: str) -> BusinessModel:
+        """动态获取模型实例"""
+        if name in self._model_instances:
+            return self._model_instances[name]
+        raise AttributeError(f"Model '{name}' not found. Available models: {list(self._model_instances.keys())}")
+
+    def __dir__(self):
+        """支持 IDE 自动补全"""
+        return list(self._model_instances.keys())
+
+    def get(self, model_id: str) -> Optional[BusinessModel]:
+        """通过名称获取模型实例（向后兼容）"""
+        return self._model_instances.get(model_id)
+
+    def list_models(self) -> list:
+        """列出所有可用模型"""
+        return list(self._model_instances.keys())
+
+    def __iter__(self):
+        """支持迭代所有模型"""
+        return iter(self._model_instances.values())
+
+
+class OntologyClient:
+    """本体客户端，SDK的主要入口点
+
+    使用示例：
+        # 初始化客户端
+        client = OntologyClient("http://localhost:8081", "api-key")
+
+        # 方式1：通过 models 命名空间访问（推荐）
+        orders = client.models.work_order.find(production_workshop="Assembly")
+        customer = client.models.customer.get_by_id("123")
+
+        # 方式2：链式查询
+        orders = client.query.from_model("work_order") \
+            .where_eq("production_workshop", "Assembly") \
+            .order_by("created_at", "desc") \
+            .take(10) \
+            .execute()
+
+        # 方式3：向后兼容的字符串方式
+        orders = client.get_model("work_order").find(production_workshop="Assembly")
+
+        # 执行行动
+        result = client.actions.execute("create_work_order", {...})
+    """
+
+    def __init__(self, api_url: str, api_key: str):
+        self.api_url = api_url
+        self.api_key = api_key
+        self.session = Session(api_url, api_key)
+        self.models = ModelNamespace(self)
+        self.actions = ActionRegistry(self)
+        self.query = QueryBuilder(self)
+
+    def get_model(self, model_name: str) -> Optional[BusinessModel]:
+        """获取业务对象模型（向后兼容）"""
+        return self.models.get(model_name)
+
+    def execute_action(self, action_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """执行行动"""
+        return self.actions.execute(action_name, parameters)
+
+    def get_session(self) -> Session:
+        """获取会话对象"""
+        return self.session
+
+    def health_check(self) -> bool:
+        """检查API连接状态"""
+        try:
+            response = self.session.get("/health")
+            return response.status_code == 200
+        except Exception:
+            return False

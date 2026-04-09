@@ -99,6 +99,12 @@ export const actionApi = {
   execute: (data) => api.post('/actions/execute', data),
 };
 
+// SDK生成
+export const sdkApi = {
+  generate: (data) => api.post('/sdk/generate', data),
+  getInfo: () => api.get('/sdk/info'),
+};
+
 // 驱动日志管理
 export const driveLogApi = {
   create: (data) => api.post('/drive-logs', data),

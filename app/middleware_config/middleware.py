@@ -4,6 +4,7 @@ from starlette.responses import Response
 from fastapi.responses import StreamingResponse
 import time
 import json
+import traceback
 from app.utils.logger import get_logger, get_request_logger
 
 logger = get_logger(__name__)
@@ -136,11 +137,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 return response
             
         except Exception as e:
-            # 记录异常信息
+            # 记录异常信息和完整堆栈跟踪
             process_time = time.time() - start_time
             request_logger.error(
                 f"请求处理异常: {request.method} {request.url.path} | "
                 f"处理时间: {process_time:.3f}秒 | 异常: {str(e)}"
             )
+            request_logger.error(f"完整堆栈跟踪:\n{traceback.format_exc()}")
             request_logger.debug(f"请求详情: {json.dumps(request_info, ensure_ascii=False)}")
             raise

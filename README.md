@@ -149,7 +149,7 @@ npm install
 
 ```bash
 # 启动后端服务
-uvicorn app.main:app --host 0.0.0.0 --reload --port 8080
+uvicorn app.main:app --host 0.0.0.0 --reload --port 8080 --reload-dir ./app/ --reload-dir ./tests/
 ```
 
 **前端服务** (可选)

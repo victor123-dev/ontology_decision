@@ -1,0 +1,69 @@
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from ..core.business_model import BusinessModel
+
+if TYPE_CHECKING:
+    from ..core.client import OntologyClient
+{% for link in links %}
+{% if link.type == 'outgoing' %}
+    from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
+{% elif link.type == 'incoming' %}
+    from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
+{% endif %}
+{% endfor %}
+
+
+class {{ model_name }}(BusinessModel):
+    """{{ model.description or model.name }}
+
+    业务对象模型，提供字段访问和关系导航功能。
+
+    使用示例：
+        # 创建新对象
+        order = client.models.work_order.create(
+            order_number="WO-001",
+            production_workshop="Assembly"
+        )
+
+        # 查询对象
+        orders = client.models.work_order.find(production_workshop="Assembly")
+
+        # 更新对象
+        order.update(status="completed")
+
+        # 访问关系
+        customer = order.get_customer_by_customer_id()
+    """
+
+    _model_name = "{{ model.id }}"
+    _fields = {
+        {% for field in fields %}
+        "{{ field.field_id }}": "{{ field.data_type }}",
+        {% endfor %}
+    }
+
+    def __init__(self, client: 'OntologyClient', data: Dict[str, Any] = None):
+        super().__init__(client, data)
+
+    {% for link in links %}
+    {% if link.type == 'outgoing' %}
+    def get_{{ link.target_model.lower() }}_by_{{ link.link.source_key }}(self) -> Optional['{{ link.target_model_name }}']:
+        """获取关联的{{ link.link.name }}"""
+        from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
+        return {{ link.target_model_name }}.find_one(self.client, {{ link.link.target_key }}=getattr(self, "{{ link.link.source_key }}", None))
+
+    {% elif link.type == 'incoming' %}
+    def get_{{ link.source_model.lower() }}s_by_{{ link.link.target_key }}(self) -> List['{{ link.source_model_name }}']:
+        """获取关联的{{ link.link.name }}列表"""
+        from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
+        return {{ link.source_model_name }}.find(self.client, {{ link.link.source_key }}=getattr(self, "{{ link.link.target_key }}", None))
+    {% endif %}
+    {% endfor %}
+
+    # 字段属性（类型提示）
+    {% for field in fields %}
+    @property
+    def {{ field.field_id }}(self) -> {{ field.python_type }}:
+        """{{ field.description or field.field_id }}"""
+        return self.data.get("{{ field.field_id }}")
+
+    {% endfor %}

@@ -1,0 +1,26 @@
+from typing import Dict, Any, Optional
+from ..core.client import OntologyClient
+{% if action.parameters %}
+from .parameters.{{ action.id }}_parameters import {{ action_name }}Parameters
+{% endif %}
+
+
+class {{ action_name }}Action:
+    """{{ action.description or action.name }}"""
+    
+    def __init__(self, client: OntologyClient):
+        self.client = client
+    
+    {% if action.parameters %}
+    def execute(self, parameters: {{ action_name }}Parameters) -> Dict[str, Any]:
+        """执行行动"""
+        return self.client.execute_action("{{ action.id }}", parameters.to_dict())
+    
+    def execute_with_dict(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """使用字典参数执行行动（向后兼容）"""
+        return self.client.execute_action("{{ action.id }}", parameters)
+    {% else %}
+    def execute(self) -> Dict[str, Any]:
+        """执行行动"""
+        return self.client.execute_action("{{ action.id }}", {})
+    {% endif %}
