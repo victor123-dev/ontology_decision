@@ -10,7 +10,7 @@ import BusinessModel from './components/BusinessModel/BusinessModel'
 import DataSensing from './components/DataSensing/DataSensing'
 import DriveLogic from './components/DriveLogic/DriveLogic'
 import Agent from './components/Agent/Agent'
-import TestData from './components/TestData/TestData'
+import BusinessData from './components/BusinessData/BusinessData'
 import DriveLog from './components/DriveLog/DriveLog'
 import TestExecution from './components/TestExecution/TestExecution'
 import DocumentImport from './components/DocumentImport/DocumentImport'
@@ -57,9 +57,9 @@ function AppContent() {
                   label: <Link to="/business-model">业务模型管理</Link>,
                 },
                 {
-                  key: 'test-data',
+                  key: 'business-data',
                   icon: <span>📝</span>,
-                  label: <Link to="/test-data">测试数据管理</Link>,
+                  label: <Link to="/business-data">业务数据管理</Link>,
                 }
               ]
             },
@@ -164,7 +164,7 @@ function AppContent() {
           <Routes>
             <Route path="/data-source" element={<DataSource />} />
             <Route path="/business-model" element={<BusinessModel />} />
-            <Route path="/test-data" element={<TestData />} />
+            <Route path="/business-data" element={<BusinessData />} />
             <Route path="/agent" element={<Agent />} />
             <Route path="/document-import" element={<DocumentImport />} />
             <Route path="/data-sensing" element={<DataSensing />} />

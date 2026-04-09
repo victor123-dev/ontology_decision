@@ -81,12 +81,24 @@ export const agentApi = {
   deleteCapability: (id) => api.delete(`/capabilities/${id}`),
 };
 
-// 测试数据管理
-export const testDataApi = {
-  get: (dataSourceId, tableName, limit = 50) => api.get(`/test-data/${dataSourceId}/${tableName}?limit=${limit}`),
-  insert: (dataSourceId, tableName, data) => api.post(`/test-data/${dataSourceId}/${tableName}`, data),
-  delete: (dataSourceId, tableName, data) => api.delete(`/test-data/${dataSourceId}/${tableName}`, { data }),
-  update: (dataSourceId, tableName, data) => api.put(`/test-data/${dataSourceId}/${tableName}`, data),
+// 业务数据管理
+export const businessDataApi = {
+  getAll: (modelName, limit = 50, offset = 0) => api.post(`/business-data/${modelName}/query`, {
+    limit: limit,
+    offset: offset
+  }),
+  getCount: (modelName, filters = []) => api.post(`/business-data/${modelName}/count`, {
+    filters: filters
+  }),
+  get: (modelName, id) => api.get(`/business-data/${modelName}/get`, { params: { id } }),
+  create: (modelName, data) => api.post(`/business-data/${modelName}/create`, data),
+  update: (modelName, id, data) => api.put(`/business-data/${modelName}/update`, { 
+    params: { id }, 
+    data: data
+  }),
+  delete: (modelName, id) => api.delete(`/business-data/${modelName}/delete`, { 
+    params: { id }
+  }),
 };
 
 // 行动管理

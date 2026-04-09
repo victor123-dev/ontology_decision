@@ -388,7 +388,9 @@ class ProductDevelopmentHandler:
                 data_source_manager.execute_update(
                     data_source_name='commander_data_database',
                     table_name='product',
-                    data=product_update_data
+                    data=product_update_data,
+                    primary_key='id',
+                    primary_value=product_id
                 )
                 
                 # 7. 需求单关联产品
@@ -399,7 +401,9 @@ class ProductDevelopmentHandler:
                 data_source_manager.execute_update(
                     data_source_name='commander_data_database',
                     table_name='demand_order',
-                    data=demand_update_data
+                    data=demand_update_data,
+                    primary_key='id',
+                    primary_value=demand_id
                 )
                 
                 return {
@@ -444,7 +448,9 @@ class ProductDevelopmentHandler:
             data_source_manager.execute_update(
                 data_source_name='commander_data_database',
                 table_name='demand_order',
-                data=demand_update_data
+                data=demand_update_data,
+                primary_key='id',
+                primary_value=demand_id
             )
             
             return {

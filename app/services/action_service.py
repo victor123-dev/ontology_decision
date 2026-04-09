@@ -203,7 +203,9 @@ class ActionService:
             result = data_source_manager.execute_update(
                 data_source_id=data_source_id,
                 table_name=table_name,
-                data=parameters
+                data=parameters,
+                primary_key=business_model.primary_key_id,
+                primary_value=parameters[business_model.primary_key_id]
             )
             return {"success": result, "message": "Object updated successfully"}
         
@@ -211,7 +213,8 @@ class ActionService:
             result = data_source_manager.execute_delete(
                 data_source_id=data_source_id,
                 table_name=table_name,
-                conditions=parameters
+                primary_key=business_model.primary_key_id,
+                primary_value=parameters[business_model.primary_key_id]
             )
             return {"success": result, "message": "Object deleted successfully"}
         
@@ -247,7 +250,8 @@ class ActionService:
                 result = data_source_manager.execute_delete(
                     data_source_id=data_source_id,
                     table_name=table_name,
-                    conditions=parameters
+                    primary_key=link.intermediate_model,
+                    primary_value=parameters[link.intermediate_model]
                 )
                 return {"success": result, "message": "Link deleted successfully"}
         

@@ -89,7 +89,7 @@ class DataSourceManager:
         finally:
             client.close()
     
-    def execute_update(self, data_source_id: int = None, data_source_name: str = None, table_name: str = None, data: Dict[str, Any] = None) -> bool:
+    def execute_update(self, data_source_id: int = None, data_source_name: str = None, table_name: str = None, data: Dict[str, Any] = None, primary_key: str = None, primary_value: Any = None) -> bool:
         if data_source_name:
             data_source = self.get_data_source_by_name(data_source_name)
             if not data_source:
@@ -98,9 +98,6 @@ class DataSourceManager:
         
         client = self.get_client(data_source_id=data_source_id)
         try:
-            # 使用client的execute_query方法来执行UPDATE
-            primary_key = list(data.keys())[0]
-            primary_value = data[primary_key]
             update_values = {k: v for k, v in data.items() if k != primary_key}
             
             set_clause = ', '.join([f"{key} = ?" for key in update_values.keys()])
@@ -115,7 +112,7 @@ class DataSourceManager:
         finally:
             client.close()
     
-    def execute_delete(self, data_source_id: int = None, data_source_name: str = None, table_name: str = None, conditions: Dict[str, Any] = None) -> bool:
+    def execute_delete(self, data_source_id: int = None, data_source_name: str = None, table_name: str = None, primary_key: str = None, primary_value: Any = None) -> bool:
         if data_source_name:
             data_source = self.get_data_source_by_name(data_source_name)
             if not data_source:
@@ -125,16 +122,9 @@ class DataSourceManager:
         client = self.get_client(data_source_id=data_source_id)
         try:
             # 使用client的execute_query方法来执行DELETE
-            condition_list = []
-            values = []
-            for key, value in conditions.items():
-                condition_list.append(f"{key} = ?")
-                values.append(value)
+            query = f"DELETE FROM {table_name} WHERE {primary_key} = ?"
             
-            condition_str = ' AND '.join(condition_list)
-            query = f"DELETE FROM {table_name} WHERE {condition_str}"
-            
-            client.execute_query(query, values)
+            client.execute_query(query, [primary_value])
             return True
         except Exception as e:
             logger.error(f"Execute delete failed: {str(e)}")
