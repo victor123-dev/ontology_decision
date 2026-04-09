@@ -57,6 +57,7 @@ function ActionManager({ businessModels, modelLinks }) {
   const handleEdit = (record) => {
     setEditingAction(record)
     form.setFieldsValue({
+      id: record.id,
       name: record.name,
       description: record.description,
       action_type: record.action_type,
@@ -352,6 +353,12 @@ function ActionManager({ businessModels, modelLinks }) {
 
   const columns = [
     {
+      title: '行动ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 180,
+    },
+    {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
@@ -479,6 +486,20 @@ function ActionManager({ businessModels, modelLinks }) {
           
           {/* 步骤1: 基础配置 */}
           <div style={{ display: currentStep === 0 ? 'block' : 'none' }}>
+            <Form.Item 
+              name="id" 
+              label="行动ID" 
+              rules={[
+                { required: true, message: '请输入行动ID' },
+                { 
+                  pattern: /^[a-zA-Z0-9_-]+$/, 
+                  message: '行动ID只能包含字母、数字、下划线和连字符'
+                }
+              ]}
+            >
+              <Input placeholder="例如: create_customer_order" disabled={editingAction} />
+            </Form.Item>
+
             <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
               <Input />
             </Form.Item>

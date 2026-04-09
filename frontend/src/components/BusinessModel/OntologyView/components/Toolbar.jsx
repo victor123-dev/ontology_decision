@@ -6,13 +6,13 @@ import { modelEventBus } from '../../../../utils/modelEventBus';
 
 const { Option } = Select;
 
-const Toolbar = ({ onAddNode, onAddLink, nodes }) => {
-  const [nodeModalVisible, setNodeModalVisible] = useState(false);
+const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
+  const [modelModalVisible, setModelModalVisible] = useState(false);
   const [linkModalVisible, setLinkModalVisible] = useState(false);
   const [actionModalVisible, setActionModalVisible] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [initialFormValues, setInitialFormValues] = useState({});
-  const [nodeForm] = Form.useForm();
+  const [modelForm] = Form.useForm();
   const [linkForm] = Form.useForm();
   const [actionForm] = Form.useForm();
   const [dataSources, setDataSources] = useState([]);
@@ -262,19 +262,6 @@ const Toolbar = ({ onAddNode, onAddLink, nodes }) => {
     }
   }
 
-  const handleSubmit = async (values) => {
-    try {
-      const response = await actionApi.create(values);
-      message.success('创建成功');
-      // 发布行动创建事件
-      await modelEventBus.emitActionCreated(response.data);
-      setActionModalVisible(false);
-    } catch (error) {
-      console.error('Action submission error:', error);
-      message.error('操作失败');
-    }
-  }
-
   const handleAddAction = () => {
     setInitialFormValues({});
     setCurrentStep(0);
@@ -282,11 +269,11 @@ const Toolbar = ({ onAddNode, onAddLink, nodes }) => {
     setActionModalVisible(true);
   }
 
-  const handleNodeSubmit = () => {
-    nodeForm.validateFields().then(values => {
-      onAddNode(values);
-      nodeForm.resetFields();
-      setNodeModalVisible(false);
+  const handleModelSubmit = () => {
+    modelForm.validateFields().then(values => {
+      onAddModel(values);
+      modelForm.resetFields();
+      setModelModalVisible(false);
     });
   };
 
@@ -298,6 +285,14 @@ const Toolbar = ({ onAddNode, onAddLink, nodes }) => {
     });
   };
 
+  const handleActionSubmit = () => {
+    actionForm.validateFields().then(values => {
+      onAddAction(values);
+      actionForm.resetFields();
+      setActionModalVisible(false);
+    });
+  };
+
   return (
     <>
       <div style={{ 
@@ -306,10 +301,10 @@ const Toolbar = ({ onAddNode, onAddLink, nodes }) => {
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)', zIndex: 10,
         display: 'flex', gap: '12px', alignItems: 'center'
       }}>
-        <Button type="primary" size="small" onClick={() => setNodeModalVisible(true)}>
+        <Button type="primary" size="small" onClick={() => setModelModalVisible(true)}>
           + 新增模型
         </Button>
-        <Button size="small" onClick={() => setLinkModalVisible(true)} disabled={nodes.length < 2}>
+        <Button size="small" onClick={() => setLinkModalVisible(true)} disabled={models.length < 2}>
           + 新增关系
         </Button>
         <Button size="small" onClick={handleAddAction}>
@@ -320,11 +315,11 @@ const Toolbar = ({ onAddNode, onAddLink, nodes }) => {
       {/* 新增业务模型模态框 */}
       <Modal
         title="添加业务模型"
-        open={nodeModalVisible}
-        onOk={nodeForm.submit}
-        onCancel={() => setNodeModalVisible(false)}
+        open={modelModalVisible}
+        onOk={modelForm.submit}
+        onCancel={() => setModelModalVisible(false)}
       >
-        <Form form={nodeForm} layout="vertical" onFinish={handleNodeSubmit}>
+        <Form form={modelForm} layout="vertical" onFinish={handleModelSubmit}>
           <Form.Item name="id" label="模型ID" rules={[{ required: true, message: '请输入模型ID' }]}>
             <Input />
           </Form.Item>
@@ -701,9 +696,23 @@ const Toolbar = ({ onAddNode, onAddLink, nodes }) => {
           <Steps.Step title="提交条件" />
         </Steps>
         
-        <Form form={actionForm} layout="vertical" onFinish={handleSubmit} initialValues={initialFormValues}>
+        <Form form={actionForm} layout="vertical" onFinish={handleActionSubmit} initialValues={initialFormValues}>
           {/* 步骤1: 基础配置 */}
           <div style={{ display: currentStep === 0 ? 'block' : 'none' }}>
+            <Form.Item 
+              name="id" 
+              label="行动ID" 
+              rules={[
+                { required: true, message: '请输入行动ID' },
+                { 
+                  pattern: /^[a-zA-Z0-9_-]+$/, 
+                  message: '行动ID只能包含字母、数字、下划线和连字符'
+                }
+              ]}
+            >
+              <Input placeholder="例如: create_customer_order" />
+            </Form.Item>
+
             <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
               <Input />
             </Form.Item>

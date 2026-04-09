@@ -853,7 +853,7 @@ function BusinessModel() {
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="id" label="模型ID" rules={[{ required: true, message: '请输入模型ID' }]}>
-            <Input />
+            <Input disabled={editingModel} />
           </Form.Item>
           <Form.Item name="name" label="中文名称" rules={[{ required: true, message: '请输入中文名称' }]}>
             <Input />
@@ -975,7 +975,7 @@ function BusinessModel() {
           onFinish={handleSubmitLink}
         >
           <Form.Item name="id" label="关系ID" rules={[{ required: true, message: '请输入关系ID' }]}>
-            <Input />
+            <Input disabled={editingLink} />
           </Form.Item>
           <Form.Item name="name" label="关系中文名称" rules={[{ required: true, message: '请输入关系中文名称' }]}>
             <Input />

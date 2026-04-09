@@ -241,7 +241,7 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
     message.success('删除成功');
   };
 
-  const isNode = element.type === 'business_model';
+  const isModel = element.type === 'business_model';
   const isAction = element.type === 'action';
 
   return (
@@ -261,7 +261,7 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
         alignItems: 'center'
       }}>
         <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
-          {isAction ? '行动属性' : isNode ? '业务模型属性' : '模型关系属性'}
+          {isAction ? '行动属性' : isModel ? '业务模型属性' : '模型关系属性'}
         </h3>
         <Button type="link" onClick={() => {
           setIsEdit(!isEdit);
@@ -282,11 +282,10 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
           {isAction ? (
             // 行动属性 - 垂直滚动布局
             <>
+              <Divider>基础配置</Divider>
               <Form.Item name="id" label="行动ID">
                 <Input disabled />
               </Form.Item>
-              
-              <Divider>基础配置</Divider>
               <Form.Item
                 name="name"
                 label="名称"
@@ -526,17 +525,8 @@ result = {
                   />
                 )}
               </Form.Item>
-              
-              {/* 保存按钮 */}
-              {isEdit && (
-                <div style={{ marginTop: 24, textAlign: 'right' }}>
-                  <Button type="primary" onClick={handleSave}>
-                    保存
-                  </Button>
-                </div>
-              )}
             </>
-          ) : isNode ? (
+          ) : isModel ? (
             // 业务模型属性
             <>
               <Form.Item name="id" label="模型ID">
@@ -564,7 +554,7 @@ result = {
               </Form.Item>
               
               {/* 字段列表 */}
-              {isNode && (
+              {isModel && (
                 <div style={{ marginTop: '16px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                   <div 
                     style={{ 
@@ -988,14 +978,14 @@ result = {
         display: 'flex',
         gap: '12px'
       }}>
-        {isEdit && !isAction && (
+        {isEdit && (
           <Button type="primary" onClick={handleSave} style={{ flex: 1 }}>
             保存修改
           </Button>
         )}
-        {!isAction && (
+        {(
           <Popconfirm
-            title={`确定要删除该${isNode ? '业务模型' : '模型关系'}吗？`}
+            title={`确定要删除该${isAction ? '行动' : isModel ? '业务模型' : '模型关系'}吗？`}
             onConfirm={handleDeleteConfirm}
             okText="确认"
             cancelText="取消"

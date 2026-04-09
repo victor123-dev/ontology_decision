@@ -501,65 +501,30 @@ const OntologyView = () => {
     };
   }, []);
 
-  const handleUpdateNode = useCallback(async (nodeId, newData) => {    
+  useEffect(() => {
+    if (fieldModalVisible) {
+      // 延迟设置，确保模态框完全打开后再设置表单值
+      const timer = setTimeout(() => {
+        fieldForm.setFieldsValue(editingField || {});
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      // 模态框关闭时重置表单
+      fieldForm.resetFields();
+    }
+  }, [editingField, fieldModalVisible, fieldForm]);
+
+  const handleUpdateModel = useCallback(async (nodeId, newData) => {    
     try {
       await businessModelApi.update(nodeId, newData);
       
       // 触发事件通知其他页面
       modelEventBus.emitModelUpdated(nodeId, newData);
-      
-      // 更新图数据（本体视图内部处理）
-      setGraphData(prev => {
-        const newNodes = [...prev.nodes];
-        const nodeIndex = newNodes.findIndex(n => n.id === nodeId);
-        if (nodeIndex !== -1) {
-          // 直接修改原对象，而不是创建新对象
-          const nodeToUpdate = newNodes[nodeIndex];
-          nodeToUpdate.name = newData.name || nodeToUpdate.name;
-          nodeToUpdate.description = newData.description || nodeToUpdate.description;
-          nodeToUpdate.data = { ...nodeToUpdate.data, ...newData };
-        }
-        return {
-          ...prev,
-          nodes: newNodes
-        };
-      });
-      
-      // 更新选中元素
-      setSelectedElement(prev => {
-        const newSelectedElement = prev?.data.id === nodeId ? { 
-          ...prev, 
-          data: {
-            ...prev.data,
-            name: newData.name,
-            description: newData.description,
-            data: {
-              ...prev.data.data,
-              ...newData
-            }
-          }
-        } : prev;
-        return newSelectedElement;
-      });
     } catch (error) {
       message.error('更新模型失败');
     }
   }, []);
-
-  useEffect(() => {
-  if (fieldModalVisible) {
-    // 延迟设置，确保模态框完全打开后再设置表单值
-    const timer = setTimeout(() => {
-      fieldForm.setFieldsValue(editingField || {});
-    }, 0);
-    return () => clearTimeout(timer);
-  } else {
-    // 模态框关闭时重置表单
-    fieldForm.resetFields();
-  }
-}, [editingField, fieldModalVisible, fieldForm]);
-
-  // 字段操作处理函数
+  
   const handleAddField = useCallback((modelId) => {
     setEditingModelId(modelId);
     setEditingField(null);
@@ -579,44 +544,6 @@ const OntologyView = () => {
       
       // 触发事件通知其他页面
       modelEventBus.emitFieldDeleted(modelId, fieldId);
-      
-      // 更新本体视图中的字段列表
-      setGraphData(prev => {
-        const newNodes = [...prev.nodes];
-        const nodeIndex = newNodes.findIndex(n => n.id === modelId);
-        if (nodeIndex !== -1) {
-          const node = newNodes[nodeIndex];
-          if (node.data && node.data.fields) {
-            node.data.fields = node.data.fields.filter(f => f.field_id !== fieldId);
-            // 如果删除的是主键，需要更新主键ID
-            if (node.data.primary_key_id === fieldId) {
-              node.data.primary_key_id = null;
-            }
-          }
-        }
-        return { ...prev, nodes: newNodes };
-      });
-      
-      // 如果当前选中的是这个模型，更新选中元素
-      if (selectedElement?.data.id === modelId) {
-        setSelectedElement(prev => {
-          if (prev?.data?.data?.fields) {
-            const updatedFields = prev.data.data.fields.filter(f => f.field_id !== fieldId);
-            return {
-              ...prev,
-              data: {
-                ...prev.data,
-                data: {
-                  ...prev.data.data,
-                  fields: updatedFields,
-                  primary_key_id: prev.data.data.primary_key_id === fieldId ? null : prev.data.data.primary_key_id
-                }
-              }
-            };
-          }
-          return prev;
-        });
-      }
     } catch (error) {
       message.error('删除字段失败');
     }
@@ -655,44 +582,6 @@ const OntologyView = () => {
       
       // 触发事件通知其他页面
       modelEventBus.emitLinkUpdated(linkId, newData);
-      
-      setGraphData(prev => {
-        const newLinks = [...prev.links];
-        const linkIndex = newLinks.findIndex(l => l.id === linkId);
-        if (linkIndex !== -1) {
-          // 直接修改原对象，而不是创建新对象
-          const linkToUpdate = newLinks[linkIndex];
-          linkToUpdate.name = newData.name || linkToUpdate.name;
-          linkToUpdate.description = newData.description || linkToUpdate.description;
-          linkToUpdate.data = { ...linkToUpdate.data, ...newData };
-        }
-        return {
-          ...prev,
-          links: newLinks
-        };
-      });
-      setSelectedElement(prev => {
-        // 如果是当前要更新的关系
-        if (prev?.data.id === linkId) {
-          const newSelectedElement = {
-            ...prev,
-            data: {
-              ...prev.data,
-              // 更新 prev.data 中的 name 和 description
-              name: newData.name || prev.data.name,
-              description: newData.description || prev.data.description,
-              // 更新 prev.data.data 中的内容（用 newData 覆盖）
-              data: {
-                ...prev.data.data,
-                ...newData
-              }
-            }
-          };
-          return newSelectedElement;
-        }
-        // 如果不是当前关系，保持原样
-        return prev;
-      });
     } catch (error) {
       message.error('更新关系失败');
     }
@@ -704,44 +593,6 @@ const OntologyView = () => {
       
       // 发布行动更新事件
       modelEventBus.emitActionUpdated(actionId, newData);
-      
-      // 更新图数据（本体视图内部处理）
-      setGraphData(prev => {
-        const newNodes = [...prev.nodes];
-        const nodeIndex = newNodes.findIndex(n => n.id === actionId);
-        if (nodeIndex !== -1) {
-          // 直接修改原对象，而不是创建新对象
-          const nodeToUpdate = newNodes[nodeIndex];
-          nodeToUpdate.name = newData.name || nodeToUpdate.name;
-          nodeToUpdate.description = newData.description || nodeToUpdate.description;
-          // 更新其他字段...
-          Object.assign(nodeToUpdate.data, newData);
-        }
-        return { ...prev, nodes: newNodes };
-      });
-      
-      setSelectedElement(prev => {
-        // 如果是当前要更新的关系
-        if (prev?.data.id === actionId) {
-          const newSelectedElement = {
-            ...prev,
-            data: {
-              ...prev.data,
-              // 更新 prev.data 中的 name 和 description
-              name: newData.name || prev.data.name,
-              description: newData.description || prev.data.description,
-              // 更新 prev.data.data 中的内容（用 newData 覆盖）
-              data: {
-                ...prev.data.data,
-                ...newData
-              }
-            }
-          };
-          return newSelectedElement;
-        }
-        // 如果不是当前关系，保持原样
-        return prev;
-      });
     } catch (error) {
       message.error('更新行动失败');
     }
@@ -757,33 +608,18 @@ const OntologyView = () => {
         // 触发事件通知其他页面
         modelEventBus.emitModelDeleted(selectedElement.data.id);
         
-        setGraphData(prev => ({
-          nodes: prev.nodes.filter(n => n.id !== selectedElement.data.id),
-          links: prev.links.filter(l => 
-            String(l.source) !== String(selectedElement.data.id) && 
-            String(l.target) !== String(selectedElement.data.id)
-          ),
-        }));
       } else if (selectedElement.type === 'link') {
         await businessModelLinkApi.delete(selectedElement.data.id);
         
         // 触发事件通知其他页面
         modelEventBus.emitLinkDeleted(selectedElement.data.id);
         
-        setGraphData(prev => ({
-          ...prev,
-          links: prev.links.filter(l => l.id !== selectedElement.data.id),
-        }));
       } else if (selectedElement.type === 'action') {
         await actionApi.delete(selectedElement.data.id);
         
         // 触发事件通知其他页面
         modelEventBus.emitActionDeleted(selectedElement.data.id);
         
-        setGraphData(prev => ({
-          ...prev,
-          nodes: prev.nodes.filter(n => n.id !== selectedElement.data.id),
-        }));
       }
       setSelectedElement(null);
     } catch (error) {
@@ -791,21 +627,12 @@ const OntologyView = () => {
     }
   }, [selectedElement]);
 
-  const handleAddNode = useCallback(async (nodeData) => {
+  const handleAddModel = useCallback(async (modelData) => {
     try {
-      const response = await businessModelApi.create(nodeData);
+      const response = await businessModelApi.create(modelData);
       
       // 触发事件通知其他页面
       modelEventBus.emitModelCreated(response.data);
-      
-      const newNode = {
-        id: response.data.id,
-        name: response.data.name,
-        type: response.data.type,
-        description: response.data.description,
-        data: response.data
-      };
-      setGraphData(prev => ({ ...prev, nodes: [...prev.nodes, newNode] }));
     } catch (error) {
       message.error('创建模型失败');
     }
@@ -817,19 +644,19 @@ const OntologyView = () => {
       
       // 触发事件通知其他页面
       modelEventBus.emitLinkCreated(response.data);
-      
-      // 转换为图数据格式
-      const linkGraphData = {
-        id: response.data.id,
-        source: response.data.source_model,
-        target: response.data.target_model,
-        name: response.data.name,
-        description: response.data.description,
-        data: response.data
-      };
-      setGraphData(prev => ({ ...prev, links: [...prev.links, linkGraphData] }));
     } catch (error) {
       message.error('创建关系失败');
+    }
+  }, []);
+
+  const handleAddAction = useCallback(async (actionData) => {
+    try {
+      const response = await actionApi.create(actionData);
+      
+      // 触发事件通知其他页面
+      modelEventBus.emitActionCreated(response.data);
+    } catch (error) {
+      message.error('创建行动失败');
     }
   }, []);
 
@@ -837,9 +664,10 @@ const OntologyView = () => {
     <div style={{ display: 'flex', height: '100%', width: '100%' }}>
       <div style={{ flex: 1, position: 'relative' }}>
         <Toolbar 
-          onAddNode={handleAddNode} 
+          onAddModel={handleAddModel} 
           onAddLink={handleAddLink} 
-          nodes={graphData.nodes}
+          onAddAction={handleAddAction} 
+          models={graphData.nodes.filter(n => n.type === 'business_model')}
         />
         <GraphCanvas 
           data={graphData} 
@@ -912,7 +740,7 @@ const OntologyView = () => {
       {selectedElement && (
         <PropertyPanel 
           element={selectedElement}
-          onUpdate={selectedElement.type === 'business_model' ? handleUpdateNode : selectedElement.type === 'link' ? handleUpdateLink : handleUpdateAction}
+          onUpdate={selectedElement.type === 'business_model' ? handleUpdateModel : selectedElement.type === 'link' ? handleUpdateLink : handleUpdateAction}
           onDelete={handleDeleteElement}
           onAddField={handleAddField}
           onEditField={handleEditField}

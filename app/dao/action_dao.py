@@ -1,5 +1,4 @@
 from typing import Optional, Dict, Any, List
-from bson.objectid import ObjectId
 from datetime import datetime, timezone
 from app.utils.mongo_client import get_mongo_client
 from app.utils.logger import get_logger
@@ -13,6 +12,7 @@ class ActionDAO:
     def __init__(self):
         self.client = get_mongo_client()
         self.collection = self.client.get_collection(self.COLLECTION_NAME)
+        self.collection.create_index("id", unique=True, sparse=True)
     
     def create_action(self, action_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
@@ -22,7 +22,6 @@ class ActionDAO:
             
             result = self.collection.insert_one(action_data)
             if result.inserted_id:
-                action_data["id"] = str(result.inserted_id)
                 action_data.pop('_id', None)
                 return action_data
             return None
@@ -32,11 +31,8 @@ class ActionDAO:
     
     def get_action_by_id(self, action_id: str) -> Optional[Dict[str, Any]]:
         try:
-            if not ObjectId.is_valid(action_id):
-                return None
-            action = self.collection.find_one({"_id": ObjectId(action_id)})
+            action = self.collection.find_one({"id": action_id})
             if action:
-                action["id"] = str(action["_id"])
                 action.pop('_id', None)
             return action
         except Exception as e:
@@ -49,7 +45,6 @@ class ActionDAO:
             cursor = self.collection.find(query)
             actions = []
             for action in cursor:
-                action["id"] = str(action["_id"])
                 action.pop('_id', None)
                 actions.append(action)
             return actions
@@ -62,12 +57,10 @@ class ActionDAO:
     
     def update_action(self, action_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
-            if not ObjectId.is_valid(action_id):
-                return None
             
             update_data["updated_at"] = datetime.now(timezone.utc)
             result = self.collection.update_one(
-                {"_id": ObjectId(action_id)},
+                {"id": action_id},
                 {"$set": update_data}
             )
             
@@ -80,9 +73,7 @@ class ActionDAO:
     
     def delete_action(self, action_id: str) -> bool:
         try:
-            if not ObjectId.is_valid(action_id):
-                return False
-            result = self.collection.delete_one({"_id": ObjectId(action_id)})
+            result = self.collection.delete_one({"id": action_id})
             return result.deleted_count > 0
         except Exception as e:
             logger.error(f"Error deleting action {action_id}: {e}")
