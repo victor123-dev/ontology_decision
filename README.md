@@ -87,7 +87,7 @@ PyProjectTemplate/
 ### 前提条件
 
 - Python 3.12+
-- Node.js 16+（用于前端开发）
+- Node.js 22+（用于前端开发）
 
 ### 安装与配置
 
@@ -149,6 +149,7 @@ npm install
 
 ```bash
 # 启动后端服务
+.venv\Scripts\activate
 uvicorn app.main:app --host 0.0.0.0 --reload --port 8080 --reload-dir ./app/ --reload-dir ./tests/
 ```
 
