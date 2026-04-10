@@ -121,16 +121,20 @@ SDK支持三种查找方式：
 # 通过models命名空间直接访问模型管理器（类型安全，IDE支持好）
 
 # 查找多个对象
-work_orders = client.models.workOrder.find(
+work_orders = client.models.WorkOrder.find(
     production_workshop="Assembly",
     status="active"
 )
 
+work_orders = client.models.WorkOrder.find(
+    production_workshop__in=["Assembly", "Testing"]
+)
+
 # 获取单个对象（通过主键值）
-work_order = client.models.workOrder.get("WO-001")
+work_order = client.models.WorkOrder.get("WO-001")
 
 # 创建新对象
-new_order = client.models.workOrder.create(
+new_order = client.models.WorkOrder.create(
     work_order_number="WO-002",
     item_code="PROD-001",
     production_quantity=200,
@@ -138,17 +142,17 @@ new_order = client.models.workOrder.create(
 )
 
 # 统计记录数
-count = client.models.workOrder.count(status="active")
+count = client.models.WorkOrder.count(status="active")
 
 # 检查记录是否存在  
-exists = client.models.workOrder.exists(status="active")
+exists = client.models.WorkOrder.exists(status="active")
 ```
 
 ##### 方式2：查询构建器（链式调用）
 ```python
 # 复杂查询使用Query Builder
 orders = (client.query
-          .from_model("workOrder")
+          .from_model("WorkOrder")
           .where_eq("production_workshop", "Assembly")
           .where_gt("production_quantity", 100)
           .order_by("created_at")
@@ -165,7 +169,7 @@ first_order = active_orders.first()
 ##### 方式3：向后兼容（字符串方式）
 ```python
 # 保留原有的字符串方式（向后兼容）
-work_orders = client.get_model("workOrder").find(
+work_orders = client.get_model("WorkOrder").find(
     production_workshop="Assembly",
     status="active"
 )
@@ -200,7 +204,7 @@ SDK 自动处理不同业务模型的主键字段差异：
 
 ```python
 # 无论主键字段名是什么，API 使用方式保持一致
-work_order = client.models.workOrder.get("WO-001")  # "WO-001" 是主键值
+work_order = client.models.WorkOrder.get("WO-001")  # "WO-001" 是主键值
 work_order.update(status="completed")                # 自动使用 order_id 作为主键
 work_order.delete()                                 # 自动使用 order_id 作为主键
 ```
@@ -290,7 +294,7 @@ params = AddAlertRuleParameters.from_dict(param_dict)
 
 `client.models` 是一个 `ModelNamespace` 对象，提供以下特性：
 
-- **属性访问**：`client.models.workOrder`
+- **属性访问**：`client.models.WorkOrder`
 - **IDE自动补全**：输入 `client.models.` 显示所有可用模型
 - **类型安全**：编译时检查模型是否存在
 - **动态发现**：`client.models.list_models()` 列出所有模型
@@ -311,7 +315,7 @@ for model_instance in client.models:
 
 ```python
 # 基础操作
-orders = client.models.workOrder.find(production_workshop="Assembly")
+orders = client.models.WorkOrder.find(production_workshop="Assembly")
 
 # 长度和布尔判断
 print(f"找到 {len(orders)} 个订单")
@@ -378,7 +382,7 @@ order_dict_list = high_priority_orders.to_dict()
 ```python
 try:
     # 属性访问方式
-    work_order = client.models.workOrder.create(**data)
+    work_order = client.models.WorkOrder.create(**data)
     if work_order:
         print(f"创建成功: {work_order.work_order_number}")
     else:
@@ -416,10 +420,10 @@ response = session.get("/custom-endpoint")
 ### 1. 优先使用属性访问方式
 ```python
 # 推荐：类型安全，IDE支持好
-orders = client.models.workOrder.find(production_workshop="Assembly")
+orders = client.models.WorkOrder.find(production_workshop="Assembly")
 
 # 不推荐：运行时才能发现问题
-orders = client.get_model("workOrder").find(production_workshop="Assembly")
+orders = client.get_model("WorkOrder").find(production_workshop="Assembly")
 ```
 
 ### 2. 客户端复用
@@ -446,13 +450,13 @@ from app.core.sdk_client import sdk_client
 class WorkOrderService:
     def get_active_orders(self, workshop):
         # 使用属性访问方式
-        return sdk_client.models.workOrder.find(
+        return sdk_client.models.WorkOrder.find(
             production_workshop=workshop,
             status="active"
         )
     
     def complete_order(self, order_id, actual_quantity):
-        order = sdk_client.models.workOrder.get(order_id)
+        order = sdk_client.models.WorkOrder.get(order_id)
         if order:
             return order.execute_action("complete_work_order", {
                 "actual_quantity": actual_quantity
@@ -462,7 +466,7 @@ class WorkOrderService:
     def get_high_volume_orders(self, workshop, min_quantity=100):
         # 使用Query Builder进行复杂查询
         return (sdk_client.query
-                .from_model("workOrder")
+                .from_model("WorkOrder")
                 .where_eq("production_workshop", workshop)
                 .where_gt("production_quantity", min_quantity)
                 .order_by("created_at", "desc")
@@ -476,7 +480,7 @@ class WorkOrderService:
 ```python
 def safe_create_work_order(data):
     try:
-        return sdk_client.models.workOrder.create(**data)
+        return sdk_client.models.WorkOrder.create(**data)
     except AttributeError as e:
         logger.error(f"模型不存在: {e}")
         return None
@@ -490,7 +494,7 @@ def safe_create_work_order(data):
 # 完整示例：属性访问 + 链式查询 + 结果处理
 def process_assembly_orders():
     # 1. 使用属性访问获取模型
-    orders = client.models.workOrder.find(production_workshop="Assembly")
+    orders = client.models.WorkOrder.find(production_workshop="Assembly")
     
     # 2. 使用QueryResult进行链式过滤
     pending_orders = orders.filter(lambda x: x.status == "pending")
@@ -558,12 +562,12 @@ logging.basicConfig(level=logging.DEBUG)
 
 ```python
 # 查看模型可用字段、主键信息和方法
-print("主键字段:", client.models.workOrder._primary_key_field)
-print("所有字段:", client.models.workOrder._fields)
-print("可用方法:", [method for method in dir(client.models.workOrder) if not method.startswith('_')])
+print("主键字段:", client.models.WorkOrder._primary_key_field)
+print("所有字段:", client.models.WorkOrder._fields)
+print("可用方法:", [method for method in dir(client.models.WorkOrder) if not method.startswith('_')])
 
 # 查看具体对象的数据和主键值
-order = client.models.workOrder.get("WO-001")
+order = client.models.WorkOrder.get("WO-001")
 if order:
     print("主键值:", order._get_primary_key_value())
     print("对象数据:", order.__dict__)
@@ -588,7 +592,7 @@ client = OntologyClient("http://localhost:8080", "api-key")
 print("可用模型:", client.models.list_models())
 
 # 查看特定模型的主键字段
-work_order_manager = client.models.workOrder
+work_order_manager = client.models.WorkOrder
 print(f"工单模型主键字段: {work_order_manager._primary_key_field}")
 ```
 

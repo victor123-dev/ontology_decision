@@ -44,19 +44,55 @@ class {{ model_name }}(BusinessModel):
 
     def __init__(self, client: 'OntologyClient', data: Dict[str, Any] = None):
         super().__init__(client, data)
-
+        
     {% for link in links %}
     {% if link.type == 'outgoing' %}
-    def get_{{ link.target_model.lower() }}_by_{{ link.link.source_key }}(self) -> Optional['{{ link.target_model_name }}']:
+    {% if link.cardinality == 'one-to-one' or link.cardinality == 'many-to-one' %}
+    def {{ link.target_api_name }}(self) -> Optional['{{ link.target_model_name }}']:
         """获取关联的{{ link.link.name }}"""
         from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
-        return {{ link.target_model_name }}.find_one(self.client, {{ link.link.target_key }}=getattr(self, "{{ link.link.source_key }}", None))
+        results = self.client.models.{{ link.target_model_name }}.find({{ link.link.target_key }}=getattr(self, "{{ link.link.source_key }}", None))
+        return results[0] if results else None
+    {% elif link.cardinality == 'one-to-many' or link.cardinality == 'many-to-many' %}
+    def {{ link.target_api_name }}(self) -> List['{{ link.target_model_name }}']:
+        """获取关联的{{ link.link.name }}列表"""
+        from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
+        {% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}
+        from .{{ link.link.intermediate_model.lower() }} import {{ link.intermediate_model_name }}
+        # many-to-many 关系通过中间表查询
+        intermediate_records = self.client.models.{{ link.intermediate_model_name }}.find(
+            {{ link.link.intermediate_source_key }}=getattr(self, "{{ link.link.source_key }}", None)
+        )
+        target_ids = [getattr(record, "{{ link.link.intermediate_target_key }}") for record in intermediate_records]
+        return self.client.models.{{ link.target_model_name }}.find({{ link.link.target_key }}__in=target_ids)
+        {% else %}
+        return self.client.models.{{ link.target_model_name }}.find({{ link.link.target_key }}=getattr(self, "{{ link.link.source_key }}", None))
+        {% endif %}
+    {% endif %}
 
     {% elif link.type == 'incoming' %}
-    def get_{{ link.source_model.lower() }}s_by_{{ link.link.target_key }}(self) -> List['{{ link.source_model_name }}']:
+    {% if link.cardinality == 'one-to-one' or link.cardinality == 'one-to-many' %}
+    def {{ link.source_api_name }}(self) -> Optional['{{ link.source_model_name }}']:
+        """获取关联的{{ link.link.name }}"""
+        from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
+        results = self.client.models.{{ link.source_model_name }}.find({{ link.link.source_key }}=getattr(self, "{{ link.link.target_key }}", None))
+        return results[0] if results else None
+    {% elif link.cardinality == 'many-to-one' or link.cardinality == 'many-to-many' %}
+    def {{ link.source_api_name }}(self) -> List['{{ link.source_model_name }}']:
         """获取关联的{{ link.link.name }}列表"""
         from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
-        return {{ link.source_model_name }}.find(self.client, {{ link.link.source_key }}=getattr(self, "{{ link.link.target_key }}", None))
+        {% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}
+        from .{{ link.link.intermediate_model.lower() }} import {{ link.intermediate_model_name }}
+        # many-to-many 关系通过中间表查询
+        intermediate_records = self.client.models.{{ link.intermediate_model_name }}.find(
+            {{ link.link.intermediate_target_key }}=getattr(self, "{{ link.link.target_key }}", None)
+        )
+        source_ids = [getattr(record, "{{ link.link.intermediate_source_key }}") for record in intermediate_records]
+        return self.client.models.{{ link.source_model_name }}.find({{ link.link.source_key }}__in=source_ids)
+        {% else %}
+        return self.client.models.{{ link.source_model_name }}.find({{ link.link.source_key }}=getattr(self, "{{ link.link.target_key }}", None))
+        {% endif %}
+    {% endif %}
     {% endif %}
     {% endfor %}
 

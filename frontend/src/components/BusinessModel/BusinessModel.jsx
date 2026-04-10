@@ -5,6 +5,7 @@ import { businessModelApi, businessModelLinkApi, dataSourceApi } from '../../ser
 import OntologyView from './OntologyView/OntologyView'
 import ActionManager from './ActionManager'
 import { modelEventBus } from '../../utils/modelEventBus'
+import { toPascalCase } from '../../utils/stringUtils';
 
 const { Option } = Select
 
@@ -423,6 +424,12 @@ function BusinessModel() {
       width: 100,
     },
     {
+      title: 'API名称',
+      dataIndex: 'api_name',
+      key: 'api_name',
+      width: 120,
+    },
+    {
       title: '中文名称',
       dataIndex: 'name',
       key: 'name',
@@ -682,6 +689,7 @@ function BusinessModel() {
               <div style={{ fontSize: '13px', lineHeight: 1.6 }}>
                 <div><strong>模型名称:</strong> {sourceModel?.name || record.source_model}</div>
                 <div><strong>模型ID:</strong> {record.source_model}</div>
+                <div><strong>API名称:</strong> {record.source_api_name}</div>
                 <div><strong>主键字段:</strong> {sourceField ? `${sourceField.name} (${record.source_key})` : record.source_key}</div>
                 {sourceModel?.primary_key_id && (
                   <div><strong>主键:</strong> {sourceModel.primary_key_id}</div>
@@ -716,6 +724,7 @@ function BusinessModel() {
               <div style={{ fontSize: '13px', lineHeight: 1.6 }}>
                 <div><strong>模型名称:</strong> {targetModel?.name || record.target_model}</div>
                 <div><strong>模型ID:</strong> {record.target_model}</div>
+                <div><strong>API名称:</strong> {record.target_api_name}</div>
                 <div><strong>主键字段:</strong> {targetField ? `${targetField.name} (${record.target_key})` : record.target_key}</div>
                 {targetModel?.primary_key_id && (
                   <div><strong>主键:</strong> {targetModel.primary_key_id}</div>
@@ -737,6 +746,7 @@ function BusinessModel() {
               <div style={{ fontSize: '13px', lineHeight: 1.6 }}>
                 <div><strong>模型名称:</strong> {sourceModel?.name || record.source_model}</div>
                 <div><strong>模型ID:</strong> {record.source_model}</div>
+                <div><strong>API名称:</strong> {record.source_api_name}</div>
                 <div><strong>关联字段:</strong> {sourceField ? `${sourceField.name} (${record.source_key})` : record.source_key}</div>
                 {sourceModel?.primary_key_id && (
                   <div><strong>主键:</strong> {sourceModel.primary_key_id}</div>
@@ -755,6 +765,7 @@ function BusinessModel() {
               <div style={{ fontSize: '13px', lineHeight: 1.6 }}>
                 <div><strong>模型名称:</strong> {targetModel?.name || record.target_model}</div>
                 <div><strong>模型ID:</strong> {record.target_model}</div>
+                <div><strong>API名称:</strong> {record.target_api_name}</div>
                 <div><strong>关联字段:</strong> {targetField ? `${targetField.name} (${record.target_key})` : record.target_key}</div>
                 {targetModel?.primary_key_id && (
                   <div><strong>主键:</strong> {targetModel.primary_key_id}</div>
@@ -854,6 +865,22 @@ function BusinessModel() {
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="id" label="模型ID" rules={[{ required: true, message: '请输入模型ID' }]}>
             <Input disabled={editingModel} />
+          </Form.Item>
+          <Form.Item 
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.id !== currentValues.id}
+          >
+            {({ getFieldValue, setFieldsValue }) => {
+              const modelId = getFieldValue('id');
+              if (modelId && !editingModel) {
+                const apiName = toPascalCase(modelId);
+                setFieldsValue({ api_name: apiName });
+              }
+              return null;
+            }}
+          </Form.Item>
+          <Form.Item name="api_name" label="API名称">
+            <Input disabled />
           </Form.Item>
           <Form.Item name="name" label="中文名称" rules={[{ required: true, message: '请输入中文名称' }]}>
             <Input />
@@ -1017,6 +1044,9 @@ function BusinessModel() {
                           {getModelOptions()}
                         </Select>
                       </Form.Item>
+                      <Form.Item name="source_api_name" label="源API名称">
+                        <Input disabled />
+                      </Form.Item>
                       
                       <Form.Item 
                         noStyle
@@ -1035,6 +1065,14 @@ function BusinessModel() {
                             if (currentSourceKey !== primaryKey) {
                               setFieldsValue({ source_key: primaryKey });
                             }
+                          }
+
+                          // 自动更新API名称字段
+                          if (sourceModelId) {
+                            const newTargetApiName = `get${toPascalCase(sourceModelId)}`;
+                            setFieldsValue({ 
+                              target_api_name: newTargetApiName
+                            });
                           }
                           
                           return (
@@ -1110,6 +1148,9 @@ function BusinessModel() {
                           {getModelOptions()}
                         </Select>
                       </Form.Item>
+                      <Form.Item name="target_api_name" label="目标API名称">
+                        <Input disabled />
+                      </Form.Item>
                       
                       <Form.Item 
                         noStyle
@@ -1128,6 +1169,13 @@ function BusinessModel() {
                             if (currentTargetKey !== primaryKey) {
                               setFieldsValue({ target_key: primaryKey });
                             }
+                          }
+                          // 自动更新API名称字段
+                          if (targetModelId) {
+                            const newSourceApiName = `get${toPascalCase(targetModelId)}`;
+                            setFieldsValue({ 
+                              source_api_name: newSourceApiName
+                            });
                           }
                           
                           return (
@@ -1159,6 +1207,9 @@ function BusinessModel() {
                         <Select>
                           {getModelOptions()}
                         </Select>
+                      </Form.Item>
+                      <Form.Item name="source_api_name" label="源API名称">
+                        <Input disabled />
                       </Form.Item>
                       
                       <Form.Item 
@@ -1201,7 +1252,13 @@ function BusinessModel() {
                               setFieldsValue({ source_key: primaryKey });
                             }
                           }
-                          
+                          // 自动更新API名称字段
+                          if (sourceModelId) {
+                            const newTargetApiName = `get${toPascalCase(sourceModelId)}`;
+                            setFieldsValue({
+                              target_api_name: newTargetApiName
+                            });
+                          }
                           return (
                             <Form.Item 
                               name="source_key" 
@@ -1226,6 +1283,9 @@ function BusinessModel() {
                         <Select>
                           {getModelOptions()}
                         </Select>
+                      </Form.Item>
+                      <Form.Item name="target_api_name" label="目标API名称">
+                        <Input disabled />
                       </Form.Item>
                       
                       <Form.Item 
@@ -1267,6 +1327,13 @@ function BusinessModel() {
                             if (currentTargetKey !== primaryKey) {
                               setFieldsValue({ target_key: primaryKey });
                             }
+                          }
+                          // 自动更新API名称字段
+                          if (targetModelId) {
+                            const newSourceApiName = `get${toPascalCase(targetModelId)}`;
+                            setFieldsValue({ 
+                              source_api_name: newSourceApiName
+                            });
                           }
                           
                           return (

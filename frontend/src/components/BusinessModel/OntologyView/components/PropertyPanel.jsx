@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Form, Input, Button, Popconfirm, message, Select, Switch, Radio, Collapse, Steps, Divider, Space, List, Tag, Card, Typography } from 'antd';
 import { dataSourceApi, businessModelApi, businessModelLinkApi } from '../../../../services/api';
 import { modelEventBus } from '../../../../utils/modelEventBus';
+import { toPascalCase } from '../../../../utils/stringUtils';
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 
 const { Panel } = Collapse;
@@ -286,6 +287,9 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
               <Form.Item name="id" label="行动ID">
                 <Input disabled />
               </Form.Item>
+              <Form.Item name="api_name" label="API名称">
+                <Input disabled />
+              </Form.Item>
               <Form.Item
                 name="name"
                 label="名称"
@@ -555,6 +559,9 @@ result = {
               <Form.Item name="id" label="模型ID">
                 <Input disabled />
               </Form.Item>
+              <Form.Item name="api_name" label="API名称">
+                <Input disabled />
+              </Form.Item>
               <Form.Item
                 name="name"
                 label="中文名称"
@@ -721,6 +728,9 @@ result = {
                               {getModelOptions()}
                             </Select>
                           </Form.Item>
+                          <Form.Item name="source_api_name" label="源API名称">
+                            <Input disabled />
+                          </Form.Item>
                       <Form.Item 
                         noStyle
                         shouldUpdate={(prevValues, currentValues) => 
@@ -738,6 +748,13 @@ result = {
                             if (currentSourceKey !== primaryKey) {
                               setFieldsValue({ source_key: primaryKey });
                             }
+                          }
+                          // 自动更新API名称字段
+                          if (isEdit && sourceModelId) {
+                            const newTargetApiName = `get${toPascalCase(sourceModelId)}`;
+                            setFieldsValue({
+                              target_api_name: newTargetApiName
+                            });
                           }
                           
                           return (
@@ -813,6 +830,9 @@ result = {
                               {getModelOptions()}
                             </Select>
                           </Form.Item>
+                          <Form.Item name="target_api_name" label="目标API名称">
+                            <Input disabled />
+                          </Form.Item>
                       <Form.Item 
                         noStyle
                         shouldUpdate={(prevValues, currentValues) => 
@@ -830,6 +850,13 @@ result = {
                             if (currentTargetKey !== primaryKey) {
                               setFieldsValue({ target_key: primaryKey });
                             }
+                          }
+                          // 自动更新API名称字段
+                          if (isEdit && targetModelId) {
+                            const newSourceApiName = `get${toPascalCase(targetModelId)}`;
+                            setFieldsValue({
+                              source_api_name: newSourceApiName
+                            });
                           }
                           
                           return (
@@ -861,6 +888,9 @@ result = {
                             <Select disabled={!isEdit}>
                               {getModelOptions()}
                             </Select>
+                          </Form.Item>
+                          <Form.Item name="source_api_name" label="源API名称">
+                            <Input disabled />
                           </Form.Item>
                           
                           <Form.Item 
@@ -904,6 +934,14 @@ result = {
                                 }
                               }
                               
+                              // 自动更新API名称字段
+                              if (isEdit && sourceModelId) {
+                                const newTargetApiName = `get${toPascalCase(sourceModelId)}`;
+                                setFieldsValue({ 
+                                  target_api_name: newTargetApiName
+                                });
+                              }
+                              
                               return (
                                 <Form.Item 
                                   name="source_key" 
@@ -928,6 +966,9 @@ result = {
                             <Select disabled={!isEdit}>
                               {getModelOptions()}
                             </Select>
+                          </Form.Item>
+                          <Form.Item name="target_api_name" label="目标API名称">
+                            <Input disabled />
                           </Form.Item>
                           
                           <Form.Item 
@@ -969,6 +1010,14 @@ result = {
                                 if (currentTargetKey !== primaryKey) {
                                   setFieldsValue({ target_key: primaryKey });
                                 }
+                              }
+                              
+                              // 自动更新API名称字段
+                              if (isEdit && targetModelId) {
+                                const newSourceApiName = `get${toPascalCase(targetModelId)}`;
+                                setFieldsValue({ 
+                                  source_api_name: newSourceApiName
+                                });
                               }
                               
                               return (

@@ -9,10 +9,16 @@ from app.utils.shared_utils import get_db
 
 router = APIRouter()
 
+def _to_camel_case(snake_str):
+    """将下划线分隔的字符串转换为小驼峰命名"""
+    components = snake_str.split('_')
+    return components[0] + ''.join(x.capitalize() for x in components[1:])
+
 @router.post("/business-models")
 def create_business_model(business_model: dict, db: Session = Depends(get_db)):
     db_business_model = BusinessModel(
         id=business_model.get("id"),
+        api_name=business_model.get("api_name"),
         name=business_model.get("name"),
         description=business_model.get("description"),
         primary_key_id=business_model.get("primary_key_id"),
@@ -174,8 +180,10 @@ def import_model(data: dict, db: Session = Depends(get_db)):
             business_model = existing_model
         else:
             # 创建新模型
+            model_id_final = model_id or table_name
             business_model = BusinessModel(
-                id=model_id or table_name,
+                id=model_id_final,
+                api_name=_to_camel_case(model_id_final),
                 name=translator.translate_to_chinese(table_name),
                 description=translator.generate_description(table_name),
                 primary_key_id=primary_keys[0] if primary_keys else None,
@@ -282,6 +290,7 @@ def import_model(data: dict, db: Session = Depends(get_db)):
                     source_pks = client.get_primary_keys(source_table)
                     source_model = BusinessModel(
                         id=source_table,
+                        api_name=_to_camel_case(source_table),
                         name=translator.translate_to_chinese(source_table),
                         description=translator.generate_description(source_table),
                         primary_key_id=source_pks[0] if source_pks else None,
@@ -309,6 +318,7 @@ def import_model(data: dict, db: Session = Depends(get_db)):
                     target_pks = client.get_primary_keys(target_table)
                     target_model = BusinessModel(
                         id=target_table,
+                        api_name=_to_camel_case(target_table),
                         name=translator.translate_to_chinese(target_table),
                         description=translator.generate_description(target_table),
                         primary_key_id=target_pks[0] if target_pks else None,

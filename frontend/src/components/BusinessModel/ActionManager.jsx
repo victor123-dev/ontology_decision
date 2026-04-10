@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Card, D
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { actionApi } from '../../services/api'
 import { modelEventBus } from '../../utils/modelEventBus'
+import { toPascalCase } from '../../utils/stringUtils';
 
 const { Option } = Select
 const { TextArea } = Input
@@ -359,6 +360,12 @@ function ActionManager({ businessModels, modelLinks }) {
       width: 180,
     },
     {
+      title: 'API名称',
+      dataIndex: 'api_name',
+      key: 'api_name',
+      width: 150,
+    },
+    {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
@@ -498,6 +505,24 @@ function ActionManager({ businessModels, modelLinks }) {
               ]}
             >
               <Input placeholder="例如: create_customer_order" disabled={editingAction} />
+            </Form.Item>
+
+            <Form.Item 
+              noStyle
+              shouldUpdate={(prevValues, currentValues) => prevValues.id !== currentValues.id}
+            >
+              {({ getFieldValue, setFieldsValue }) => {
+                const actionId = getFieldValue('id');
+                if (actionId && !editingAction) {
+                  const apiName = toPascalCase(actionId);
+                  setFieldsValue({ api_name: apiName });
+                }
+                return null;
+              }}
+            </Form.Item>
+
+            <Form.Item name="api_name" label="API名称">
+              <Input disabled />
             </Form.Item>
 
             <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>

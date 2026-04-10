@@ -3,6 +3,7 @@ import { Modal, Form, Input, Select, Button, Radio, message, Steps, Tabs, Space,
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, MinusCircleOutlined, CodeOutlined } from '@ant-design/icons';
 import { dataSourceApi, businessModelApi, businessModelLinkApi, actionApi, sdkApi } from '../../../../services/api';
 import { modelEventBus } from '../../../../utils/modelEventBus';
+import { toPascalCase } from '../../../../utils/stringUtils';
 
 const { Option } = Select;
 
@@ -361,6 +362,22 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
           <Form.Item name="id" label="模型ID" rules={[{ required: true, message: '请输入模型ID' }]}>
             <Input />
           </Form.Item>
+          <Form.Item 
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.id !== currentValues.id}
+          >
+            {({ getFieldValue, setFieldsValue }) => {
+              const modelId = getFieldValue('id');
+              if (modelId) {
+                const apiName = toPascalCase(modelId);
+                setFieldsValue({ api_name: apiName });
+              }
+              return null;
+            }}
+          </Form.Item>
+          <Form.Item name="api_name" label="API名称">
+            <Input disabled />
+          </Form.Item>
           <Form.Item name="name" label="中文名称" rules={[{ required: true, message: '请输入中文名称' }]}>
             <Input />
           </Form.Item>
@@ -444,6 +461,9 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                           {getModelOptions()}
                         </Select>
                       </Form.Item>
+                      <Form.Item name="source_api_name" label="源API名称">
+                        <Input disabled />
+                      </Form.Item>
                       
                       <Form.Item 
                         noStyle
@@ -462,6 +482,13 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                             if (currentSourceKey !== primaryKey) {
                               setFieldsValue({ source_key: primaryKey });
                             }
+                          }
+                          // 自动更新API名称字段
+                          if (sourceModelId) {
+                            const newTargetApiName = `get${toPascalCase(sourceModelId)}`;
+                            setFieldsValue({ 
+                              target_api_name: newTargetApiName
+                            });
                           }
                           
                           return (
@@ -537,6 +564,9 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                           {getModelOptions()}
                         </Select>
                       </Form.Item>
+                      <Form.Item name="target_api_name" label="目标API名称">
+                        <Input disabled />
+                      </Form.Item>
                       
                       <Form.Item 
                         noStyle
@@ -555,6 +585,13 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                             if (currentTargetKey !== primaryKey) {
                               setFieldsValue({ target_key: primaryKey });
                             }
+                          }
+                          // 自动更新API名称字段
+                          if (targetModelId) {
+                            const newSourceApiName = `get${toPascalCase(targetModelId)}`;
+                            setFieldsValue({ 
+                              source_api_name: newSourceApiName
+                            });
                           }
                           
                           return (
@@ -586,6 +623,9 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                         <Select>
                           {getModelOptions()}
                         </Select>
+                      </Form.Item>
+                      <Form.Item name="source_api_name" label="源API名称">
+                        <Input disabled />
                       </Form.Item>
                       
                       <Form.Item 
@@ -629,6 +669,14 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                             }
                           }
                           
+                          // 自动更新API名称字段
+                          if (sourceModelId) {
+                            const newTargetApiName = `get${toPascalCase(sourceModelId)}`;
+                            setFieldsValue({
+                              target_api_name: newTargetApiName
+                            });
+                          }
+                          
                           return (
                             <Form.Item 
                               name="source_key" 
@@ -653,6 +701,9 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                         <Select>
                           {getModelOptions()}
                         </Select>
+                      </Form.Item>
+                      <Form.Item name="target_api_name" label="目标API名称">
+                        <Input disabled />
                       </Form.Item>
                       
                       <Form.Item 
@@ -694,6 +745,14 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
                             if (currentTargetKey !== primaryKey) {
                               setFieldsValue({ target_key: primaryKey });
                             }
+                          }
+                          
+                          // 自动更新API名称字段
+                          if (targetModelId) {
+                            const newSourceApiName = `get${toPascalCase(targetModelId)}`;
+                            setFieldsValue({ 
+                              source_api_name: newSourceApiName
+                            });
                           }
                           
                           return (
@@ -749,6 +808,24 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
               ]}
             >
               <Input placeholder="例如: create_customer_order" />
+            </Form.Item>
+
+            <Form.Item 
+              noStyle
+              shouldUpdate={(prevValues, currentValues) => prevValues.id !== currentValues.id}
+            >
+              {({ getFieldValue, setFieldsValue }) => {
+                const actionId = getFieldValue('id');
+                if (actionId) {
+                  const apiName = toPascalCase(actionId);
+                  setFieldsValue({ api_name: apiName });
+                }
+                return null;
+              }}
+            </Form.Item>
+
+            <Form.Item name="api_name" label="API名称">
+              <Input disabled />
             </Form.Item>
 
             <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>

@@ -9,8 +9,10 @@ class BusinessModelLink(Base):
     name = Column(String(255), nullable=False)  # 中文名称
     description = Column(Text)  # 中文说明
     source_model = Column(String(255), ForeignKey("business_models.id"), nullable=False)
+    source_api_name = Column(String(255))  # 源模型API名称，基于get+targetModelId的小驼峰命名
     source_key = Column(String(255), nullable=False)  # 对应business_model_fields.field_id
     target_model = Column(String(255), ForeignKey("business_models.id"), nullable=False)
+    target_api_name = Column(String(255))  # 目标模型API名称，基于get+sourceModelId的小驼峰命名
     target_key = Column(String(255), nullable=False)  # 对应business_model_fields.field_id
     cardinality = Column(String(50), nullable=False)  # "one-to-one", "one-to-many", "many-to-one", "many-to-many"
     # many-to-many 关系的中间表信息（仅在 cardinality = "many-to-many" 时使用）

@@ -31,6 +31,7 @@ class SDKGenerator:
         for model in business_models:
             model_info = {
                 "id": model.id,
+                "api_name": model.api_name,
                 "name": model.name,
                 "description": model.description,
                 "primary_key_id": model.primary_key_id,  # 添加主键字段名
@@ -56,8 +57,10 @@ class SDKGenerator:
                 "name": link.name,
                 "description": link.description,
                 "source_model": link.source_model,
+                "source_api_name": link.source_api_name,
                 "source_key": link.source_key,
                 "target_model": link.target_model,
+                "target_api_name": link.target_api_name,
                 "target_key": link.target_key,
                 "cardinality": link.cardinality
             }
@@ -136,7 +139,7 @@ class SDKGenerator:
         client_template = self.template_env.get_template("client.py.j2")
         client_content = client_template.render(
             package_name=package_name,
-            models=[{"id": model.id, "name": self._camel_case(model.id)} for model in business_models]
+            models=[{"id": model.id, "name": model.api_name} for model in business_models]
         )
         with open(os.path.join(core_dir, "client.py"), "w", encoding="utf-8") as f:
             f.write(client_content)
@@ -177,7 +180,7 @@ class SDKGenerator:
         
         for model in business_models:
             # 生成模型文件
-            model_name = self._camel_case(model.id)
+            model_name = model.api_name
             model_filename = model.id.lower() + ".py"
             model_files.append(model_filename)
             
@@ -185,18 +188,42 @@ class SDKGenerator:
             model_links = []
             for link in links:
                 if link.source_model == model.id:
+                    # 获取目标模型的API名称
+                    target_model_obj = next((m for m in business_models if m.id == link.target_model), None)
+                    target_model_api_name = target_model_obj.api_name
+                    
+                    intermediate_model_name = None
+                    if link.cardinality == 'many-to-many' and hasattr(link, 'intermediate_model') and link.intermediate_model:
+                        intermediate_model_obj = next((m for m in business_models if m.id == link.intermediate_model), None)
+                        intermediate_model_name = intermediate_model_obj.api_name
+                    
                     model_links.append({
                         "type": "outgoing",
                         "link": link,
                         "target_model": link.target_model,
-                        "target_model_name": self._camel_case(link.target_model)
+                        "target_model_name": target_model_api_name,
+                        "target_api_name": link.target_api_name,
+                        "cardinality": link.cardinality,
+                        "intermediate_model_name": intermediate_model_name
                     })
                 elif link.target_model == model.id:
+                    # 获取源模型的API名称  
+                    source_model_obj = next((m for m in business_models if m.id == link.source_model), None)
+                    source_model_api_name = source_model_obj.api_name
+                    
+                    intermediate_model_name = None
+                    if link.cardinality == 'many-to-many' and hasattr(link, 'intermediate_model') and link.intermediate_model:
+                        intermediate_model_obj = next((m for m in business_models if m.id == link.intermediate_model), None)
+                        intermediate_model_name = intermediate_model_obj.api_name
+                    
                     model_links.append({
                         "type": "incoming",
                         "link": link,
                         "source_model": link.source_model,
-                        "source_model_name": self._camel_case(link.source_model)
+                        "source_model_name": source_model_api_name,
+                        "source_api_name": link.source_api_name,
+                        "cardinality": link.cardinality,
+                        "intermediate_model_name": intermediate_model_name
                     })
             
             # 准备字段数据
@@ -243,7 +270,7 @@ class SDKGenerator:
         # 生成executor.py
         executor_template = self.template_env.get_template("query_executor.py.j2")
         executor_content = executor_template.render(
-            models=[{"id": model.id, "name": self._camel_case(model.id)} for model in business_models]
+            models=[{"id": model.id, "name": model.api_name} for model in business_models]
         )
         with open(os.path.join(query_dir, "executor.py"), "w", encoding="utf-8") as f:
             f.write(executor_content)
@@ -261,7 +288,7 @@ class SDKGenerator:
         
         # 生成每个action的参数类和action类
         for action in actions:
-            action_name = self._camel_case(action['id'])
+            action_name = action.get('api_name')
             # 准备action参数
             if "parameters" in action and action["parameters"]:
                 prepared_params = self._prepare_action_parameters(action["parameters"])
@@ -287,7 +314,7 @@ class SDKGenerator:
         # 生成actions/__init__.py
         actions_init = "from .registry import ActionRegistry\n"
         for action in actions:
-            action_class_name = self._camel_case(action['id'].replace(" ", "_").replace("-", "_"))
+            action_class_name = action['api_name']
             actions_init += f"from .{action['id']} import {action_class_name}Action\n"
         with open(os.path.join(actions_dir, "__init__.py"), "w", encoding="utf-8") as f:
             f.write(actions_init)
@@ -297,7 +324,7 @@ class SDKGenerator:
             params_init = ""
             for action in actions:
                 if "parameters" in action and action["parameters"]:
-                    param_class_name = self._camel_case(action['id'].replace(" ", "_").replace("-", "_")) + "Parameters"
+                    param_class_name = action['api_name'] + "Parameters"
                     params_init += f"from .{action['id']}_parameters import {param_class_name}\n"
             with open(os.path.join(params_dir, "__init__.py"), "w", encoding="utf-8") as f:
                 f.write(params_init)

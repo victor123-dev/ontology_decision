@@ -5,6 +5,11 @@ from app.utils.shared_utils import get_db
 from app.services.sdk_generator import get_sdk_generator, SDKGenerator
 
 router = APIRouter()
+import traceback
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 
 @router.post("/sdk/generate")
@@ -42,6 +47,7 @@ def generate_sdk(
             "data": result
         }
     except Exception as e:
+        logger.error(f"完整堆栈跟踪:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"SDK generation failed: {str(e)}")
 
 

@@ -7,6 +7,7 @@ class BusinessModel(Base):
     __tablename__ = "business_models"
     
     id = Column(String(255), primary_key=True)  # 映射表名
+    api_name = Column(String(255))  # API名称，基于id自动生成的小驼峰命名
     name = Column(String(255), nullable=False)  # 中文名称
     description = Column(Text)  # 中文说明
     primary_key_id = Column(String(255))  # 主键ID

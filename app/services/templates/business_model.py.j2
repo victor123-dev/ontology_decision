@@ -17,19 +17,31 @@ class BusinessModelManager:
         
         Args:
             **filters: 过滤条件（键值对）
+                   支持特殊后缀：
+                   - 字段名__in: IN查询，值为列表
             
         Returns:
             符合条件的对象列表
         """
-        # 将简单过滤条件转换为 FilterCondition 格式
+        # 将过滤条件转换为 FilterCondition 格式
         filter_conditions = []
-        for field, value in filters.items():
+        for field_expr, value in filters.items():
             if value is not None:
-                filter_conditions.append({
-                    "field": field,
-                    "operator": "eq",
-                    "value": value
-                })
+                if field_expr.endswith('__in'):
+                    # 处理 IN 查询
+                    field_name = field_expr[:-4]  # 移除 '__in' 后缀
+                    filter_conditions.append({
+                        "field": field_name,
+                        "operator": "in",
+                        "value": value
+                    })
+                else:
+                    # 默认等值查询
+                    filter_conditions.append({
+                        "field": field_expr,
+                        "operator": "eq",
+                        "value": value
+                    })
         
         query_params = {
             "filters": filter_conditions
