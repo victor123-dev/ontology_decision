@@ -279,8 +279,27 @@ class ActionService:
             
             tree = ast.parse(function_code)
             for node in ast.walk(tree):
+                # 安全的导入限制：只允许 my_ontology_sdk 及其子模块
                 if isinstance(node, (ast.Import, ast.ImportFrom)):
-                    raise ValueError("Imports are not allowed in function actions")
+                    unsafe_imports = []
+                    
+                    if isinstance(node, ast.Import):
+                        # 检查 import 语句
+                        for alias in node.names:
+                            module_name = alias.name
+                            if not module_name.startswith('my_ontology_sdk'):
+                                unsafe_imports.append(module_name)
+                    
+                    elif isinstance(node, ast.ImportFrom):
+                        # 检查 from ... import ... 语句
+                        if node.module:
+                            if not node.module.startswith('my_ontology_sdk'):
+                                unsafe_imports.append(node.module)
+                    
+                    if unsafe_imports:
+                        raise ValueError(f"Only my_ontology_sdk imports are allowed. Unsafe imports: {unsafe_imports}")
+                
+                # 禁止危险函数调用
                 if isinstance(node, ast.Call) and hasattr(node.func, 'id') and node.func.id in ['eval', 'exec', 'open', '__import__']:
                     raise ValueError(f"Disallowed function call: {node.func.id}")
             

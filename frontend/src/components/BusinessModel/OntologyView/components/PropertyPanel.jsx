@@ -425,33 +425,56 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
                         <Input.TextArea 
                           disabled={!isEdit} 
                           rows={10} 
-                          placeholder={`# 函数行动示例
+                          placeholder={`# 函数行动示例（业务场景优先，SDK 可选增强）
 # 可以访问 parameters 变量（用户提交的参数）
-# 必须返回包含 result 键的对象
+# 必须在脚本末尾定义 result 变量（包含执行结果的字典）
+# 如需使用 SDK：from my_ontology_sdk import OntologyClient
 
-# 示例1: 简单的数据处理
+# 示例1: 简单数据处理（基础功能）
+processed_name = parameters.get("name", "").upper()
+age_group = "adult" if parameters.get("age", 0) >= 18 else "minor"
+
 result = {
-  "message": "处理成功",
-  "data": {
-    "processed_name": parameters.name?.toUpperCase(),
-    "age_group": parameters.age >= 18 ? "adult" : "minor"
-  }
+    "success": True,
+    "message": "数据处理完成",
+    "data": {
+        "processed_name": processed_name,
+        "age_group": age_group
+    }
 }
 
-# 示例2: 条件逻辑
-if parameters.email and "@" in parameters.email:
-  result = {"success": True, "message": "邮箱格式正确"}
+# 示例2: 条件逻辑（业务规则）
+email = parameters.get("email", "")
+if email and "@" in email:
+    result = {"success": True, "message": "邮箱格式正确"}
 else:
-  result = {"success": False, "message": "邮箱格式错误"}
+    result = {"success": False, "message": "邮箱格式错误"}
 
-# 示例3: 数学计算  
-total = parameters.quantity * parameters.price
+# 示例3: 数学计算（价格计算）
+quantity = parameters.get("quantity", 0)
+price = parameters.get("price", 0)
+total = quantity * price
 discount = total * 0.1 if total > 100 else 0
+
 result = {
-  "total": total,
-  "discount": discount,
-  "final_amount": total - discount
-}`}
+    "total": total,
+    "discount": discount,
+    "final_amount": total - discount,
+    "success": True
+}
+
+# 示例4: SDK 增强 - 查询关联数据（可选）
+# from my_ontology_sdk import OntologyClient
+# client = OntologyClient("http://localhost:8080")
+# customer = client.models.customer.get(parameters["customer_id"])
+# if customer:
+#     result = {
+#         "success": True,
+#         "customer_name": customer.name,
+#         "credit_limit": customer.credit_limit
+#     }
+# else:
+#     result = {"success": False, "message": "客户未找到"} `}
                         />
                       </Form.Item>
                     );
