@@ -35,6 +35,7 @@ class {{ model_name }}(BusinessModel):
     """
 
     _model_name = "{{ model.id }}"
+    _primary_key_field = "{{ model.primary_key_id }}"
     _fields = {
         {% for field in fields %}
         "{{ field.field_id }}": "{{ field.data_type }}",
@@ -64,6 +65,8 @@ class {{ model_name }}(BusinessModel):
     @property
     def {{ field.field_id }}(self) -> {{ field.python_type }}:
         """{{ field.description or field.field_id }}"""
+        if not hasattr(self, 'data') or not isinstance(self.data, dict):
+            return None
         return self.data.get("{{ field.field_id }}")
 
     {% endfor %}

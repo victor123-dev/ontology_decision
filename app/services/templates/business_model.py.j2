@@ -1,7 +1,120 @@
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .client import OntologyClient
+
+
+class BusinessModelManager:
+    """业务模型管理器，提供类级别的CRUD操作"""
+    
+    def __init__(self, client: 'OntologyClient', model_class: type):
+        self.client = client
+        self.model_class = model_class
+        self._model_name = model_class._model_name
+    
+    def find(self, **filters) -> List['BusinessModel']:
+        """查找对象
+        
+        Args:
+            **filters: 过滤条件（键值对）
+            
+        Returns:
+            符合条件的对象列表
+        """
+        # 将简单过滤条件转换为 FilterCondition 格式
+        filter_conditions = []
+        for field, value in filters.items():
+            if value is not None:
+                filter_conditions.append({
+                    "field": field,
+                    "operator": "eq",
+                    "value": value
+                })
+        
+        query_params = {
+            "filters": filter_conditions
+        }
+        
+        session = self.client.get_session()
+        response = session.post(f"/api/v1/business-data/{self._model_name}/query", json=query_params)
+        if response.status_code == 200:
+            result = response.json()
+            items = result.get("data", [])
+            return [self.model_class(self.client, item) for item in items]
+        return []
+    
+    def get(self, object_id: str) -> Optional['BusinessModel']:
+        """通过ID获取对象"""
+        session = self.client.get_session()
+        response = session.get(f"/api/v1/business-data/{self._model_name}/get", params={"id": object_id})
+        if response.status_code == 200:
+            result = response.json()
+            item_data = result.get("data", {})
+            if item_data:
+                return self.model_class(self.client, item_data)
+        return None
+    
+    def create(self, data: Union[Dict[str, Any], 'BusinessModel', None] = None, **kwargs) -> Optional['BusinessModel']:
+        """创建对象
+        
+        Args:
+            data: 可以是字典、BusinessModel 实例，或者使用 kwargs 传参
+            **kwargs: 字段值（当 data 为 None 时使用）
+            
+        Returns:
+            创建的 BusinessModel 实例，如果创建失败返回 None
+        """
+        from typing import Union
+        
+        # 处理不同的输入格式
+        if isinstance(data, dict):
+            create_data = data
+        elif hasattr(data, 'to_dict') and callable(getattr(data, 'to_dict')):
+            # BusinessModel 实例
+            create_data = data.to_dict()
+        elif data is None:
+            # 使用 kwargs
+            create_data = kwargs
+        else:
+            raise ValueError("data must be a dict, BusinessModel instance, or use keyword arguments")
+        
+        session = self.client.get_session()
+        response = session.post(f"/api/v1/business-data/{self._model_name}/create", json=create_data)
+        if response.status_code == 200:
+            # 使用服务器返回的完整数据
+            result = response.json()
+            if "data" in result:
+                return self.model_class(self.client, result["data"])
+            else:
+                return None
+        return None
+    
+    def count(self, **filters) -> int:
+        """获取符合条件的记录数"""
+        # 将简单过滤条件转换为 FilterCondition 格式
+        filter_conditions = []
+        for field, value in filters.items():
+            if value is not None:
+                filter_conditions.append({
+                    "field": field,
+                    "operator": "eq",
+                    "value": value
+                })
+        
+        query_params = {
+            "filters": filter_conditions
+        }
+        
+        session = self.client.get_session()
+        response = session.post(f"/api/v1/business-data/{self._model_name}/count", json=query_params)
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("count", 0)
+        return 0
+    
+    def exists(self, **filters) -> bool:
+        """检查是否存在符合条件的记录"""
+        return self.count(**filters) > 0
 
 
 class BusinessModel:
@@ -10,28 +123,26 @@ class BusinessModel:
     所有业务对象模型的基类，提供通用的CRUD操作和查询功能。
 
     使用示例：
-        # 通过模型类方法查询
-        orders = WorkOrder.find(client, production_workshop="Assembly")
-
-        # 通过实例方法更新
-        order.update(status="completed")
-
-        # 通过 models 命名空间访问
+        # 通过 models 命名空间访问（管理器方法）
         orders = client.models.work_order.find(production_workshop="Assembly")
+        work_order = client.models.work_order.get("WO-001")
+        new_order = client.models.work_order.create(status="pending", ...)
+
+        # 通过实例方法操作
+        work_order.update(status="completed")
+        work_order.delete()
+        work_order.refresh()
     """
 
     _model_name = ""
     _fields = {}
 
     def __init__(self, client: 'OntologyClient', data: Dict[str, Any] = None):
+        # 确保 data 属性总是存在，防止 AttributeError
+        self.data = {}
         self.client = client
-        self.data = data or {}
-        self._populate_fields()
-
-    def _populate_fields(self):
-        """填充字段到对象属性"""
-        for field_name, field_value in self.data.items():
-            setattr(self, field_name, field_value)
+        if data is not None and isinstance(data, dict):
+            self.data = data
 
     def to_dict(self) -> Dict[str, Any]:
         """将对象转换为字典"""
@@ -39,113 +150,75 @@ class BusinessModel:
 
     def __repr__(self) -> str:
         """对象字符串表示"""
-        return f"<{self.__class__.__name__}(id={getattr(self, 'id', None)})>"
+        primary_key_value = self._get_primary_key_value()
+        return f"<{self.__class__.__name__}({self._primary_key_field}={primary_key_value})>"
 
     def __str__(self) -> str:
         """对象字符串表示"""
         return self.__repr__()
+    
+    def _get_primary_key_value(self) -> Any:
+        """获取主键值"""
+        if not hasattr(self, 'data') or not isinstance(self.data, dict):
+            return None
+        if hasattr(self, '_primary_key_field'):
+            primary_key_field = self._primary_key_field
+            if hasattr(self, primary_key_field):
+                return getattr(self, primary_key_field)
+        return None
 
     # ============ 实例方法 ============
 
     def update(self, **data) -> bool:
         """更新对象"""
+        primary_key_value = self._get_primary_key_value()
+        if primary_key_value is None:
+            return False
+        
         session = self.client.get_session()
-        response = session.put(f"/api/v1/business-models/{self._model_name}/update", json={
-            "id": getattr(self, 'id', None),
+        response = session.put(f"/api/v1/business-data/{self._model_name}/update", json={
+            "id": primary_key_value,
             **data
         })
         if response.status_code == 200:
+            # 使用服务器返回的完整数据更新本地状态
             result = response.json()
-            self.data = result.get("data", {})
-            self._populate_fields()
-            return True
+            if "data" in result:
+                self.data = result["data"]
+                return True
+            else:
+                # 如果服务器没有返回完整数据
+                return False
         return False
 
     def delete(self) -> bool:
-        """删除对象"""
+        """删除对象
+        
+        注意：删除操作只在服务器端执行，本地对象不会自动销毁。
+        删除后应避免继续使用该对象，建议将其置为 None。
+        """
+        primary_key_value = self._get_primary_key_value()
+        if primary_key_value is None:
+            return False
+        
         session = self.client.get_session()
-        response = session.delete(f"/api/v1/business-models/{self._model_name}/delete", params={
-            "id": getattr(self, 'id', None)
+        response = session.delete(f"/api/v1/business-data/{self._model_name}/delete", params={
+            "id": primary_key_value
         })
         return response.status_code == 200
 
     def refresh(self) -> bool:
         """刷新对象数据"""
+        primary_key_value = self._get_primary_key_value()
+        if primary_key_value is None:
+            return False
+        
         session = self.client.get_session()
-        response = session.get(f"/api/v1/business-models/{self._model_name}/get", params={
-            "id": getattr(self, 'id', None)
-        })
+        response = session.get(f"/api/v1/business-data/{self._model_name}/get", params={"id": primary_key_value})
         if response.status_code == 200:
             result = response.json()
-            self.data = result.get("data", {})
-            self._populate_fields()
-            return True
+            item_data = result.get("data", {})
+            if item_data:
+                self.data = item_data
+                return True
         return False
-
-    def execute_action(self, action_name: str, **parameters) -> Dict[str, Any]:
-        """执行与对象相关的行动"""
-        return self.client.execute_action(action_name, {
-            "object_id": getattr(self, 'id', None),
-            **parameters
-        })
-
-    # ============ 类方法 ============
-
-    @classmethod
-    def find(cls, client: 'OntologyClient', **filters) -> List['BusinessModel']:
-        """查找对象
-
-        Args:
-            client: OntologyClient 实例
-            **filters: 过滤条件
-
-        Returns:
-            符合条件的对象列表
-        """
-        session = client.get_session()
-        response = session.get(f"/api/v1/business-models/{cls._model_name}/find", params=filters)
-        if response.status_code == 200:
-            data = response.json()
-            return [cls(client, item) for item in data.get("data", [])]
-        return []
-
-    @classmethod
-    def find_one(cls, client: 'OntologyClient', **filters) -> Optional['BusinessModel']:
-        """查找单个对象"""
-        results = cls.find(client, **filters)
-        return results[0] if results else None
-
-    @classmethod
-    def get_by_id(cls, client: 'OntologyClient', object_id: str) -> Optional['BusinessModel']:
-        """通过ID获取对象"""
-        session = client.get_session()
-        response = session.get(f"/api/v1/business-models/{cls._model_name}/get", params={"id": object_id})
-        if response.status_code == 200:
-            result = response.json()
-            return cls(client, result.get("data", {}))
-        return None
-
-    @classmethod
-    def create(cls, client: 'OntologyClient', **data) -> Optional['BusinessModel']:
-        """创建对象"""
-        session = client.get_session()
-        response = session.post(f"/api/v1/business-models/{cls._model_name}/create", json=data)
-        if response.status_code == 200:
-            result = response.json()
-            return cls(client, result.get("data", {}))
-        return None
-
-    @classmethod
-    def count(cls, client: 'OntologyClient', **filters) -> int:
-        """获取符合条件的记录数"""
-        session = client.get_session()
-        response = session.get(f"/api/v1/business-models/{cls._model_name}/count", params=filters)
-        if response.status_code == 200:
-            result = response.json()
-            return result.get("count", 0)
-        return 0
-
-    @classmethod
-    def exists(cls, client: 'OntologyClient', **filters) -> bool:
-        """检查是否存在符合条件的记录"""
-        return cls.count(client, **filters) > 0

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Callable
 {% for action in actions %}
-from .{{ action.id }} import {{ action.class_name }}Action
+from .{{ action.id }} import {{ action_name }}Action
 {% endfor %}
 
 
@@ -10,7 +10,7 @@ class ActionRegistry:
     def __init__(self, client):
         self.client = client
         {% for action in actions %}
-        self.{{ action.attribute_name }} = {{ action.class_name }}Action(client)
+        self.{{ action.id }} = {{ action_name }}Action(client)
         {% endfor %}
     
     def execute(self, action_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from .session import Session
-from .business_model import BusinessModel
+from .business_model import BusinessModel, BusinessModelManager
 from ..query.builder import QueryBuilder
 from ..actions.registry import ActionRegistry
 
@@ -23,20 +23,20 @@ class ModelNamespace:
         """注册所有业务模型"""
         {% for model in models %}
         from ..models.{{ model.id }} import {{ model.name }}
-        self._register_model("{{ model.id }}", {{ model.name }})
+        self._register_model("{{ model.name }}", {{ model.name }})
         {% endfor %}
 
     def _register_model(self, model_id: str, model_class: type):
         """注册单个模型"""
         self._model_classes[model_id] = model_class
-        # 创建模型实例并设置为属性
-        instance = model_class(self._client)
-        self._model_instances[model_id] = instance
+        # 创建模型管理器实例并设置为属性
+        manager = BusinessModelManager(self._client, model_class)
+        self._model_instances[model_id] = manager
         # 设置属性，使得可以通过 self.work_order 访问
-        setattr(self, model_id, instance)
+        setattr(self, model_id, manager)
 
-    def __getattr__(self, name: str) -> BusinessModel:
-        """动态获取模型实例"""
+    def __getattr__(self, name: str) -> BusinessModelManager:
+        """动态获取模型管理器"""
         if name in self._model_instances:
             return self._model_instances[name]
         raise AttributeError(f"Model '{name}' not found. Available models: {list(self._model_instances.keys())}")

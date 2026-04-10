@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from app.models.data_source import DataSource
 from app.utils.db_client import DBClient
 from app.utils.shared_utils import get_db
-
 router = APIRouter()
 
 @router.post("/data-sources")
@@ -21,6 +20,28 @@ def create_data_source(data_source: dict, db: Session = Depends(get_db)):
 
 @router.get("/data-sources")
 def get_data_sources(db: Session = Depends(get_db)):
+
+    # 初始化客户端
+    from my_ontology_sdk import OntologyClient
+    client = OntologyClient(
+        api_url="http://localhost:8080",  # 后端API地址
+        api_key="your-api-key"           # API密钥（如果需要）
+    )
+    orders = (client.query
+          .from_model("WorkOrder")
+          .where_gt("production_quantity", 100)
+          .order_by("planned_start_date")
+          .desc()
+          .take(10)
+          .execute())
+    print("看这里！！orders:", orders)
+    active_orders = orders.filter(lambda x: x.production_workshop in ["WS0002"])
+    print("看这里！！active_orders:", active_orders)
+    # 通过models命名空间直接访问模型（类型安全，IDE支持好）
+
+    # 获取单个对象
+    work_order = client.models.WorkOrder.get("WO000001")
+    print("看这里！！work_order:", work_order)
     return db.query(DataSource).all()
 
 @router.get("/data-sources/{data_source_id}")

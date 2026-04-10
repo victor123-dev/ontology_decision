@@ -241,7 +241,24 @@ def create_business_data(
             data=data
         )
         if success:
-            return {"message": "Data created successfully"}
+            # 获取主键值（假设插入成功后可以通过某种方式获取）
+            # 这里需要根据实际情况实现，比如从 data 中获取主键值
+            primary_key_field = business_model.primary_key_id
+            primary_key_value = data.get(primary_key_field)
+            
+            if primary_key_value is not None:
+                # 查询刚创建的对象
+                query = f"SELECT * FROM {model_name} WHERE {primary_key_field} = '{primary_key_value}'"
+                result_data = data_source_manager.execute_query(
+                    data_source_id=business_model.data_source_id,
+                    query=query,
+                    max_rows=1
+                )
+                if result_data:
+                    return {"data": result_data[0]}
+            
+            # 如果无法获取完整数据，至少返回输入数据
+            return {"data": data}
         else:
             raise HTTPException(status_code=500, detail="Failed to create data")
     except Exception as e:
@@ -272,7 +289,22 @@ def update_business_data(
             primary_value=id
         )
         if success:
-            return {"message": "Data updated successfully"}
+            # 查询更新后的完整对象
+            query = f"SELECT * FROM {model_name} WHERE {business_model.primary_key_id} = '{id}'"
+            result_data = data_source_manager.execute_query(
+                data_source_id=business_model.data_source_id,
+                query=query,
+                max_rows=1
+            )
+            if result_data:
+                return {"data": result_data[0]}
+            else:
+                # 如果查询失败，返回合并后的数据
+                updated_data = {}
+                # 这里需要获取原始数据，但为了简化，直接合并
+                updated_data.update(data)
+                updated_data[business_model.primary_key_id] = id
+                return {"data": updated_data}
         else:
             raise HTTPException(status_code=500, detail="Failed to update data")
     except Exception as e:

@@ -33,6 +33,7 @@ class SDKGenerator:
                 "id": model.id,
                 "name": model.name,
                 "description": model.description,
+                "primary_key_id": model.primary_key_id,  # 添加主键字段名
                 "fields": [
                     {
                         "field_id": field.field_id,
@@ -80,27 +81,31 @@ class SDKGenerator:
             shutil.rmtree(output_path)
         os.makedirs(output_path, exist_ok=True)
         
+        # 创建包目录（在output_path下创建package_name子目录）
+        package_dir = os.path.join(output_path, package_name)
+        os.makedirs(package_dir, exist_ok=True)
+        
         # 收集数据
         business_models = db.query(BusinessModel).all()
         links = db.query(BusinessModelLink).all()
         actions = self.action_dao.get_actions()
         
         # 生成核心文件
-        self._generate_core_files(output_path, package_name, business_models)
+        self._generate_core_files(package_dir, package_name, business_models)
         
         # 生成业务模型文件
-        model_files = self._generate_model_files(output_path, business_models, links)
+        model_files = self._generate_model_files(package_dir, business_models, links)
         
         # 生成查询模块
-        self._generate_query_files(output_path, business_models)
+        self._generate_query_files(package_dir, business_models)
         
         # 生成行动模块
-        self._generate_action_files(output_path, actions)
+        self._generate_action_files(package_dir, actions)
         
         # 生成配置文件
-        self._generate_config_file(output_path, version)
+        self._generate_config_file(package_dir, version)
         
-        # 生成setup.py
+        # 生成setup.py（在output_path根目录，不在package_dir内）
         self._generate_setup_file(output_path, package_name, version)
         
         # 构建SDK包
@@ -338,7 +343,7 @@ class SDKGenerator:
         
         original_cwd = os.getcwd()
         try:
-            # 进入SDK目录
+            # 进入SDK根目录（setup.py所在目录）
             os.chdir(sdk_path)
             
             # 执行构建命令

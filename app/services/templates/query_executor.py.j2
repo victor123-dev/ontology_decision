@@ -33,7 +33,7 @@ class QueryExecutor:
 
         # 执行查询
         session = self.client.get_session()
-        response = session.post(f"/api/v1/business-models/{model_name}/query", json=params)
+        response = session.post(f"/api/v1/business-data/{model_name}/query", json=params)
 
         if response.status_code == 200:
             result = response.json()
@@ -46,13 +46,13 @@ class QueryExecutor:
               model_name: str,
               filters: List[FilterCondition]) -> int:
         """获取符合条件的记录数"""
+        # 构建查询参数
         params = {
-            "filters": [f.to_dict() for f in filters],
-            "count_only": True
+            "filters": [f.to_dict() for f in filters]
         }
 
         session = self.client.get_session()
-        response = session.post(f"/api/v1/business-models/{model_name}/count", json=params)
+        response = session.get(f"/api/v1/business-data/{model_name}/count", params=simple_filters)
 
         if response.status_code == 200:
             result = response.json()
@@ -64,7 +64,7 @@ class QueryExecutor:
         """根据模型名称获取模型类"""
         model_map = {
             {% for model in models %}
-            "{{ model.id }}": {{ model.name }},
+            "{{ model.name }}": {{ model.name }},
             {% endfor %}
         }
         return model_map.get(model_name)
