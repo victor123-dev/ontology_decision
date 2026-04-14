@@ -202,7 +202,7 @@ class SDKGenerator:
                         "link": link,
                         "target_model": link.target_model,
                         "target_model_name": target_model_api_name,
-                        "target_api_name": link.target_api_name,
+                        "source_api_name": link.source_api_name,
                         "cardinality": link.cardinality,
                         "intermediate_model_name": intermediate_model_name
                     })
@@ -221,7 +221,7 @@ class SDKGenerator:
                         "link": link,
                         "source_model": link.source_model,
                         "source_model_name": source_model_api_name,
-                        "source_api_name": link.source_api_name,
+                        "target_api_name": link.target_api_name,
                         "cardinality": link.cardinality,
                         "intermediate_model_name": intermediate_model_name
                     })

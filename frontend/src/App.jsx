@@ -15,11 +15,13 @@ import DriveLog from './components/DriveLog/DriveLog'
 import TestExecution from './components/TestExecution/TestExecution'
 import DocumentImport from './components/DocumentImport/DocumentImport'
 import DriveVisualization from './components/DriveVisualization/DriveVisualization'
+import { AgentButton, AgentPanel } from './components/AgentDialog'
 
 const { Header, Sider, Content } = Layout
 
 function AppContent() {
   const [collapsed, setCollapsed] = useState(false)
+  const [agentPanelVisible, setAgentPanelVisible] = useState(false)
   const { token: { colorBgContainer } } = theme.useToken()
   const location = useLocation()
   
@@ -176,6 +178,14 @@ function AppContent() {
           </Routes>
         </Content>
       </Layout>
+      <AgentPanel 
+        visible={agentPanelVisible} 
+        onClose={() => setAgentPanelVisible(false)} 
+      />
+      <AgentButton 
+        onClick={() => setAgentPanelVisible(true)}
+        isVisible={!agentPanelVisible}
+      />
     </Layout>
   )
 }

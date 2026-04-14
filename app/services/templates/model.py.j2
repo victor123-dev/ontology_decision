@@ -48,13 +48,13 @@ class {{ model_name }}(BusinessModel):
     {% for link in links %}
     {% if link.type == 'outgoing' %}
     {% if link.cardinality == 'one-to-one' or link.cardinality == 'many-to-one' %}
-    def {{ link.target_api_name }}(self) -> Optional['{{ link.target_model_name }}']:
+    def {{ link.source_api_name }}(self) -> Optional['{{ link.target_model_name }}']:
         """获取关联的{{ link.link.name }}"""
         from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
         results = self.client.models.{{ link.target_model_name }}.find({{ link.link.target_key }}=getattr(self, "{{ link.link.source_key }}", None))
         return results[0] if results else None
     {% elif link.cardinality == 'one-to-many' or link.cardinality == 'many-to-many' %}
-    def {{ link.target_api_name }}(self) -> List['{{ link.target_model_name }}']:
+    def {{ link.source_api_name }}(self) -> List['{{ link.target_model_name }}']:
         """获取关联的{{ link.link.name }}列表"""
         from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
         {% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}
@@ -72,13 +72,13 @@ class {{ model_name }}(BusinessModel):
 
     {% elif link.type == 'incoming' %}
     {% if link.cardinality == 'one-to-one' or link.cardinality == 'one-to-many' %}
-    def {{ link.source_api_name }}(self) -> Optional['{{ link.source_model_name }}']:
+    def {{ link.target_api_name }}(self) -> Optional['{{ link.source_model_name }}']:
         """获取关联的{{ link.link.name }}"""
         from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
         results = self.client.models.{{ link.source_model_name }}.find({{ link.link.source_key }}=getattr(self, "{{ link.link.target_key }}", None))
         return results[0] if results else None
     {% elif link.cardinality == 'many-to-one' or link.cardinality == 'many-to-many' %}
-    def {{ link.source_api_name }}(self) -> List['{{ link.source_model_name }}']:
+    def {{ link.target_api_name }}(self) -> List['{{ link.source_model_name }}']:
         """获取关联的{{ link.link.name }}列表"""
         from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
         {% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}

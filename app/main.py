@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, agent, drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk
+from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, agent, drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk, ontology_type_mcp
 from app.config import settings
 from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
@@ -10,6 +10,7 @@ from app.engines.data_sensing_engine import data_sensing_engine
 from app.engines.drive_engine import drive_engine
 from app.engines.task_manager import task_manager
 from app.utils.background_task_processor import background_task_processor
+from fastapi_mcp import FastApiMCP
 
 logger = get_logger(__name__)
 
@@ -75,6 +76,17 @@ app.include_router(drive_visualization.router, prefix="/api/v1", tags=["Drive Vi
 app.include_router(ontology_view.router, prefix="/api/v1", tags=["Ontology View"])
 app.include_router(action.router, prefix="/api/v1", tags=["Action"])
 app.include_router(sdk.router, prefix="/api/v1", tags=["SDK"])
+app.include_router(ontology_type_mcp.router, prefix="/api/v1", tags=["ontology"])
+
+# 添加MCP支持
+mcp = FastApiMCP(
+    app,
+    include_tags=["ontology"],
+    name="Ontology MCP",
+    description="Ontology MCP Server",
+    describe_all_responses=True,
+    describe_full_response_schema=True)
+mcp.mount_http()
 
 # 根路径
 @app.get("/")

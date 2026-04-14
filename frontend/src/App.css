@@ -49,6 +49,121 @@ main {
   text-align: center;
 }
 
+/* Agent Dialog 样式 */
+.agent-button-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+}
+
+.agent-button {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease;
+}
+
+.agent-button:hover {
+  transform: scale(1.1);
+}
+
+.agent-dialog-modal .ant-modal-body {
+  padding: 0 !important;
+}
+
+.agent-loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 85vh;
+  font-size: 18px;
+  color: #666;
+}
+
+.agent-loading-spinner .spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #1890ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.agent-iframe {
+  background-color: #f5f5f5;
+}
+
+/* Agent 侧边栏面板样式 */
+.agent-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 800px;
+  background: white;
+  border-left: 1px solid #e8e8e8;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  z-index: 999;
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+
+.agent-panel.hidden {
+  transform: translateX(100%);
+}
+
+.agent-panel-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e8e8e8;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.agent-panel-close:hover {
+  background: white;
+  color: #333;
+}
+
+.agent-iframe.loaded {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.agent-loading-spinner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #666;
+  z-index: 998;
+}
+
 /* 标题样式 */
 h2 {
   margin-bottom: 20px;
