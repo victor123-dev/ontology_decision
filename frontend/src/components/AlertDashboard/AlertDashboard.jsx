@@ -11,7 +11,7 @@ import { LayoutDashboard, Bell, TrendingUp, Package, Truck, Factory,
   Maximize2, Minimize2, GripHorizontal } from "lucide-react";
 import KpiCard from "./components/KpiCard";
 import SupplyChainMap from "./components/SupplyChainMap";
-import AiAssistant from "./components/AiAssistant";
+
 import AlertDrawer from "./components/AlertDrawer";
 import SalesForecastChart from "./components/SalesForecastChart";
 import ForecastTable from "./components/ForecastTable";
@@ -715,8 +715,7 @@ export default function AlertDashboard() {
         <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} onStatusChange={handleStatusChange} />
       )}
 
-      {/* AI助手 */}
-      <AiAssistant />
+
     </div>
   );
 }
