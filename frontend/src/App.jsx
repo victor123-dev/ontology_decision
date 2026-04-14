@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { Layout, Menu, theme } from 'antd'
 
@@ -15,6 +15,7 @@ import DriveLog from './components/DriveLog/DriveLog'
 import TestExecution from './components/TestExecution/TestExecution'
 import DocumentImport from './components/DocumentImport/DocumentImport'
 import DriveVisualization from './components/DriveVisualization/DriveVisualization'
+import AlertDashboard from './components/AlertDashboard/AlertDashboard'
 import { AgentButton, AgentPanel } from './components/AgentDialog'
 
 const { Header, Sider, Content } = Layout
@@ -35,8 +36,8 @@ function AppContent() {
   const selectedKey = getCurrentSelectedKey()
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+    <Layout style={{ minHeight: '100vh', width: '100%' }}>
+      <Sider trigger={null} collapsible collapsed={collapsed} style={{ marginRight: '1px' }}>
         <div className="logo" />
         <Menu
           theme="dark"
@@ -127,40 +128,31 @@ function AppContent() {
                   label: <Link to="/drive-visualization">驱动可视化</Link>,
                 }
               ]
+            },
+            {
+              key: 'group-6',
+              label: '业务案例',
+              type: 'group',
+              children: [
+                {
+                  key: 'alert-dashboard',
+                  icon: <span>⚠️</span>,
+                  label: <Link to="/alert-dashboard">预警看板</Link>,
+                }
+              ]
             }
           ]}
         />
       </Sider>
-      <Layout>
-        <Header
-          style={{
-            background: colorBgContainer,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 24px',
-          }}
-        >
-          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>数据驱动项目系统</div>
-          <button
-            type="button"
-            className="trigger"
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              fontSize: '16px',
-              width: 64,
-              height: 64,
-            }}
-          >
-            {collapsed ? '展开' : '收起'}
-          </button>
-        </Header>
+      <Layout style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', marginLeft: '1px' }}>
         <Content
           style={{
-            margin: '24px 16px',
-            padding: 24,
-            minHeight: 280,
-            background: colorBgContainer,
+            padding: '0',
+            margin: '0',
+            background: 'transparent',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
           <Routes>
@@ -174,6 +166,7 @@ function AppContent() {
             <Route path="/test-execution" element={<TestExecution />} />
             <Route path="/drive-log" element={<DriveLog />} />
             <Route path="/drive-visualization" element={<DriveVisualization />} />
+            <Route path="/alert-dashboard" element={<AlertDashboard />} />
             <Route path="/" element={<DataSource />} />
           </Routes>
         </Content>
