@@ -1,0 +1,493 @@
+// 供应链控制塔 - 主页面
+// 深蓝科技风格：顶部导航 + 看板Tab + 预警Tab
+// 支持：拖拽布局（react-grid-layout）、全屏展示、图表筛选+下钻
+import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
+import GridLayout from "react-grid-layout";
+import { LayoutDashboard, Bell, TrendingUp, Package, Truck, Factory,
+  ShoppingCart, AlertTriangle, CheckCircle, Clock, Filter,
+  ChevronDown, RefreshCw, Settings, User, Search,
+  Maximize2, Minimize2, GripHorizontal } from "lucide-react";
+import KpiCard from "@/components/KpiCard";
+import SupplyChainMap from "@/components/SupplyChainMap";
+import AiAssistant from "@/components/AiAssistant";
+import AlertDrawer from "@/components/AlertDrawer";
+import SalesForecastChart from "@/components/SalesForecastChart";
+import ForecastTable from "@/components/ForecastTable";
+import { kpiData, logisticsData,
+  alertMessages, getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "@/lib/data";
+import { useWindowSize } from "@/hooks/useWindowSize";
+
+// rowHeight=8px，cols=24
+// KPI行：独立于GridLayout，固定高度105px，无留白
+// 图表/地图行：h=24 → 192+23=215px（匹配线上版本约190px）
+// 图表占左宽57%（w=14/24），地图占右宽43%（w=10/24）
+// 物流占左宽43%（w=10/24），预测占右宽57%（w=14/24）
+// 物流/预测行：h=29 → 232+28=260px（匹配线上版本约230px）
+// 预警概览行：h=14 → 112+13=125px（匹配线上版本约110px）
+const INITIAL_LAYOUT = [
+  // kpi 行已移出 GridLayout，不再占用 layout 格子
+  { i: 'chart',     x: 0,  y: 0,  w: 14, h: 24,  minH: 18, minW: 8 },
+  { i: 'map',       x: 14, y: 0,  w: 10, h: 24,  minH: 18, minW: 6 },
+  { i: 'logistics', x: 0,  y: 24, w: 10, h: 29,  minH: 20, minW: 5 },
+  { i: 'forecast',  x: 10, y: 24, w: 14, h: 29,  minH: 20, minW: 8 },
+  { i: 'alertsnap', x: 0,  y: 53, w: 24, h: 14,  minH: 12 },
+];
+
+const ROW_HEIGHT = 8; // px per grid row unit
+const GRID_MARGIN = [12, 12];
+
+// ─── 内联 Widget 容器（支持拖拽手柄 + 全屏） ───────────────────────────────
+function Widget({ title, subtitle, children, headerRight, fullscreenContent, fullscreenNoPadding }) { const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // 全屏 overlay 通过 Portal 渲染到 document.body，确保覆盖整个页面
+  const fullscreenOverlay = isFullscreen ? createPortal(
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9999,
+        background: '#0b1426',
+        display: 'flex', flexDirection: 'column' }}
+    >
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 24px', flexShrink: 0,
+          borderBottom: '1px solid rgba(59,130,246,0.2)',
+          background: 'rgba(15,29,53,0.98)' }}
+      >
+        <div>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', margin: 0 }}>{title}</h2>
+          {subtitle && <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0' }}>{subtitle}</p>}
+        </div>
+        <button
+          onClick={() => setIsFullscreen(false)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 14px', borderRadius: 8,
+            fontSize: 13, color: '#cbd5e1', cursor: 'pointer',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.12)' }}
+        >
+          <Minimize2 size={14} />
+          退出全屏
+        </button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: fullscreenNoPadding ? 0 : 24, display: 'flex', flexDirection: 'column' }}>
+        {fullscreenContent ?? children}
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      {/* 正常卡片 */}
+      <div className="sct-card flex flex-col h-full">
+        {/* 标题栏 - 拖拽手柄 */}
+        <div
+          className="widget-drag-handle flex items-center justify-between px-4 py-2 flex-shrink-0 select-none"
+          style={{ borderBottom: '1px solid rgba(59,130,246,0.12)', cursor: 'move' }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <GripHorizontal size={13} className="text-slate-600 flex-shrink-0" />
+            <div className="min-w-0">
+              <span className="text-sm font-semibold text-slate-200 truncate block">{title}</span>
+              {subtitle && <span className="text-[10px] text-slate-500">{subtitle}</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {headerRight}
+            <button
+              onMouseDown={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); setIsFullscreen(true); }}
+              className="w-6 h-6 flex items-center justify-center rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
+              title="全屏展示"
+            >
+              <Maximize2 size={12} />
+            </button>
+          </div>
+        </div>
+        {/* 内容区 - 无多余 padding，内容自适应 */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {children}
+        </div>
+      </div>
+
+      {/* 全屏 Portal */}
+      {fullscreenOverlay}
+    </>
+  ); }
+
+// ─── KPI 行容器（支持拖拽手柄 + 全屏） ────────────────────────────────────
+function KpiWidget({ children }) { return (
+    // 外层容器高度固定为105px，防止被 GridLayout 拉伸
+    <div style={{ height: 105, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* 拖拽手柄条 */}
+      <div
+        className="widget-drag-handle flex items-center gap-2 px-3 flex-shrink-0 select-none"
+        style={{ cursor: 'move', borderBottom: '1px solid rgba(59,130,246,0.08)', height: 20, minHeight: 20 }}
+      >
+        <GripHorizontal size={11} className="text-slate-700" />
+        <span className="text-[10px] text-slate-700 tracking-widest uppercase">KPI 指标</span>
+      </div>
+      {/* KPI 卡片网格 */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, padding: '6px 8px', minHeight: 0 }}>
+        {children}
+      </div>
+    </div>
+  ); }
+
+export default function Home() { const [activeTab, setActiveTab] = useState('dashboard');
+  const [alertFilter, setAlertFilter] = useState('all');
+  const [riskFilter, setRiskFilter] = useState('all');
+  const [selectedAlert, setSelectedAlert] = useState(null);
+  const [alerts, setAlerts] = useState(alertMessages);
+  const [searchText, setSearchText] = useState('');
+  const [lastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  const [layout, setLayout] = useState(INITIAL_LAYOUT);
+  const { width: winWidth } = useWindowSize();
+
+  const handleStatusChange = (id, status) => { setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    if (selectedAlert?.id === id) { setSelectedAlert(prev => prev ? { ...prev, status } : prev); } };
+
+  const filteredAlerts = alerts.filter(a => { const matchStatus = alertFilter === 'all' || a.status === alertFilter;
+    const matchRisk = riskFilter === 'all' || a.riskLevel === riskFilter;
+    const matchSearch = !searchText || a.title.includes(searchText) || a.supplier.includes(searchText) || a.customer.includes(searchText);
+    return matchStatus && matchRisk && matchSearch; });
+
+  const unhandledCount = alerts.filter(a => a.status === '未处理').length;
+
+  // 根据 layout 中的 h 计算实际像素高度
+  const getItemPx = useCallback((id) => { const item = layout.find(l => l.i === id);
+    return item ? item.h * ROW_HEIGHT + (item.h - 1) * GRID_MARGIN[1] : 300; }, [layout]);
+
+  const gridWidth = Math.max((winWidth || 1280) - 40, 800);
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: '#0b1426', fontFamily: "'Noto Sans SC', sans-serif" }}>
+      {/* 顶部导航 */}
+      <header
+        className="flex-shrink-0 flex items-center justify-between px-6 py-3 z-30"
+        style={{ background: 'linear-gradient(90deg, #0d1a2e, #0f1d35)',
+          borderBottom: '1px solid rgba(59,130,246,0.2)',
+          boxShadow: '0 2px 16px rgba(0,0,0,0.4)' }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1e40af, #0891b2)' }}>
+            <Factory size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-slate-100 leading-tight tracking-tight">供应链控制塔</h1>
+            <p className="text-[10px] text-slate-500">Supply Chain Control Tower · 半导体制造</p>
+          </div>
+        </div>
+
+        <nav className="flex items-center gap-1">
+          {[
+            { id: 'dashboard', label: '控制看板', icon: LayoutDashboard },
+            { id: 'alerts', label: `预警中心${unhandledCount > 0 ? ` (${unhandledCount})` : ''}`, icon: Bell },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={activeTab === id
+                ? { background: 'rgba(59,130,246,0.2)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.35)' }
+                : { color: '#64748b', border: '1px solid transparent' } }
+            >
+              <Icon size={15} />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span>实时更新 {lastRefresh}</span>
+          </div>
+          <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors">
+            <RefreshCw size={14} />
+          </button>
+          <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors">
+            <Settings size={14} />
+          </button>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center">
+              <User size={12} className="text-white" />
+            </div>
+            <span className="text-xs text-slate-300">供应链管理员</span>
+            <ChevronDown size={12} className="text-slate-500" />
+          </div>
+        </div>
+      </header>
+
+      {/* 主内容区 */}
+      <main className="flex-1 overflow-auto">
+
+        {/* ==================== 控制看板 ==================== */}
+        {activeTab === 'dashboard' && (
+          <div className="p-5">
+            {/* ── KPI 卡片行：独立于GridLayout，固定105px，无留白 ── */}
+            <div style={{ marginBottom: 12 }}>
+              <KpiWidget>
+                <KpiCard title="采购到货及时率" value={kpiData.purchaseOnTimeRate} format="percent" trend="down" trendValue="-2.1%" icon={<Truck size={16} />} color="#3b82f6" delay={0} />
+                <KpiCard title="当月销售金额" value={kpiData.monthlySalesAmount} unit="万元" format="currency" trend="up" trendValue="+8.3%" icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} />
+                <KpiCard title="当月销售数量" value={kpiData.monthlySalesQty} unit="件" format="integer" trend="up" trendValue="+5.2%" icon={<Package size={16} />} color="#06b6d4" delay={200} />
+                <KpiCard title="活跃预警消息" value={kpiData.alertCount} unit="条" format="integer" trend="up" trendValue="+12条" icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} />
+                <KpiCard title="自动执行次数" value={kpiData.autoExecCount} unit="次" format="integer" trend="up" trendValue="+6次" icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} />
+              </KpiWidget>
+            </div>
+
+            <GridLayout
+              className="layout"
+              layout={layout}
+              gridConfig={{ cols: 24,
+                rowHeight: ROW_HEIGHT,
+                margin: GRID_MARGIN,
+                containerPadding: [0, 0] }}
+              dragConfig={{ handle: '.widget-drag-handle' }}
+              resizeConfig={{ handles: ['se', 's', 'e'] }}
+              width={gridWidth}
+              onLayoutChange={(newLayout) => setLayout([...newLayout])}
+            >
+              {/* ── 销售预测图表 ── */}
+              <div key="chart">
+                <Widget
+                  title="销售预测 vs 实际订单 vs 采购量"
+                  subtitle="近12个月 · 点击月份可下钻查看产品明细"
+                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} />}
+                >
+                  <SalesForecastChart height={getItemPx('chart') - 72} />
+                </Widget>
+              </div>
+
+              {/* ── 供应链地图 ── */}
+              <div key="map">
+                <Widget
+                  title="供应链地图"
+                  subtitle="实时节点状态"
+                  fullscreenNoPadding
+                  fullscreenContent={ <div
+                      style={{ flex: 1,
+                        minHeight: 0,
+                        backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663439243238/eAaE9FZQc3rqCtqMQX6MhY/china-map-bg-VBnkueTcA3KJzfiArGZZLF.webp)`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        position: 'relative' }}
+                    >
+                      <SupplyChainMap />
+                    </div> }
+                >
+                  {/* 地图容器：背景图 + SVG节点，无任何蒙层 */}
+                  <div
+                    className="w-full h-full"
+                    style={{ height: getItemPx('map') - 52,
+                      backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663439243238/eAaE9FZQc3rqCtqMQX6MhY/china-map-bg-VBnkueTcA3KJzfiArGZZLF.webp)`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      position: 'relative' }}
+                  >
+                    <SupplyChainMap />
+                  </div>
+                </Widget>
+              </div>
+
+              {/* ── 物流动态 ── */}
+              <div key="logistics">
+                <Widget title="物流动态" subtitle={`今日 · ${logisticsData.length} 条`}>
+                  <div className="overflow-hidden px-3" style={{ height: getItemPx('logistics') - 48 }}>
+                    <div className="sct-scroll-list h-full overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(59,130,246,0.3) transparent' }}>
+                      {[...logisticsData, ...logisticsData].map((item, idx) => (
+                        <div
+                          key={`${item.id}-${idx}`}
+                          className="flex items-start gap-3 py-2.5 border-b sct-table-row"
+                          style={{ borderColor: 'rgba(255,255,255,0.05)' }}
+                        >
+                          <div className="flex-shrink-0 mt-1">
+                            <div className="w-2 h-2 rounded-full" style={{ background: getLogisticsStatusColor(item.status) }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-slate-200 truncate font-medium">{item.material}</p>
+                              <span
+                                className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+                                style={{ background: `${getLogisticsStatusColor(item.status)}20`, color: getLogisticsStatusColor(item.status), border: `1px solid ${getLogisticsStatusColor(item.status)}30` }}
+                              >
+                                {item.status}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5 truncate">{item.from} → {item.to}</p>
+                            <p className="text-[10px] text-slate-600 mt-0.5">{item.carrier} · {item.time}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Widget>
+              </div>
+
+              {/* ── 需求预测表 ── */}
+              <div key="forecast">
+                <Widget
+                  title="需求预测（未来6个月）"
+                  subtitle="点击产品可下钻查看月度明细与采购建议"
+                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} />}
+                >
+                  <ForecastTable maxHeight={getItemPx('forecast') - 56} />
+                </Widget>
+              </div>
+
+              {/* ── 预警概览 ── */}
+              <div key="alertsnap">
+                <Widget
+                  title="最新预警"
+                  headerRight={ <button
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); setActiveTab('alerts'); }}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+                    >
+                      查看全部 <ChevronDown size={10} className="rotate-[-90deg]" />
+                    </button> }
+                >
+                  <div className="grid grid-cols-4 gap-3 px-4 pb-2 pt-1">
+                    {alerts.slice(0, 4).map(alert => (
+                      <div
+                        key={alert.id}
+                        className="p-3 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                        style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${getRiskTextColor(alert.riskLevel)}30` }}
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={() => { setSelectedAlert(alert); setActiveTab('alerts'); }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: `${getRiskTextColor(alert.riskLevel)}20`, color: getRiskTextColor(alert.riskLevel) }}>{alert.riskLevel}</span>
+                          <span className="text-[10px]" style={{ color: getStatusColor(alert.status) }}>{alert.status}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-snug line-clamp-2">{alert.title.replace(/【.*?】/, '')}</p>
+                        <p className="text-[10px] text-slate-500 mt-1.5">{alert.supplier}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Widget>
+              </div>
+            </GridLayout>
+          </div>
+        )}
+
+        {/* ==================== 预警中心 ==================== */}
+        {activeTab === 'alerts' && (
+          <div className="p-5 space-y-4">
+            {/* 统计卡片 */}
+            <div className="grid grid-cols-4 gap-4">
+              {[
+                { label: '全部预警', count: alerts.length, color: '#3b82f6', icon: Bell },
+                { label: '未处理', count: alerts.filter(a => a.status === '未处理').length, color: '#ef4444', icon: AlertTriangle },
+                { label: '处理中', count: alerts.filter(a => a.status === '处理中').length, color: '#f59e0b', icon: Clock },
+                { label: '已处理', count: alerts.filter(a => a.status === '已处理').length, color: '#22c55e', icon: CheckCircle },
+              ].map(({ label, count, color, icon: Icon }) => (
+                <div key={label} className="sct-card p-4 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}20` }}>
+                    <Icon size={18} style={{ color }} />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold font-mono" style={{ color }}>{count}</p>
+                    <p className="text-xs text-slate-400">{label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 筛选栏 */}
+            <div className="sct-card p-3 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-1 min-w-48 rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <Search size={13} className="text-slate-500 flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="搜索预警标题、供应商、客户..."
+                  value={searchText}
+                  onChange={e => setSearchText(e.target.value)}
+                  className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-600 outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <Filter size={12} className="text-slate-500 mr-1" />
+                {(['all', '未处理', '处理中', '已处理']).map(f => (
+                  <button key={f} onClick={() => setAlertFilter(f)} className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                    style={alertFilter === f ? { background: 'rgba(59,130,246,0.2)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.4)' } : { color: '#64748b', border: '1px solid transparent' }}>
+                    {f === 'all' ? '全部状态' : f}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                {(['all', '最高风险', '高风险', '中风险', '低风险']).map(f => (
+                  <button key={f} onClick={() => setRiskFilter(f)} className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                    style={riskFilter === f
+                      ? { background: f === 'all' ? 'rgba(59,130,246,0.2)' : `${getRiskTextColor(f)}20`, color: f === 'all' ? '#60a5fa' : getRiskTextColor(f), border: `1px solid ${f === 'all' ? 'rgba(59,130,246,0.4)' : getRiskTextColor(f) + '50'}` }
+                      : { color: '#64748b', border: '1px solid transparent' }}>
+                    {f === 'all' ? '全部风险' : f}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-slate-500 ml-auto">共 {filteredAlerts.length} 条</span>
+            </div>
+
+            {/* 预警列表 */}
+            <div className="sct-card overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(59,130,246,0.15)', background: 'rgba(59,130,246,0.05)' }}>
+                    {['风险等级', '预警标题', '规则编码', '供应商', '关联客户', '创建时间', '状态', '操作'].map(h => (
+                      <th key={h} className="text-left py-3 px-4 text-xs font-medium text-slate-400 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAlerts.map((alert, idx) => (
+                    <tr key={alert.id} className="sct-table-row"
+                      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
+                      onClick={() => setSelectedAlert(alert)}>
+                      <td className="py-3 px-4">
+                        <span className="text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap"
+                          style={{ background: `${getRiskTextColor(alert.riskLevel)}20`, color: getRiskTextColor(alert.riskLevel), border: `1px solid ${getRiskTextColor(alert.riskLevel)}40` }}>
+                          {alert.riskLevel}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="text-sm text-slate-200 font-medium" style={{ maxWidth: '280px' }}>{alert.title}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate" style={{ maxWidth: '280px' }}>{alert.content.slice(0, 60)}...</p>
+                      </td>
+                      <td className="py-3 px-4"><span className="text-xs font-mono text-slate-400">{alert.ruleCode}</span></td>
+                      <td className="py-3 px-4"><span className="text-xs text-slate-300">{alert.supplier}</span></td>
+                      <td className="py-3 px-4"><span className="text-xs text-slate-300">{alert.customer}</span></td>
+                      <td className="py-3 px-4"><span className="text-xs text-slate-400 whitespace-nowrap">{alert.createdAt}</span></td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs px-2 py-1 rounded-full whitespace-nowrap"
+                          style={{ background: `${getStatusColor(alert.status)}20`, color: getStatusColor(alert.status), border: `1px solid ${getStatusColor(alert.status)}40` }}>
+                          {alert.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <button className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                          style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}
+                          onClick={e => { e.stopPropagation(); setSelectedAlert(alert); }}>
+                          查看详情
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredAlerts.length === 0 && (
+                    <tr><td colSpan={8} className="py-12 text-center text-slate-500 text-sm">暂无符合条件的预警消息</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* 预警详情抽屉 */}
+      {selectedAlert && (
+        <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} onStatusChange={handleStatusChange} />
+      )}
+
+      {/* AI助手 */}
+      <AiAssistant />
+    </div>
+  ); }
