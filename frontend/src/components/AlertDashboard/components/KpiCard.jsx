@@ -21,12 +21,63 @@ function useCountUp(target, duration = 1500, delay = 0) { const [current, setCur
 
   return current; }
 
-export default function KpiCard({ title, value, unit, format = 'number', trend = 'flat', trendValue, icon, color = '#3b82f6', delay = 0 }) { const animatedValue = useCountUp(value, 1500, delay);
+export default function KpiCard({ title, value, unit, format = 'number', trend = 'flat', trendValue, icon, color = '#3b82f6', delay = 0, loading = false }) { 
+  const animatedValue = useCountUp(value || 0, 1500, delay);
 
-  const formatValue = (v) => { switch (format) { case 'percent': return v.toFixed(1) + '%';
+  // 加载状态：显示旋转动画
+  if (loading) {
+    return (
+      <div
+        style={{
+          background: '#0f1d35',
+          borderRadius: '8px',
+          border: '1px solid rgba(59,130,246,0.12)',
+          padding: '8px 12px',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+          height: '100%',
+          borderTop: `2px solid ${color}`,
+          boxShadow: '0 0 20px rgba(59,130,246,0.15), 0 4px 16px rgba(0,0,0,0.4)'
+        }}
+      >
+        {/* 顶部：标题 + 图标 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 500, color: '#94a3b8', letterSpacing: '0.05em', lineHeight: '1.2' }}>{title}</span>
+          <div
+            style={{ width: '24px', height: '24px', borderRadius: '6px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, background: `${color}20`, color }}
+          >
+            {icon}
+          </div>
+        </div>
+
+        {/* 加载中动画 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '40px' }}>
+          <div style={{
+            width: '24px',
+            height: '24px',
+            border: `2px solid ${color}30`,
+            borderTop: `2px solid ${color}`,
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+        </div>
+
+        {/* 趋势占位 */}
+        <div style={{ height: '17px' }} />
+      </div>
+    );
+  }
+
+  const formatValue = (v) => { 
+    if (v === undefined || v === null || isNaN(v)) return '--';
+    switch (format) { 
+      case 'percent': return v.toFixed(1) + '%';
       case 'currency': return v.toFixed(2);
       case 'integer': return Math.round(v).toString();
-      default: return v.toFixed(1); } };
+      default: return v.toFixed(1); 
+    } 
+  };
 
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
   const trendColor = trend === 'up' ? '#22c55e' : trend === 'down' ? '#ef4444' : '#94a3b8';
@@ -84,4 +135,5 @@ export default function KpiCard({ title, value, unit, format = 'number', trend =
         </div>
       )}
     </div>
-  ); }
+  ); 
+}

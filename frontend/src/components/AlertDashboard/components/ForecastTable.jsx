@@ -2,24 +2,28 @@
 // 支持：① 产品筛选 ② 下钻（点击产品查看月度明细+采购建议）
 import { useState, useMemo } from "react";
 import { ChevronLeft, Search, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { forecastData, forecastMonths } from "../lib/data";
+import { useForecastData } from "../hooks/useApiData";
 
-// 下钻明细：每个产品的月度明细（含采购建议）
-
-function getDrillDetails(row) { return forecastMonths.map((m, i) => { const demand = row.months[m] || 0;
-    const stock = Math.round(demand * (0.3 + Math.random() * 0.4));
-    const inTransit = Math.round(demand * (0.1 + Math.random() * 0.2));
-    const gap = demand - stock - inTransit;
-    let suggestion = '';
-    if (gap > 0) suggestion = `建议采购 ${gap.toLocaleString()} 件`;
-    else if (gap > -demand * 0.1) suggestion = '库存充足';
-    else suggestion = `库存过剩 ${Math.abs(gap).toLocaleString()} 件`;
-    return { month: m, demand, stock, inTransit, gap, suggestion }; }); }
-
-export default function ForecastTable({ maxHeight = 260 }) { const [searchText, setSearchText] = useState('');
+export default function ForecastTable({ maxHeight = 260 }) {
+  const { data: forecastResult, loading } = useForecastData();
+  const [searchText, setSearchText] = useState('');
   const [drillProduct, setDrillProduct] = useState(null);
   const [sortField, setSortField] = useState('');
   const [sortAsc, setSortAsc] = useState(true);
+
+  const forecastData = forecastResult?.data || [];
+  const forecastMonths = forecastResult?.months || [];
+
+  // 下钻明细：每个产品的月度明细（含采购建议）
+  const getDrillDetails = (row) => { return forecastMonths.map((m, i) => { const demand = row.months[m] || 0;
+      const stock = Math.round(demand * (0.3 + Math.random() * 0.4));
+      const inTransit = Math.round(demand * (0.1 + Math.random() * 0.2));
+      const gap = demand - stock - inTransit;
+      let suggestion = '';
+      if (gap > 0) suggestion = `建议采购 ${gap.toLocaleString()} 件`;
+      else if (gap > -demand * 0.1) suggestion = '库存充足';
+      else suggestion = `库存过剩 ${Math.abs(gap).toLocaleString()} 件`;
+      return { month: m, demand, stock, inTransit, gap, suggestion }; }); };
 
   const filteredData = useMemo(() => { let data = forecastData;
     if (searchText) { data = data.filter(d =>
@@ -28,7 +32,7 @@ export default function ForecastTable({ maxHeight = 260 }) { const [searchText, 
     if (sortField) { data = [...data].sort((a, b) => { const va = a.months[sortField] || 0;
         const vb = b.months[sortField] || 0;
         return sortAsc ? va - vb : vb - va; }); }
-    return data; }, [searchText, sortField, sortAsc]);
+    return data; }, [searchText, sortField, sortAsc, forecastData]);
 
   const handleSort = (field) => { if (sortField === field) setSortAsc(v => !v);
     else { setSortField(field); setSortAsc(false); } };

@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, agent, drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk, ontology_type_mcp
+from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, agent, \
+    drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk, \
+    alert_dashboard, ontology_type_mcp
 from app.config import settings
 from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
@@ -87,6 +89,7 @@ mcp = FastApiMCP(
     describe_all_responses=True,
     describe_full_response_schema=True)
 mcp.mount_http()
+app.include_router(alert_dashboard.router, prefix="/api/v1", tags=["Alert Dashboard"])
 
 # 根路径
 @app.get("/")
