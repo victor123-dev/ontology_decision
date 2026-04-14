@@ -54,7 +54,7 @@ const ChartStyle = ({ id, config }) => { const colorConfig = Object.entries(conf
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] { ${colorConfig
   .map(([key, itemConfig]) => { const color =
-      itemConfig.theme?.[theme typeof itemConfig.theme] ||
+      itemConfig.theme?.[theme] ||
       itemConfig.color;
     return color ? `  --color-${key}: ${color};` : null; })
   .join("\n")} }
@@ -75,7 +75,7 @@ function ChartTooltipContent({ active, payload, className, indicator = "dot", hi
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
     const value =
       !labelKey && typeof label === "string"
-        ? config[label typeof config]?.label || label
+        ? config[label]?.label || label
         : itemConfig?.label;
 
     if (labelFormatter) { return (
@@ -228,18 +228,18 @@ function getPayloadConfigFromPayload(
 
   if (
     key in payload &&
-    typeof payload[key typeof payload] === "string"
-  ) { configLabelKey = payload[key typeof payload]; } else if (
+    typeof payload[key] === "string"
+  ) { configLabelKey = payload[key]; } else if (
     payloadPayload &&
     key in payloadPayload &&
-    typeof payloadPayload[key typeof payloadPayload] === "string"
+    typeof payloadPayload[key] === "string"
   ) { configLabelKey = payloadPayload[
-      key typeof payloadPayload
+      key
     ]; }
 
   return configLabelKey in config
     ? config[configLabelKey]
-    : config[key typeof config]; }
+    : config[key]; }
 
 export { ChartContainer,
   ChartTooltip,

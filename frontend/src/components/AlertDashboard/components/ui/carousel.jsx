@@ -19,7 +19,7 @@ function Carousel({ orientation = "horizontal",
   plugins,
   className,
   children,
-  ...props } & CarouselProps) { const [carouselRef, api] = useEmblaCarousel({ ...opts,
+  ...props }) { const [carouselRef, api] = useEmblaCarousel({ ...opts,
       axis: orientation === "horizontal" ? "x" : "y" },
     plugins
   );
