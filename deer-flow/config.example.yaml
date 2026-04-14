@@ -55,6 +55,23 @@ models:
   #       thinking:
   #         type: disabled
 
+  - name: qwen3-max
+    display_name: Qwen3 Max
+    use: langchain_community.chat_models:ChatTongyi
+    model: qwen3-max
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key: $OPENAI_API_KEY # Use environment variable
+    streaming: true
+    supports_thinking: true
+    supports_vision: true
+    supports_reasoning_effort: false
+    when_thinking_enabled:
+      model_kwargs:
+        enable_thinking: true
+    when_thinking_disabled:
+      model_kwargs:
+        enable_thinking: false
+
   # Example: OpenAI model
   # - name: gpt-4
   #   display_name: GPT-4
