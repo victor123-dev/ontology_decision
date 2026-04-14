@@ -15,8 +15,8 @@ import SupplyChainMap from "./components/SupplyChainMap";
 import AlertDrawer from "./components/AlertDrawer";
 import SalesForecastChart from "./components/SalesForecastChart";
 import ForecastTable from "./components/ForecastTable";
-import { kpiData, logisticsData,
-  alertMessages, getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "./lib/data";
+import { useKpiData, useLogisticsData, useAlertMessages } from "./hooks/useApiData";
+import { getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "./lib/data";
 import { useWindowSize } from "./hooks/useWindowSize";
 
 // rowHeight=8px，cols=24
@@ -164,12 +164,17 @@ export default function AlertDashboard() {
   const [alertFilter, setAlertFilter] = useState('all');
   const [riskFilter, setRiskFilter] = useState('all');
   const [selectedAlert, setSelectedAlert] = useState(null);
-  const [alerts, setAlerts] = useState(alertMessages);
   const [searchText, setSearchText] = useState('');
   const [lastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [layout, setLayout] = useState(INITIAL_LAYOUT);
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(1280);
+
+  // 使用 API Hooks 获取数据
+  const { data: kpiData, loading: kpiLoading } = useKpiData();
+  const { data: logisticsData, loading: logisticsLoading } = useLogisticsData();
+  const { data: alertsData, loading: alertsLoading, refetch: refetchAlerts } = useAlertMessages();
+  const [alerts, setAlerts] = useState([]);
 
   // 监听容器宽度变化
   useEffect(() => {
@@ -182,6 +187,13 @@ export default function AlertDashboard() {
     window.addEventListener('resize', updateWidth);
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
+
+  // 当 API 数据加载完成后更新 alerts
+  useEffect(() => {
+    if (alertsData && alertsData.length > 0) {
+      setAlerts(alertsData);
+    }
+  }, [alertsData]);
 
   const handleStatusChange = (id, status) => {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
@@ -319,11 +331,11 @@ export default function AlertDashboard() {
             {/* ── KPI 卡片行：独立于GridLayout，宽度与GridLayout一致 ── */}
             <div style={{ padding: '16px 0 12px 0' }}>
               <KpiWidget>
-                <KpiCard title="采购到货及时率" value={kpiData.purchaseOnTimeRate} format="percent" trend="down" trendValue="-2.1%" icon={<Truck size={16} />} color="#3b82f6" delay={0} />
-                <KpiCard title="当月销售金额" value={kpiData.monthlySalesAmount} unit="万元" format="currency" trend="up" trendValue="+8.3%" icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} />
-                <KpiCard title="当月销售数量" value={kpiData.monthlySalesQty} unit="件" format="integer" trend="up" trendValue="+5.2%" icon={<Package size={16} />} color="#06b6d4" delay={200} />
-                <KpiCard title="活跃预警消息" value={kpiData.alertCount} unit="条" format="integer" trend="up" trendValue="+12条" icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} />
-                <KpiCard title="自动执行次数" value={kpiData.autoExecCount} unit="次" format="integer" trend="up" trendValue="+6次" icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} />
+                <KpiCard title="采购到货及时率" value={kpiData?.purchaseOnTimeRate?.val ?? 0} format="percent" trend={kpiData?.purchaseOnTimeRate?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.purchaseOnTimeRate?.trendVal > 0 ? '+' : ''}${kpiData?.purchaseOnTimeRate?.trendVal?.toFixed(1)}%`} icon={<Truck size={16} />} color="#3b82f6" delay={0} loading={kpiLoading} />
+                <KpiCard title="当月销售金额" value={kpiData?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={kpiData?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${kpiData?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} loading={kpiLoading} />
+                <KpiCard title="当月销售数量" value={kpiData?.monthlySalesQty?.val ?? 0} unit="件" format="integer" trend={kpiData?.monthlySalesQty?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.monthlySalesQty?.trendVal > 0 ? '+' : ''}${kpiData?.monthlySalesQty?.trendVal?.toFixed(1)}%`} icon={<Package size={16} />} color="#06b6d4" delay={200} loading={kpiLoading} />
+                <KpiCard title="活跃预警消息" value={kpiData?.alertCount?.val ?? 0} unit="条" format="integer" trend={kpiData?.alertCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${kpiData?.alertCount?.trendVal ?? 0}条`} icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={kpiLoading} />
+                <KpiCard title="自动执行次数" value={kpiData?.alertExecCount?.val ?? 0} unit="次" format="integer" trend={kpiData?.alertExecCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${kpiData?.alertExecCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} loading={kpiLoading} />
               </KpiWidget>
             </div>
 
@@ -383,7 +395,7 @@ export default function AlertDashboard() {
 
               {/* ── 物流动态 ── */}
               <div key="logistics">
-                <Widget title="物流动态" subtitle={`今日 · ${logisticsData.length} 条`}>
+                <Widget title="物流动态" subtitle={`今日 · ${logisticsData?.length ?? 0} 条`}>
                   <div style={{ overflow: 'hidden', padding: '0 16px',
                     height: getItemPx('logistics') - 48 }}>
                     <div style={{ height: '100%', overflowY: 'hidden' }}>

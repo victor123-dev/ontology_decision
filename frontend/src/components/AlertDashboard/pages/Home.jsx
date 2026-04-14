@@ -228,11 +228,11 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
             {/* ── KPI 卡片行：独立于GridLayout，固定105px，无留白 ── */}
             <div style={{ marginBottom: 12 }}>
               <KpiWidget>
-                <KpiCard title="采购到货及时率" value={kpiData.purchaseOnTimeRate} format="percent" trend="down" trendValue="-2.1%" icon={<Truck size={16} />} color="#3b82f6" delay={0} />
-                <KpiCard title="当月销售金额" value={kpiData.monthlySalesAmount} unit="万元" format="currency" trend="up" trendValue="+8.3%" icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} />
-                <KpiCard title="当月销售数量" value={kpiData.monthlySalesQty} unit="件" format="integer" trend="up" trendValue="+5.2%" icon={<Package size={16} />} color="#06b6d4" delay={200} />
-                <KpiCard title="活跃预警消息" value={kpiData.alertCount} unit="条" format="integer" trend="up" trendValue="+12条" icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} />
-                <KpiCard title="自动执行次数" value={kpiData.autoExecCount} unit="次" format="integer" trend="up" trendValue="+6次" icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} />
+                <KpiCard title="采购到货及时率" value={kpiData?.purchaseOnTimeRate?.val ?? 0} format="percent" trend={kpiData?.purchaseOnTimeRate?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.purchaseOnTimeRate?.trendVal > 0 ? '+' : ''}${kpiData?.purchaseOnTimeRate?.trendVal?.toFixed(1)}%`} icon={<Truck size={16} />} color="#3b82f6" delay={0} />
+                <KpiCard title="当月销售金额" value={kpiData?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={kpiData?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${kpiData?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} />
+                <KpiCard title="当月销售数量" value={kpiData?.monthlySalesQty?.val ?? 0} unit="件" format="integer" trend={kpiData?.monthlySalesQty?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.monthlySalesQty?.trendVal > 0 ? '+' : ''}${kpiData?.monthlySalesQty?.trendVal?.toFixed(1)}%`} icon={<Package size={16} />} color="#06b6d4" delay={200} />
+                <KpiCard title="活跃预警消息" value={kpiData?.alertCount?.val ?? 0} unit="条" format="integer" trend={kpiData?.alertCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${kpiData?.alertCount?.trendVal ?? 0}条`} icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} />
+                <KpiCard title="自动执行次数" value={kpiData?.alertExecCount?.val ?? 0} unit="次" format="integer" trend={kpiData?.alertExecCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${kpiData?.alertExecCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} />
               </KpiWidget>
             </div>
 

@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { ChevronLeft, X } from "lucide-react";
-import { chartData } from "../lib/data";
+import { useChartData } from "../hooks/useApiData";
 
 // 下钻明细数据（模拟按产品拆解）
 const drillDownData = { '2025-01': [
@@ -63,13 +63,18 @@ const DrillTooltip = ({ active, payload, label }) => { if (!active || !payload?.
     </div>
   ); };
 
-export default function SalesForecastChart({ height = 220 }) { const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder', 'purchaseQty']));
+export default function SalesForecastChart({ height = 220 }) {
+  const { data: chartData, loading } = useChartData();
+  const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder', 'purchaseQty']));
   const [timeRange, setTimeRange] = useState('all');
   const [drillMonth, setDrillMonth] = useState(null);
 
-  const filteredData = useMemo(() => { if (timeRange === 'H1') return chartData.filter(d => parseInt(d.month.slice(5)) <= 6);
+  const filteredData = useMemo(() => { 
+    if (!chartData || !Array.isArray(chartData)) return [];
+    if (timeRange === 'H1') return chartData.filter(d => parseInt(d.month.slice(5)) <= 6);
     if (timeRange === 'H2') return chartData.filter(d => parseInt(d.month.slice(5)) >= 7);
-    return chartData; }, [timeRange]);
+    return chartData; 
+  }, [timeRange, chartData]);
 
   const toggleSeries = (key) => { setActiveSeries(prev => { const next = new Set(prev);
       if (next.has(key)) { if (next.size > 1) next.delete(key); }
