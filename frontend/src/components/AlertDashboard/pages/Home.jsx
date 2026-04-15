@@ -14,8 +14,9 @@ import SupplyChainMap from "@/components/SupplyChainMap";
 import AlertDrawer from "@/components/AlertDrawer";
 import SalesForecastChart from "@/components/SalesForecastChart";
 import ForecastTable from "@/components/ForecastTable";
-import { kpiData, logisticsData,
+import { logisticsData,
   alertMessages, getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "@/lib/data";
+import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useAlertExecCount } from "../hooks/useApiData";
 import { useWindowSize } from "@/hooks/useWindowSize";
 
 // rowHeight=8px，cols=24
@@ -144,6 +145,12 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
   const [layout, setLayout] = useState(INITIAL_LAYOUT);
   const { width: winWidth } = useWindowSize();
 
+  // 使用独立 KPI hooks
+  const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading } = usePurchaseOnTimeRate();
+  const { data: monthlySales, loading: monthlySalesLoading } = useMonthlySales(); // 使用合并的销售数据API
+  const { data: alertCount, loading: alertCountLoading } = useAlertCount();
+  const { data: alertExecCount, loading: alertExecCountLoading } = useAlertExecCount();
+
   const handleStatusChange = (id, status) => { setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
     if (selectedAlert?.id === id) { setSelectedAlert(prev => prev ? { ...prev, status } : prev); } };
 
@@ -228,11 +235,11 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
             {/* ── KPI 卡片行：独立于GridLayout，固定105px，无留白 ── */}
             <div style={{ marginBottom: 12 }}>
               <KpiWidget>
-                <KpiCard title="采购到货及时率" value={kpiData?.purchaseOnTimeRate?.val ?? 0} format="percent" trend={kpiData?.purchaseOnTimeRate?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.purchaseOnTimeRate?.trendVal > 0 ? '+' : ''}${kpiData?.purchaseOnTimeRate?.trendVal?.toFixed(1)}%`} icon={<Truck size={16} />} color="#3b82f6" delay={0} />
-                <KpiCard title="当月销售金额" value={kpiData?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={kpiData?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${kpiData?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} />
-                <KpiCard title="当月销售数量" value={kpiData?.monthlySalesQty?.val ?? 0} unit="件" format="integer" trend={kpiData?.monthlySalesQty?.trendVal > 0 ? 'up' : 'down'} trendValue={`${kpiData?.monthlySalesQty?.trendVal > 0 ? '+' : ''}${kpiData?.monthlySalesQty?.trendVal?.toFixed(1)}%`} icon={<Package size={16} />} color="#06b6d4" delay={200} />
-                <KpiCard title="活跃预警消息" value={kpiData?.alertCount?.val ?? 0} unit="条" format="integer" trend={kpiData?.alertCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${kpiData?.alertCount?.trendVal ?? 0}条`} icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} />
-                <KpiCard title="自动执行次数" value={kpiData?.alertExecCount?.val ?? 0} unit="次" format="integer" trend={kpiData?.alertExecCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${kpiData?.alertExecCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} />
+                <KpiCard title="采购到货及时率" value={purchaseOnTimeRate?.val ?? 0} format="percent" trend={purchaseOnTimeRate?.trendVal > 0 ? 'up' : 'down'} trendValue={`${purchaseOnTimeRate?.trendVal > 0 ? '+' : ''}${purchaseOnTimeRate?.trendVal?.toFixed(1)}%`} icon={<Truck size={16} />} color="#3b82f6" delay={0} loading={purchaseOnTimeRateLoading} />
+                <KpiCard title="当月销售金额" value={monthlySales?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={monthlySales?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} loading={monthlySalesLoading} />
+                <KpiCard title="当月销售数量" value={monthlySales?.monthlySalesQty?.val ?? 0} unit="件" format="integer" trend={monthlySales?.monthlySalesQty?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesQty?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesQty?.trendVal?.toFixed(1)}%`} icon={<Package size={16} />} color="#06b6d4" delay={200} loading={monthlySalesLoading} />
+                <KpiCard title="活跃预警消息" value={alertCount?.val ?? 0} unit="条" format="integer" trend={alertCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${alertCount?.trendVal ?? 0}条`} icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={alertCountLoading} />
+                <KpiCard title="自动执行次数" value={alertExecCount?.val ?? 0} unit="次" format="integer" trend={alertExecCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${alertExecCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} loading={alertExecCountLoading} />
               </KpiWidget>
             </div>
 
