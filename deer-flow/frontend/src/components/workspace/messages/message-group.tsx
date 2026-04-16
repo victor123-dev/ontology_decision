@@ -1,6 +1,7 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import {
   BookOpenTextIcon,
+  ChevronDownIcon,
   ChevronUp,
   FolderOpenIcon,
   GlobeIcon,
@@ -23,6 +24,7 @@ import {
 } from "@/components/ai-elements/chain-of-thought";
 import { CodeBlock } from "@/components/ai-elements/code-block";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   extractReasoningContentFromMessage,
@@ -413,12 +415,74 @@ function ToolCall({
   } else {
     const description: string | undefined = (args as { description: string })
       ?.description;
+    
+    // Format args and result as JSON strings for display
+    const formattedArgs = args && Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : undefined;
+    const formattedResult = result 
+      ? typeof result === "string" 
+        ? result 
+        : JSON.stringify(result, null, 2)
+      : undefined;
+    
+    // Only show expandable content if there's actually data to show
+    const hasDetails = formattedArgs || formattedResult;
+    
+    if (!hasDetails) {
+      return (
+        <ChainOfThoughtStep
+          key={id}
+          label={description ?? t.toolCalls.useTool(name)}
+          icon={WrenchIcon}
+        ></ChainOfThoughtStep>
+      );
+    }
+    
     return (
-      <ChainOfThoughtStep
-        key={id}
-        label={description ?? t.toolCalls.useTool(name)}
-        icon={WrenchIcon}
-      ></ChainOfThoughtStep>
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <ChainOfThoughtStep
+            key={id}
+            label={
+              <div className="flex items-center justify-between">
+                <span>{description ?? t.toolCalls.useTool(name)}</span>
+                <ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </div>
+            }
+            icon={WrenchIcon}
+            className="cursor-pointer group"
+          ></ChainOfThoughtStep>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 space-y-2 bg-muted/30 rounded-lg p-3">
+            {formattedArgs && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Arguments
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedArgs}
+                />
+              </div>
+            )}
+            {formattedResult && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Result
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedResult}
+                />
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     );
   }
 }
