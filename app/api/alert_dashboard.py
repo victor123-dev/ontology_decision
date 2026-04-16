@@ -1,8 +1,15 @@
-from fastapi import APIRouter
-from typing import List, Dict, Any
+import traceback
+from datetime import datetime
+
+from dateutil.relativedelta import relativedelta
+from fastapi import APIRouter, HTTPException
+
+from app.services.dashbaord.kpi_service import KpiService
+from app.utils.logger import get_logger
+from app.vo.alertdashboard.kpi_vo import KpiMetricVO, MonthlySalesMetricsVO
 
 router = APIRouter()
-
+logger = get_logger(__name__)
 # ==================== KPI 数据 ====================
 MOCK_KPI_DATA = {
     "purchaseOnTimeRate": {"val": 87.3, "trendVal": -2.2},
@@ -294,18 +301,105 @@ MOCK_ALERT_MESSAGES = [
         }
     }
 ];
-
-
 # ==================== API 路由 ====================
 
-@router.get("/alert-dashboard/kpi")
-async def get_kpi_data():
-    """获取KPI数据"""
-    return MOCK_KPI_DATA
+@router.get("/alert-dashboard/kpi/purchase-on-time-rate")
+def get_purchase_on_time_rate():
+    """获取采购准时率KPI"""
+    try:
+        kpi_service = KpiService()
+        day = "2025-08-31"
+        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_month = current_date.strftime("%Y-%m")
+        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
+
+        current_rate = kpi_service.get_purchase_on_time_rate(current_month)
+        last_month_rate = kpi_service.get_purchase_on_time_rate(last_month)
+
+        return KpiMetricVO(
+            val=current_rate,
+            trendVal=((current_rate - last_month_rate) / last_month_rate * 100) if last_month_rate > 0 else 0
+        )
+    except Exception as e:
+        logger.error(f"获取采购准时率失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取采购准时率失败: {str(e)}")
+
+
+@router.get("/alert-dashboard/kpi/monthly-sales")
+def get_monthly_sales():
+    """获取月销售数据KPI（合并金额和数量）"""
+    try:
+        kpi_service = KpiService()
+        day = "2025-06-30"
+        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_month = current_date.strftime("%Y-%m")
+        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
+
+        # 使用合并后的查询方法，只查询一次数据库
+        current_data = kpi_service.get_monthly_sales_data(current_month)
+        last_month_data = kpi_service.get_monthly_sales_data(last_month)
+
+        return MonthlySalesMetricsVO(
+            monthlySalesAmount=KpiMetricVO(
+                val=current_data["amount"],
+                trendVal=((current_data["amount"] - last_month_data["amount"]) / last_month_data["amount"] * 100) if last_month_data["amount"] > 0 else 0
+            ),
+            monthlySalesQty=KpiMetricVO(
+                val=current_data["qty"],
+                trendVal=((current_data["qty"] - last_month_data["qty"]) / last_month_data["qty"] * 100) if last_month_data["qty"] > 0 else 0
+            )
+        )
+    except Exception as e:
+        logger.error(f"获取月销售数据失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取月销售数据失败: {str(e)}")
+
+@router.get("/alert-dashboard/kpi/alert-count")
+def get_alert_count():
+    """获取预警数量KPI"""
+    try:
+        kpi_service = KpiService()
+        day = "2025-08-31"
+        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_month = current_date.strftime("%Y-%m")
+        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
+
+        current_count = 0
+        last_month_count = 0
+
+        return KpiMetricVO(
+            val=current_count,
+            trendVal=current_count - last_month_count
+        )
+    except Exception as e:
+        logger.error(f"获取预警数量失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取预警数量失败: {str(e)}")
+
+
+@router.get("/alert-dashboard/kpi/alert-exec-count")
+def get_alert_exec_count():
+    """获取预警执行数量KPI"""
+    try:
+        kpi_service = KpiService()
+        day = "2025-08-31"
+        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_month = current_date.strftime("%Y-%m")
+        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
+
+        current_count = 0
+        last_month_count = 0
+
+        return KpiMetricVO(
+            val=current_count,
+            trendVal=current_count - last_month_count
+        )
+    except Exception as e:
+        logger.error(f"获取预警执行数量失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取预警执行数量失败: {str(e)}")
+
 
 
 @router.get("/alert-dashboard/chart")
-async def get_chart_data():
+def get_chart_data():
     """获取图表数据"""
     return MOCK_CHART_DATA
 

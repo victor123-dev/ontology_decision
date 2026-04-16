@@ -13,21 +13,27 @@ const api = axios.create({
 
 // 预警看板数据接口
 export const alertDashboardApi = {
-  // KPI 数据
+  // KPI 数据 - 单个指标API
+  getPurchaseOnTimeRate: () => api.get('/kpi/purchase-on-time-rate'),
+  getMonthlySales: () => api.get('/kpi/monthly-sales'),
+  getAlertCount: () => api.get('/kpi/alert-count'),
+  getAlertExecCount: () => api.get('/kpi/alert-exec-count'),
+
+  // KPI 数据 - 整体API（保留以兼容）
   getKpiData: () => api.get('/kpi'),
-  
+
   // 图表数据
   getChartData: () => api.get('/chart'),
-  
+
   // 物流动态数据
   getLogisticsData: () => api.get('/logistics'),
-  
+
   // 需求预测数据
   getForecastData: () => api.get('/forecast'),
-  
+
   // 地图数据
   getMapData: () => api.get('/map'),
-  
+
   // 预警消息数据
   getAlertMessages: () => api.get('/alerts'),
 };

@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 from app.models.data_source import DataSource
 from app.utils.db_client import DBClient, create_engine, sessionmaker
 from app.utils.logger import get_logger
-
+from app.utils.shared_utils import get_db_session
 logger = get_logger(__name__)
 
 
@@ -13,9 +13,9 @@ class DataSourceManager:
         self.lock = Lock()
     
     def _get_system_db_session(self):
-        engine = create_engine("sqlite:///data.db")
-        Session = sessionmaker(bind=engine)
-        return Session()
+        # engine = create_engine("sqlite:///data.db")
+        # Session = sessionmaker(bind=engine)
+        return get_db_session()
     
     def get_data_source_by_id(self, data_source_id: int) -> Optional[DataSource]:
         db = self._get_system_db_session()

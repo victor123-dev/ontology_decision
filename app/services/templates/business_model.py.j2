@@ -27,12 +27,15 @@ class BusinessModelManager:
         filter_conditions = []
         for field_expr, value in filters.items():
             if value is not None:
-                if field_expr.endswith('__in'):
-                    # 处理 IN 查询
-                    field_name = field_expr[:-4]  # 移除 '__in' 后缀
+                if '__' in field_expr:
+                    parts = field_expr.split('__')
+                    # 最后一部分是操作符
+                    operator = parts[-1]
+                    # 重新组合字段名（处理字段名中包含__的情况）
+                    field_name = '__'.join(parts[:-1])
                     filter_conditions.append({
                         "field": field_name,
-                        "operator": "in",
+                        "operator": operator,
                         "value": value
                     })
                 else:

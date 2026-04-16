@@ -334,7 +334,7 @@ class SDKGenerator:
         
         # 生成registry.py
         registry_template = self.template_env.get_template("action_registry.py.j2")
-        registry_content = registry_template.render(action_name=action_name, actions=actions)
+        registry_content = registry_template.render(actions=actions)
         with open(os.path.join(actions_dir, "registry.py"), "w", encoding="utf-8") as f:
             f.write(registry_content)
     
