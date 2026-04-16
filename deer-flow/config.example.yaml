@@ -57,7 +57,7 @@ models:
 
   - name: qwen3-max
     display_name: Qwen3 Max
-    use: langchain_community.chat_models:ChatTongyi
+    use: deerflow.models.tongyi_provider:PatchedChatTongyi
     model: qwen3-max
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api_key: $OPENAI_API_KEY # Use environment variable
@@ -68,9 +68,12 @@ models:
     when_thinking_enabled:
       model_kwargs:
         enable_thinking: true
+        incremental_output: true
     when_thinking_disabled:
       model_kwargs:
         enable_thinking: false
+        incremental_output: true
+
 
   # Example: OpenAI model
   # - name: gpt-4
