@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, agent, \
     drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk, \
-    alert_dashboard
+    alert_dashboard, excel_import_export
 from app.api.general_mcp import ontology_type_mcp, object_query_mcp, object_query_by_link_mcp
 from app.api import dynamic_mcp
 from app.config import settings
@@ -83,6 +83,7 @@ app.include_router(sdk.router, prefix="/api/v1", tags=["SDK"])
 app.include_router(ontology_type_mcp.router, prefix="/api/v1", tags=["ontology"])
 app.include_router(object_query_mcp.router, prefix="/api/v1", tags=["ontology"])
 app.include_router(object_query_by_link_mcp.router, prefix="/api/v1", tags=["ontology"])
+app.include_router(excel_import_export.router, prefix="/api/v1", tags=["Excel Import Export"])
 
 # 动态包含所有动态MCP路由器
 def include_all_mcp_routers():

@@ -153,10 +153,24 @@ npm install
 uvicorn app.main:app --host 0.0.0.0 --reload --port 8080 --reload-dir ./app/ --reload-dir ./tests/
 ```
 
+```bash
+cd deer-flow/backend
+uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 --reload --reload-include='*.yaml' --reload-include='.env'
+```
+```bash
+cd deer-flow/backend
+uv run langgraph dev --no-browser --allow-blocking
+```
+
 **前端服务** (可选)
 
 ```bash
 cd frontend
+npm run dev
+```
+
+```bash
+cd deer-flow/frontend
 npm run dev
 ```
 
