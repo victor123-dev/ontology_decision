@@ -44,7 +44,10 @@ def get_ontology_context(db: Session = Depends(get_db)):
         if business_models:
             markdown_parts.append("### 对象类型 (Objects)\n")
             for model in business_models:
-                markdown_parts.append(f"#### {model.id} ({model.name})")
+                markdown_parts.append(f"#### {model.id}")
+                markdown_parts.append(f"- **类型标识 (object_type_id)**: {model.id}")
+                markdown_parts.append(f"- **类型名称 (object_type_name)**: {model.name}")
+                markdown_parts.append(f"- **主键字段**: {model.primary_key_id or 'id'}")
                 if model.description:
                     markdown_parts.append(f"- **描述**: {model.description}")
                 else:
@@ -53,8 +56,9 @@ def get_ontology_context(db: Session = Depends(get_db)):
                 if model.fields:
                     markdown_parts.append("- **字段**:")
                     for field in sorted(model.fields, key=lambda x: x.field_id):
-                        field_desc = f"{field.name} ({field.data_type})" if field.description else field.name
-                        markdown_parts.append(f"  - {field.field_id}: {field_desc}")
+                        field_desc = f"{field.name} ({field.data_type})"
+                        is_primary = " [主键]" if field.field_id == (model.primary_key_id ) else ""
+                        markdown_parts.append(f"  - {field.field_id}: {field_desc}{is_primary}")
                 else:
                     markdown_parts.append("- **字段**: 无")
                 markdown_parts.append("")  # 空行分隔
@@ -65,6 +69,7 @@ def get_ontology_context(db: Session = Depends(get_db)):
             markdown_parts.append("### 关系类型 (Links)\n")
             for link in model_links:
                 markdown_parts.append(f"#### {link.id}")
+                markdown_parts.append(f"- **关系标识 (link_type_id)**: {link.id}")
                 if link.description:
                     markdown_parts.append(f"- **描述**: {link.description}")
                 else:
@@ -77,7 +82,8 @@ def get_ontology_context(db: Session = Depends(get_db)):
                 source_name = source_model.name if source_model else link.source_model
                 target_name = target_model.name if target_model else link.target_model
                 
-                markdown_parts.append(f"- **源模型**: {link.source_model} ({source_name}) → **目标模型**: {link.target_model} ({target_name})")
+                markdown_parts.append(f"- **源模型 (source)**: {link.source_model} ({source_name})")
+                markdown_parts.append(f"- **目标模型 (target)**: {link.target_model} ({target_name})")
                 
                 # 基数映射
                 cardinality_map = {
@@ -88,6 +94,11 @@ def get_ontology_context(db: Session = Depends(get_db)):
                 }
                 cardinality_desc = cardinality_map.get(link.cardinality, link.cardinality)
                 markdown_parts.append(f"- **基数**: {cardinality_desc}")
+                
+                # 添加查询示例
+                markdown_parts.append("- **查询示例**:")
+                markdown_parts.append(f"  - 正向查询: `query_objects_by_link(object_type_id: \"{link.source_model}\", object_ids: [...], link_type_id: \"{link.id}\")`")
+                markdown_parts.append(f"  - 反向查询: `query_objects_by_link(object_type_id: \"{link.target_model}\", object_ids: [...], link_type_id: \"{link.id}\")`")
                 markdown_parts.append("")  # 空行分隔
         
         # 获取所有行动
@@ -97,7 +108,9 @@ def get_ontology_context(db: Session = Depends(get_db)):
             markdown_parts.append("### 动作类型 (Actions)\n")
             for action in actions:
                 action_name = action.get("name", "Unnamed Action")
-                markdown_parts.append(f"#### {action['id']} ({action_name})")
+                markdown_parts.append(f"#### {action['id']}")
+                markdown_parts.append(f"- **动作标识 (action_type_id)**: {action['id']}")
+                markdown_parts.append(f"- **动作名称**: {action_name}")
                 
                 if action.get("description"):
                     markdown_parts.append(f"- **描述**: {action['description']}")
@@ -213,9 +226,16 @@ def search_ontology(
     operation_id="view_object_type",
     summary="查看对象类型详情",
     description="""
-    查看本体中现有对象类型的详细信息，包括其属性、关联链接类型和动作类型。
-    返回完整的对象元数据，包括字段定义、相关的关系和可用的操作。
-    """,
+查看对象类型的详细信息，包括字段定义、主键字段、关联关系等。
+
+**返回内容**:
+- object_type_id: 对象类型的唯一标识符
+- object_type_name: 对象类型的可读名称
+- primary_key_id: 主键字段名
+- fields: 所有字段定义
+- links: 关联的关系类型
+- actions: 可执行的动作类型
+""",
     response_description="对象类型的完整详细信息"
 )
 def view_object_type(
@@ -251,8 +271,8 @@ def view_object_type(
         links_info = []
         for link in all_links:
             links_info.append({
-                "id": link.id,
-                "name": link.name,
+                "link_type_id": link.id,
+                "link_type_name": link.name,
                 "description": link.description or "",
                 "direction": "source" if link.source_model == object_type_id else "target",
                 "cardinality": link.cardinality,
@@ -266,8 +286,8 @@ def view_object_type(
         actions_info = []
         for action in object_actions:
             actions_info.append({
-                "id": action["id"],
-                "name": action.get("name", "Unnamed Action"),
+                "action_type_id": action["action_id"],
+                "action_type_name": action.get("name", "Unnamed Action"),
                 "description": action.get("description", ""),
                 "action_type": action.get("action_type"),
                 "operation": action.get("operation"),
@@ -276,8 +296,8 @@ def view_object_type(
         
         return {
             "object_type": {
-                "id": business_model.id,
-                "name": business_model.name,
+                "object_type_id": business_model.id,
+                "object_type_name": business_model.name,
                 "description": business_model.description or "",
                 "primary_key_id": business_model.primary_key_id,
                 # "api_name": business_model.api_name 模型的api_name好像没太大用对于MCP服务来说，所以这里不返回
@@ -291,8 +311,8 @@ def view_object_type(
                 }
                 for field in business_model.fields
             ] if business_model.fields else [],
-            "associated_links": links_info,
-            "associated_actions": actions_info
+            "links": links_info,
+            "actions": actions_info
         }
     except HTTPException:
         raise
@@ -305,8 +325,7 @@ def view_object_type(
     summary="查看链接类型详情",
     description="""
     查看本体中已有的链接类型的详细信息。
-    返回完整的链接元数据，包括源模型、目标模型、基数类型、
-    以及多对多关系的中间表信息（如果适用）。
+    返回完整的链接元数据，包括源模型、目标模型、基数类型。
     """,
     response_description="链接类型的完整详细信息"
 )
@@ -334,17 +353,17 @@ def view_link_type(
         
         result = {
             "link_type": {
-                "id": link.id,
-                "name": link.name,
+                "link_type_id": link.id,
+                "link_type_name": link.name,
                 "description": link.description or "",
                 "cardinality": link.cardinality,
-                "source_model": {
-                    "id": link.source_model,
-                    "name": source_model.name if source_model else None
+                "source": {
+                    "object_type_id": link.source_model,
+                    "object_type_name": source_model.name if source_model else None
                 },
-                "target_model": {
-                    "id": link.target_model,
-                    "name": target_model.name if target_model else None
+                "target": {
+                    "object_type_id": link.target_model,
+                    "object_type_name": target_model.name if target_model else None
                 },
                 "source_key": link.source_key,
                 "target_key": link.target_key
@@ -399,13 +418,13 @@ def view_action_type(
         
         return {
             "action_type": {
-                "id": action["id"],
-                "name": action.get("name"),
+                "action_type_id": action["id"],
+                "action_type_name": action.get("name"),
                 "description": action.get("description"),
                 "action_type": action.get("action_type"),  # object, link, function
                 "operation": action.get("operation"),      # create, update, delete, custom
-                "target_model_id": action.get("target_model_id"),
-                "target_link_id": action.get("target_link_id"),
+                "target_object_type_id": action.get("target_model_id"),
+                "target_link_type_id": action.get("target_link_id"),
                 "parameters": action.get("parameters", []),
                 "submission_criteria": action.get("submission_criteria", []),
                 "function_code": action.get("function_code")

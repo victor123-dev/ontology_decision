@@ -44,8 +44,8 @@ class AggregateCondition(BaseModel):
 
 
 class QueryObjectsRequest(BaseModel):
-    object_type_name: str = Field(..., description="要查询的对象类型名称，例如：'test_Product'")
-    filter: Dict[str, FilterCondition] = Field(default={}, description="过滤条件，用于筛选符合条件的对象实例。键必须为对象的属性名。")
+    object_type_id: str = Field(..., description="对象类型的唯一标识符（如 'product'）")
+    filter: Dict[str, FilterCondition] = Field(default={}, description="过滤条件，用于筛选符合条件的对象实例。键必须为对象的属性名（如 'category'）")
     sort: Dict[str, Literal["asc", "desc"]] = Field(default={}, description="排序条件，用于对查询结果进行排序")
     limit: Optional[int] = Field(None, ge=1, le=1000, description="返回结果的最大数量，默认10", example=10)
     offset: Optional[int] = Field(None, ge=0, description="跳过的记录数量，用于分页，默认为0", example=0)
@@ -143,7 +143,10 @@ def _build_sql_condition(field: str, operator: str, value) -> str:
     operation_id="query_objects",
     summary="查询指定类型的对象实例",
     description="""
-    查询本体中指定类型的对象实例，支持过滤、聚合、排序、分页和分组操作。
+    查询指定类型的对象实例，支持过滤、聚合、排序、分页和分组操作。
+
+    **重要提示**:
+    - 当查询关联对象时，优先使用 query_objects_by_link 工具
     
     **功能特性：**
     - **过滤**: 支持多种操作符 (eq, ne, gt, lt, gte, lte, contains, in, not_in)
@@ -158,17 +161,17 @@ def _build_sql_condition(field: str, operator: str, value) -> str:
     1. **基础查询**: 查询所有产品对象实例
     ```json
     {
-        "object_type_name": "test_Product"
+        "object_type_id": "product"
     }
     ```
     
     2. **带过滤条件的查询**: 查询所有电子产品类别且价格大于1000的产品
     ```json
     {
-        "object_type_name": "test_Product",
+        "object_type_id": "product",
         "filter": {
-            "test_category": {"op": "eq", "value": "电子产品"},
-            "test_price": {"op": "gt", "value": 1000}
+            "category": {"op": "eq", "value": "电子产品"},
+            "price": {"op": "gt", "value": 1000}
         }
     }
     ```
@@ -176,8 +179,8 @@ def _build_sql_condition(field: str, operator: str, value) -> str:
     3. **带排序和分页的查询**: 查询产品并按价格降序排序，只返回前10条结果
     ```json
     {
-        "object_type_name": "test_Product",
-        "sort": {"test_price": "desc"},
+        "object_type_id": "product",
+        "sort": {"price": "desc"},
         "limit": 10
     }
     ```
@@ -185,7 +188,7 @@ def _build_sql_condition(field: str, operator: str, value) -> str:
     4. **带OFFSET的分页查询**: 查询产品列表的第2页（每页10条）
     ```json
     {
-        "object_type_name": "test_Product",
+        "object_type_id": "product",
         "limit": 10,
         "offset": 10
     }
@@ -194,10 +197,10 @@ def _build_sql_condition(field: str, operator: str, value) -> str:
     5. **聚合查询**: 计算所有产品的总销售额和平均库存
     ```json
     {
-        "object_type_name": "test_Product",
+        "object_type_id": "product",
         "aggregate": {
-            "test_price": {"type": "sum", "alias": "total_sales"},
-            "test_stock": {"type": "avg"}
+            "price": {"type": "sum", "alias": "total_sales"},
+            "stock": {"type": "avg"}
         }
     }
     ```
@@ -205,12 +208,12 @@ def _build_sql_condition(field: str, operator: str, value) -> str:
     6. **分组聚合查询**: 按产品类别分组，计算每个类别的总销售额，并按总销售额降序排序
     ```json
     {
-        "object_type_name": "test_Product",
-        "filter": {"test_category": {"op": "contains", "value": "电子"}},
+        "object_type_id": "product",
+        "filter": {"category": {"op": "contains", "value": "电子"}},
         "aggregate": {
-            "test_price": {"type": "sum", "alias": "total_sales"}
+            "price": {"type": "sum", "alias": "total_sales"}
         },
-        "group": ["test_category"],
+        "group": ["category"],
         "sort": {"total_sales": "desc"}
     }
     ```
@@ -218,11 +221,11 @@ def _build_sql_condition(field: str, operator: str, value) -> str:
     7. **带HAVING条件的聚合查询**: 按产品类别分组，计算总销售额，并筛选出总销售额大于3000的类别
     ```json
     {
-        "object_type_name": "test_Product",
+        "object_type_id": "product",
         "aggregate": {
-            "test_price": {"type": "sum", "alias": "total_sales"}
+            "price": {"type": "sum", "alias": "total_sales"}
         },
-        "group": ["test_category"],
+        "group": ["category"],
         "having": {"total_sales": {"op": "gt", "value": 3000}}
     }
     ```
@@ -251,12 +254,12 @@ def query_objects(
         # 查找业务模型并预加载字段
         business_model = db.query(BusinessModel).options(
             joinedload(BusinessModel.fields)
-        ).filter(BusinessModel.id == request.object_type_name).first()
+        ).filter(BusinessModel.id == request.object_type_id).first()
         if not business_model:
-            raise HTTPException(status_code=404, detail=f"Object type '{request.object_type_name}' not found")
+            raise HTTPException(status_code=404, detail=f"Object type '{request.object_type_id}' not found")
         
         if not business_model.data_source_id:
-            raise HTTPException(status_code=400, detail=f"Object type '{request.object_type_name}' has no data source configured")
+            raise HTTPException(status_code=400, detail=f"Object type '{request.object_type_id}' has no data source configured")
         
         # 获取有效字段名集合用于验证
         valid_fields = _get_valid_field_names(business_model)
@@ -325,7 +328,7 @@ def query_objects(
                 else:
                     limit_clause = f" LIMIT {actual_limit}"
             
-            query = f"SELECT * FROM {request.object_type_name}{where_clause}{order_clause}{limit_clause}"
+            query = f"SELECT * FROM {request.object_type_id}{where_clause}{order_clause}{limit_clause}"
             
             try:
                 data = data_source_manager.execute_query(
@@ -377,7 +380,7 @@ def query_objects(
                 select_fields = aggregate_fields
             
             # 构建基础聚合查询
-            base_query = f"SELECT {', '.join(select_fields)} FROM {request.object_type_name}{where_clause}{group_clause}"
+            base_query = f"SELECT {', '.join(select_fields)} FROM {request.object_type_id}{where_clause}{group_clause}"
             
             # 处理 HAVING 条件
             if request.having:

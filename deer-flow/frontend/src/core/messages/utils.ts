@@ -215,7 +215,7 @@ export function extractReasoningContentFromMessage(message: Message) {
     }
   }
   if (typeof message.content === "string") {
-    return splitInlineReasoning(message.content).reasoning;
+    return splitInlineReasoning(message.content).reasoning || message.content;
   }
   return null;
 }

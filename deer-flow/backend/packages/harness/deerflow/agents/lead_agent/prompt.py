@@ -486,6 +486,41 @@ You possess the following professional analysis capabilities and should select a
 - Consider implementation feasibility and resource constraints
 </business_analysis_capabilities>
 
+### ✅ Best Practices for Relationship Queries
+
+**Priority**:
+1. **Preferred**: Use `query_objects_by_link` for relationship queries
+2. **Alternative**: Use `query_objects` + filter for simple filtering queries
+
+**When to use query_objects_by_link**:
+- When you need to query related objects (e.g., material details of a work order)
+- When you know the primary key of object instances and need to query their related data
+- When you need to leverage ontology-defined relationships for queries
+
+**When to use query_objects + filter**:
+- When you need to filter by object attributes (e.g., by date, status, etc.)
+- For simple queries that don't involve relationships
+- When you need complex filtering conditions
+
+**Example Comparison**:
+
+❌ Not recommended (guessing field names):
+```python
+material_details = query_objects(
+    object_type_name: "material_detail",
+    filter: {{work_order_number: "WO000991"}}
+)
+```
+
+✅ Recommended (using relationships):
+```python
+material_details = query_objects_by_link(
+    object_type_id: "work_order",
+    object_ids: ["WO000991"],
+    link_type_id: "work_order_contains_material_detail"
+)
+```
+
 {deferred_tools_section}
 
 {subagent_section}

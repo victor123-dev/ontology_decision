@@ -18,9 +18,9 @@ router = APIRouter()
 
 
 class QueryObjectsByLinkRequest(BaseModel):
-    object_type_id: str = Field(..., description="源对象类型ID，例如：'work_order'")
-    object_ids: List[str] = Field(..., description="源对象的主键ID列表")
-    link_type_id: str = Field(..., description="关系类型ID，例如：'work_order_to_product'")
+    object_type_id: str = Field(..., description="对象类型的唯一标识符（如 'work_order'）")
+    object_ids: List[str] = Field(..., description="对象实例的主键字段值列表（如 ['WO000991']）")
+    link_type_id: str = Field(..., description="关系类型的唯一标识符（如 'work_order_contains_material_detail'）")
     limit: Optional[int] = Field(None, ge=1, le=1000, description="返回结果的最大数量，默认100", example=100)
     offset: Optional[int] = Field(None, ge=0, description="跳过的记录数量，用于分页，默认为0", example=0)
 
@@ -52,51 +52,45 @@ def _build_in_condition(field: str, values: List[str]) -> str:
     operation_id="query_objects_by_link",
     summary="通过关系查询关联的对象实例",
     description="""
-    通过指定的关系查询与给定对象列表关联的对象实例。
-    
-    **功能特性：**
-    - **双向查询**: 自动识别object_type_id在关系中是作为source还是target
-    - **多关系类型支持**: 支持一对一、一对多、多对一、多对多关系
-    - **多对多中间表**: 自动处理多对多关系的中间表查询
-    - **批量查询**: 支持同时查询多个源对象的关联对象
-    - **分页支持**: 通过limit和offset参数支持分页
-    
-    **使用示例：**
-    
-    1. **查询预警规则关联的预警消息**: 
-    ```json
-    {
-        "object_type_id": "alert_rule",
-        "object_ids": ["RULE00001", "RULE000002"],
-        "link_type_id": "alert_rule_generates_alert_message"
-    }
-    ```
-    
-    2. **查询预警消息关联的预警规则**（反向查询）:
-    ```json
-    {
-        "object_type_id": "alert_message",
-        "object_ids": ["MSG000001", "MSG000002"],
-        "link_type_id": "alert_rule_generates_alert_message"
-    }
-    ```
-    
-    3. **带分页的查询**:
-    ```json
-    {
-        "object_type_id": "alert_rule",
-        "object_ids": ["RULE00001", "RULE000002"],
-        "link_type_id": "alert_rule_generates_alert_message",
-        "limit": 50,
-        "offset": 0
-    }
-    ```
-    
-    **注意事项：**
-    - object_type_id可以是关系的source_model或target_model
-    - 对于多对多关系，系统会自动通过中间表进行查询
-    - 返回的结果是关联对象的完整数据列表
-    """,
+通过关系查询关联的对象实例。
+
+**核心概念**:
+- object_type_id: 对象类型的唯一标识符（如 "work_order"）
+- object_ids: 对象实例的主键字段值列表（如 ["WO000991", "WO000992"]）
+- link_type_id: 关系类型的唯一标识符（如 "work_order_contains_material_detail"）
+
+**查询方向**:
+工具自动识别 object_type_id 在关系中是作为 source 还是 target：
+- 如果 object_type_id = source_model，查询 target_model 的实例
+- 如果 object_type_id = target_model，查询 source_model 的实例
+
+**示例**:
+1. 查询工单的材料明细（正向）:
+   query_objects_by_link(
+       object_type_id: "work_order",
+       object_ids: ["WO000991"],
+       link_type_id: "work_order_contains_material_detail"
+   )
+   返回: material_detail 实例列表
+
+2. 查询材料明细所属的工单（反向）:
+   query_objects_by_link(
+       object_type_id: "material_detail",
+       object_ids: ["MD000001"],
+       link_type_id: "work_order_contains_material_detail"
+   )
+   返回: work_order 实例列表
+
+3. 带分页的查询材料明细所属的工单（反向）:
+   query_objects_by_link(
+       object_type_id: "material_detail",
+       object_ids: ["MD000001"],
+       link_type_id: "work_order_contains_material_detail",
+       "limit": 50,
+       "offset": 0
+   )
+   返回: work_order 实例分页列表
+""",
     response_description="关联对象实例列表"
 )
 def query_objects_by_link(
