@@ -1,0 +1,184 @@
+@router.post(
+    "/{{ query_direction.query_name }}",
+    response_model=List[{{ target_model.api_name }}Response],
+    operation_id="{{ query_direction.query_name }}",
+    summary="通过{{ query_direction.link_name }}关系查询{{ target_model.name }}",
+    description="""
+通过{{ query_direction.link_name }}关系，从{{ source_model.name }}查询关联的{{ target_model.name }}对象。
+
+**关系信息:**
+- 源对象: {{ source_model.name }} ({{ source_model.id }})
+- 目标对象: {{ target_model.name }} ({{ target_model.id }})
+- 关系类型: {{ query_direction.cardinality }}
+{% if query_direction.cardinality == "many-to-many" and query_direction.intermediate_model %}
+- 中间表: {{ query_direction.intermediate_model }}
+{% endif %}
+
+**使用示例:**
+```json
+{
+    "{{ query_direction.param_field_name }}": ["{{ query_direction.param_field_name }}_example"],
+    "limit": 100,
+    "offset": 0
+}
+```
+""",
+    response_description="{{ target_model.name }}对象列表"
+)
+def {{ query_direction.query_name }}(
+    {{ query_direction.param_field_name }}: List[str] = Body(..., description="{{ query_direction.param_description }}", example=["{{ query_direction.param_field_name }}_example"]),
+    limit: Optional[int] = Body(None, ge=1, le=1000, description="返回结果的最大数量，默认100", example=100),
+    offset: Optional[int] = Body(None, ge=0, description="跳过的记录数量，用于分页，默认为0", example=0),
+    db: Session = Depends(get_db)
+):
+    """
+    通过{{ query_direction.link_name }}关系，从{{ source_model.name }}查询关联的{{ target_model.name }}
+    
+    Args:
+        {{ query_direction.param_field_name }}: {{ query_direction.param_description }}
+        limit: 返回结果的最大数量
+        offset: 跳过的记录数量（分页）
+        db: Database session
+        
+    Returns:
+        {{ target_model.name }}对象列表
+    """
+    try:
+        if not {{ query_direction.param_field_name }}:
+            raise HTTPException(status_code=400, detail="{{ query_direction.param_field_name }} cannot be empty")
+        
+        # 验证源对象类型存在且有数据源
+        source_business_model = db.query(BusinessModel).filter(
+            BusinessModel.id == "{{ source_model.id }}"
+        ).first()
+        if not source_business_model:
+            raise HTTPException(status_code=404, detail="源对象类型 '{{ source_model.id }}' 未找到")
+        
+        if not source_business_model.data_source_id:
+            raise HTTPException(status_code=400, detail="源对象类型 '{{ source_model.id }}' 未配置数据源")
+        
+        # 获取目标对象类型信息
+        target_business_model = db.query(BusinessModel).filter(
+            BusinessModel.id == "{{ target_model.id }}"
+        ).first()
+        if not target_business_model:
+            raise HTTPException(status_code=404, detail="目标对象类型 '{{ target_model.id }}' 未找到")
+        
+        if not target_business_model.data_source_id:
+            raise HTTPException(status_code=400, detail="目标对象类型 '{{ target_model.id }}' 未配置数据源")
+        
+        # 处理多对多关系
+        {% if query_direction.cardinality == "many-to-many" and query_direction.intermediate_model %}
+        # 多对多关系需要通过中间表查询
+        intermediate_model = db.query(BusinessModel).filter(
+            BusinessModel.id == "{{ query_direction.intermediate_model }}"
+        ).first()
+        
+        if not intermediate_model:
+            raise HTTPException(status_code=404, detail="中间表模型 '{{ query_direction.intermediate_model }}' 未找到")
+        
+        if not intermediate_model.data_source_id:
+            raise HTTPException(status_code=400, detail="中间表模型 '{{ query_direction.intermediate_model }}' 未配置数据源")
+        
+        # 查询中间表
+        {% if query_direction.direction == "forward" %}
+        intermediate_condition = _build_in_condition("{{ query_direction.intermediate_source_key }}", {{ query_direction.param_field_name }})
+        {% else %}
+        intermediate_condition = _build_in_condition("{{ query_direction.intermediate_target_key }}", {{ query_direction.param_field_name }})
+        {% endif %}
+        intermediate_query = f"SELECT * FROM {{ query_direction.intermediate_model }} WHERE {intermediate_condition}"
+        
+        try:
+            intermediate_data = data_source_manager.execute_query(
+                data_source_id=intermediate_model.data_source_id,
+                query=intermediate_query,
+                max_rows=10000
+            )
+            
+            if not intermediate_data:
+                return []
+            
+            # 提取目标对象ID
+            {% if query_direction.direction == "forward" %}
+            target_ids = [str(record.get("{{ query_direction.intermediate_target_key }}")) for record in intermediate_data 
+                         if record.get("{{ query_direction.intermediate_target_key }}") is not None]
+            {% else %}
+            target_ids = [str(record.get("{{ query_direction.intermediate_source_key }}")) for record in intermediate_data 
+                         if record.get("{{ query_direction.intermediate_source_key }}") is not None]
+            {% endif %}
+            
+            if not target_ids:
+                return []
+            
+            # 去重
+            target_ids = list(set(target_ids))
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"查询中间表失败: {str(e)}")
+        
+        {% else %}
+        # 非多对多关系
+        # 检查映射字段是否就是主键
+        source_primary_key_field = source_business_model.primary_key_id or "id"
+        if "{{ query_direction.source_key }}" == source_primary_key_field:
+            # 映射字段就是主键，可以直接使用传入的object_ids
+            target_ids = {{ query_direction.param_field_name }}
+        else:
+            # 映射字段不是主键，需要先查询源对象获取映射字段值
+            source_condition = _build_in_condition(source_primary_key_field, {{ query_direction.param_field_name }})
+            source_query = f"SELECT * FROM {{ source_model.id }} WHERE {source_condition}"
+            
+            try:
+                source_data = data_source_manager.execute_query(
+                    data_source_id=source_business_model.data_source_id,
+                    query=source_query,
+                    max_rows=1000
+                )
+                
+                if not source_data:
+                    return []
+                
+                # 提取映射字段值
+                mapping_values = [str(record.get("{{ query_direction.source_key }}")) for record in source_data if record.get("{{ query_direction.source_key }}") is not None]
+                
+                if not mapping_values:
+                    return []
+                
+                # 去重
+                target_ids = list(set(mapping_values))
+                
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"查询源对象失败: {str(e)}")
+        {% endif %}
+        
+        # 查询目标对象
+        target_condition = _build_in_condition("{{ query_direction.target_key }}", target_ids)
+        target_query = f"SELECT * FROM {{ target_model.id }} WHERE {target_condition}"
+        
+        # 添加分页
+        actual_limit = limit if limit is not None else 100
+        actual_offset = offset if offset is not None else 0
+        
+        if actual_limit > 0:
+            if actual_offset > 0:
+                target_query += f" LIMIT {actual_limit} OFFSET {actual_offset}"
+            else:
+                target_query += f" LIMIT {actual_limit}"
+        
+        try:
+            target_data = data_source_manager.execute_query(
+                data_source_id=target_business_model.data_source_id,
+                query=target_query,
+                max_rows=1000
+            )
+            
+            # 转换为响应模型
+            return [{{ target_model.api_name }}Response(**record) for record in target_data]
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"查询目标对象失败: {str(e)}")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"通过关系查询对象失败: {str(e)}")

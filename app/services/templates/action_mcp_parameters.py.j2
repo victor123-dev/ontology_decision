@@ -1,0 +1,25 @@
+{% macro python_type_for_param(param) -%}
+{%- if param.type == "string" or param.type == "text" -%}
+str
+{%- elif param.type == "integer" -%}
+int
+{%- elif param.type == "float" or param.type == "decimal" -%}
+float
+{%- elif param.type == "boolean" -%}
+bool
+{%- elif param.type == "date" or param.type == "datetime" -%}
+str
+{%- elif param.type == "object" -%}
+Dict[str, Any]
+{%- elif param.type == "array" -%}
+List[Any]
+{%- else -%}
+Any
+{%- endif -%}
+{%- endmacro %}
+
+class {{ action.api_name }}Parameters(BaseModel):
+    """{{ action.description or action.name }} Parameters"""
+    {% for param in action.parameters %}
+    {{ param.name }}: {% if param.required %}{{ python_type_for_param(param) }}{% else %}Optional[{{ python_type_for_param(param) }}]{% endif %} = Field({% if not param.required %}default=None, {% elif param.default_value is not none %}default={{ param.default_value | tojson }}, {% endif %}description="{{ param.description or '' }}")
+    {% endfor %}

@@ -73,3 +73,8 @@ frontend/build/
 *.crt
 *.pfx
 *.p12
+
+# 忽略动态生成的MCP文件
+app/api/dynamic_mcp/action_execute_mcp.py
+app/api/dynamic_mcp/object_get_by_id_mcp.py
+app/api/dynamic_mcp/object_link_query_mcp.py

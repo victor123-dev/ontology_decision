@@ -1,0 +1,51 @@
+"""
+MCP工具模块 - 通过关系查询对象功能
+提供通过具体关系查询关联对象的能力
+"""
+from fastapi import APIRouter, Depends, HTTPException, Body
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session, joinedload
+from typing import Any, Dict, List, Optional, Literal
+from app.models.business_model import BusinessModel
+from app.models.business_model_link import BusinessModelLink
+from app.utils.shared_utils import get_db
+from app.utils.data_source_manager import data_source_manager
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+router = APIRouter()
+
+
+def _build_in_condition(field: str, values: List[str]) -> str:
+    """构建IN条件"""
+    if not isinstance(field, str) or not field.replace('_', '').replace('-', '').isalnum():
+        raise ValueError("Invalid field name")
+    
+    if not values:
+        raise ValueError("Values list cannot be empty")
+    
+    # 简单的 SQL 注入防护
+    quoted_values = []
+    for value in values:
+        if isinstance(value, str):
+            # 验证值是否只包含字母数字和允许的特殊字符
+            if not value.replace('_', '').replace('-', '').replace('.', '').isalnum():
+                raise ValueError(f"Invalid value: {value}")
+            quoted_values.append(f"'{value}'")
+        else:
+            quoted_values.append(str(value))
+    
+    return f"{field} IN ({', '.join(quoted_values)})"
+
+{% for query_direction in query_directions %}
+{% set source_model = query_direction.source_model %}
+{% set target_model = query_direction.target_model %}
+{% include 'link_response_model.py.j2' %}
+{% endfor %}
+
+{% for query_direction in query_directions %}
+{% set source_model = query_direction.source_model %}
+{% set target_model = query_direction.target_model %}
+{% include 'link_query_tool.py.j2' %}
+{% endfor %}

@@ -1,0 +1,33 @@
+{% macro python_type_for_field(field) -%}
+{%- if field.data_type == "string" or field.data_type == "text" -%}
+str
+{%- elif field.data_type == "integer" -%}
+int
+{%- elif field.data_type == "float" or field.data_type == "decimal" -%}
+float
+{%- elif field.data_type == "boolean" -%}
+bool
+{%- elif field.data_type == "date" or field.data_type == "datetime" or field.data_type == "time" -%}
+str
+{%- elif field.data_type == "json" or field.data_type == "object" -%}
+Dict[str, Any]
+{%- elif field.data_type == "array" -%}
+List[Any]
+{%- elif field.data_type == "uuid" -%}
+str
+{%- elif field.data_type == "binary" -%}
+bytes
+{%- else -%}
+Any
+{%- endif -%}
+{%- endmacro %}
+
+class {{ target_model.api_name }}Response(BaseModel):
+    """{{ target_model.name }}对象响应模型"""
+    {% for field in target_model.fields %}
+    {{ field.field_id }}: {{ python_type_for_field(field) }} = Field(description="{{ field.description or field.field_id }}")
+    {% endfor %}
+    {% if not target_model.fields %}
+    # 该对象没有定义字段，返回通用字典
+    data: Dict[str, Any] = Field(description="对象的完整数据")
+    {% endif %}

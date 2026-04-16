@@ -105,6 +105,9 @@ class SDKGenerator:
         # 生成行动模块
         self._generate_action_files(package_dir, actions)
         
+        # 生成MCP服务文件
+        self._generate_mcp_files(db, actions)
+        
         # 生成配置文件
         self._generate_config_file(package_dir, version)
         
@@ -483,6 +486,185 @@ class SDKGenerator:
             }
             prepared_fields.append(prepared_field)
         return prepared_fields
+
+    def _generate_mcp_files(self, db: Session, actions: List[Dict[str, Any]]):
+        """
+        生成MCP服务文件到app/api目录下的dynamic_mcp目录
+        使用静态代码生成方式，为每个action和object生成独立的函数
+        """
+        import os
+        
+        # API目录路径
+        api_dir = os.path.join(os.path.dirname(__file__), "..", "api")
+        api_dir = os.path.abspath(api_dir)
+        
+        # 直接使用api目录下的dynamic_mcp
+        dynamic_mcp_dir = os.path.join(api_dir, "dynamic_mcp")
+        
+        # 确保目录存在
+        os.makedirs(dynamic_mcp_dir, exist_ok=True)
+        
+        # 生成Action MCP文件（到dynamic_mcp目录）
+        self._generate_action_mcp_files(dynamic_mcp_dir, actions)
+        
+        # 生成Object MCP文件（到dynamic_mcp目录）
+        # TODO 这里先不生成了吧，先使用通用的，生成以后工具太多直接上下文溢出了
+        # self._generate_object_mcp_files(dynamic_mcp_dir, db)
+        
+        # 生成Link Query MCP文件（到dynamic_mcp目录）
+        # TODO 这里先不生成了吧，先使用通用的，生成以后工具太多直接上下文溢出了
+        # self._generate_link_query_mcp_files(dynamic_mcp_dir, db)
+
+    def _generate_action_mcp_files(self, mcp_dir: str, actions: List[Dict[str, Any]]):
+        """生成Action MCP文件"""
+        # 准备action参数数据（用于模板渲染）
+        prepared_actions = []
+        for action in actions:
+            # 准备action参数
+            if "parameters" in action and action["parameters"]:
+                prepared_params = self._prepare_action_parameters(action["parameters"])
+                action_with_params = {**action, "parameters": prepared_params}
+            else:
+                action_with_params = action
+            prepared_actions.append(action_with_params)
+        
+        # 生成action_execute_mcp.py文件
+        action_mcp_template = self.template_env.get_template("action_execute_mcp.py.j2")
+        action_mcp_content = action_mcp_template.render(actions=prepared_actions)
+        action_mcp_path = os.path.join(mcp_dir, "action_execute_mcp.py")
+        with open(action_mcp_path, "w", encoding="utf-8") as f:
+            f.write(action_mcp_content)
+
+    def _generate_object_mcp_files(self, mcp_dir: str, db: Session):
+        """生成Object MCP文件"""
+        # 收集业务模型
+        business_models = db.query(BusinessModel).all()
+        models_info = []
+        
+        for model in business_models:
+            model_info = {
+                "id": model.id,
+                "api_name": model.api_name,
+                "name": model.name,
+                "description": model.description,
+                "primary_key_id": model.primary_key_id,  # 添加主键字段名
+                "fields": [
+                    {
+                        "field_id": field.field_id,
+                        "name": field.name,
+                        "data_type": field.data_type,
+                        "description": field.description
+                    }
+                    for field in model.fields
+                ]
+            }
+            models_info.append(model_info)
+        
+        # 生成object_get_by_id_mcp.py文件
+        object_mcp_template = self.template_env.get_template("object_get_by_id_mcp.py.j2")
+        object_mcp_content = object_mcp_template.render(models=models_info)
+        object_mcp_path = os.path.join(mcp_dir, "object_get_by_id_mcp.py")
+        with open(object_mcp_path, "w", encoding="utf-8") as f:
+            f.write(object_mcp_content)
+
+    def _generate_link_query_mcp_files(self, mcp_dir: str, db: Session):
+        """生成Link Query MCP文件（支持双向查询）"""
+        # 收集业务模型和关系
+        business_models = db.query(BusinessModel).all()
+        model_map = {model.id: model for model in business_models}
+        
+        links = db.query(BusinessModelLink).all()
+        query_directions = []
+        
+        for link in links:
+            source_model = model_map.get(link.source_model)
+            target_model = model_map.get(link.target_model)
+            
+            if source_model and target_model:
+                # 准备源模型信息
+                source_model_info = {
+                    "id": source_model.id,
+                    "api_name": source_model.api_name,
+                    "name": source_model.name,
+                    "description": source_model.description,
+                    "primary_key_id": source_model.primary_key_id,
+                    "fields": [
+                        {
+                            "field_id": field.field_id,
+                            "name": field.name,
+                            "data_type": field.data_type,
+                            "description": field.description
+                        }
+                        for field in source_model.fields
+                    ]
+                }
+                
+                # 准备目标模型信息
+                target_model_info = {
+                    "id": target_model.id,
+                    "api_name": target_model.api_name,
+                    "name": target_model.name,
+                    "description": target_model.description,
+                    "primary_key_id": target_model.primary_key_id,
+                    "fields": [
+                        {
+                            "field_id": field.field_id,
+                            "name": field.name,
+                            "data_type": field.data_type,
+                            "description": field.description
+                        }
+                        for field in target_model.fields
+                    ]
+                }
+                
+                # 正向查询：source -> target
+                forward_query = {
+                    "direction": "forward",
+                    "link_id": link.id,
+                    "link_name": link.name,
+                    "link_description": link.description,
+                    "source_model": source_model_info,
+                    "target_model": target_model_info,
+                    "cardinality": link.cardinality,
+                    "intermediate_model": link.intermediate_model,
+                    "intermediate_source_key": link.intermediate_source_key,
+                    "intermediate_target_key": link.intermediate_target_key,
+                    "source_key": link.source_key,
+                    "target_key": link.target_key,
+                    "query_name": f"{source_model.id}_get_{target_model.id}_by_{link.id}",
+                    "param_field_name": source_model.primary_key_id or (source_model.fields[0].field_id if source_model.fields else "id"),
+                    "param_description": f"源{source_model.name}对象的主键ID列表"
+                }
+                
+                # 反向查询：target -> source
+                reverse_query = {
+                    "direction": "reverse", 
+                    "link_id": link.id,
+                    "link_name": link.name,
+                    "link_description": link.description,
+                    "source_model": target_model_info,
+                    "target_model": source_model_info,
+                    "cardinality": link.cardinality,
+                    "intermediate_model": link.intermediate_model,
+                    "intermediate_source_key": link.intermediate_target_key,  # 注意：反向时交换
+                    "intermediate_target_key": link.intermediate_source_key,  # 注意：反向时交换
+                    "source_key": link.target_key,  # 注意：反向时交换
+                    "target_key": link.source_key,  # 注意：反向时交换
+                    "query_name": f"{target_model.id}_get_{source_model.id}_by_{link.id}",
+                    "param_field_name": target_model.primary_key_id or (target_model.fields[0].field_id if target_model.fields else "id"),
+                    "param_description": f"源{target_model.name}对象的主键ID列表"
+                }
+                
+                query_directions.append(forward_query)
+                query_directions.append(reverse_query)
+        
+        # 生成object_link_query_mcp.py文件
+        if query_directions:
+            link_mcp_template = self.template_env.get_template("object_link_query_mcp.py.j2")
+            link_mcp_content = link_mcp_template.render(query_directions=query_directions)
+            link_mcp_path = os.path.join(mcp_dir, "object_link_query_mcp.py")
+            with open(link_mcp_path, "w", encoding="utf-8") as f:
+                f.write(link_mcp_content)
 
 
 def get_sdk_generator() -> SDKGenerator:

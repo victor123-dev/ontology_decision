@@ -1,0 +1,61 @@
+"""
+MCP工具模块 - Action执行功能
+提供对本体Action的执行能力，每个Action对应一个MCP工具
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+from app.services.action_service import get_action_service
+from app.utils.shared_utils import get_db
+
+router = APIRouter()
+
+{% for action in actions if action.parameters %}
+{% include 'action_mcp_parameters.py.j2' %}
+{% endfor %}
+
+{% for action in actions %}
+@router.post(
+    "/execute_{{ action.id }}",
+    operation_id="execute_{{ action.id }}",
+    summary="{{ action.name }}",
+    description="""
+{{ action.description or "Execute " + action.name }}
+"""
+)
+def execute_{{ action.id }}(
+    {%- if action.parameters %}
+    parameters: {{ action.api_name }}Parameters
+    {%- endif %}
+):
+    """
+    Execute the {{ action.name }} action
+    
+    {% if action.parameters -%}
+    Args:
+        parameters: The parameters for the action
+    {% endif -%}
+    
+    Returns:
+    """
+    try:
+        action_service = get_action_service()
+        {%- if action.parameters %}
+        result = action_service.execute_action("{{ action.id }}", parameters.model_dump(), db)
+        {%- else %}
+        result = action_service.execute_action("{{ action.id }}", {}, db)
+        {%- endif %}
+        
+        return {
+            "success": True,
+            "message": "{{ action.name }} executed successfully",
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute {{ action.name }}: {str(e)}"
+        )
+
+{% endfor %}

@@ -1,0 +1,95 @@
+"""
+MCP工具模块 - 对象查询功能
+提供对本体对象的简单ID查询能力
+"""
+from fastapi import APIRouter, Depends, HTTPException, Path
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from typing import Any, Dict, List
+from app.models.business_model import BusinessModel
+from app.utils.shared_utils import get_db
+from app.utils.data_source_manager import data_source_manager
+
+router = APIRouter()
+
+{% for model in models %}
+{% include 'object_response_model.py.j2' %}
+{% endfor %}
+
+{% for model in models %}
+@router.get(
+    "/get_{{ model.id }}_by_id/{object_id}",
+    response_model={{ model.api_name}}Response,
+    operation_id="get_{{ model.id }}_by_id",
+    summary="获取{{ model.name }}对象",
+    description="""
+根据ID获取单个{{ model.name }}对象实例。
+
+**参数:**
+- object_id: {{ model.name }}对象的{{ model.primary_key_id or 'ID' }}
+
+**返回:**
+- 单个{{ model.name }}对象的完整数据
+""",
+    response_description="{{ model.name }}对象数据"
+)
+def get_{{ model.id }}_by_id(
+    object_id: str = Path(..., description="要查询的{{ model.name }}对象的{{ model.primary_key_id or 'ID' }}"),
+    db: Session = Depends(get_db)
+):
+    """
+    根据ID获取{{ model.name }}对象
+    
+    Args:
+        object_id: {{ model.name }}对象的{{ model.primary_key_id or 'ID' }}
+        db: Database session
+        
+    Returns:
+        {{ model.name }}对象数据
+    """
+    try:
+        # 查找业务模型
+        business_model = db.query(BusinessModel).filter(BusinessModel.id == "{{ model.id }}").first()
+        if not business_model:
+            raise HTTPException(status_code=404, detail="{{ model.name }}对象类型未找到")
+        
+        if not business_model.data_source_id:
+            raise HTTPException(status_code=400, detail="{{ model.name }}对象类型未配置数据源")
+        
+        # 确定主键字段
+        {% if model.primary_key_id %}
+        primary_key_field = "{{ model.primary_key_id }}"
+        {% elif model.fields %}
+        primary_key_field = "{{ model.fields[0].field_id }}"
+        {% else %}
+        primary_key_field = "id"
+        {% endif %}
+        
+        # 构建查询语句（简单的SQL注入防护）
+        if not isinstance(object_id, str) or not object_id.replace('_', '').replace('-', '').replace('.', '').isalnum():
+            raise HTTPException(status_code=400, detail="无效的对象ID")
+            
+        query = f"SELECT * FROM {{ model.id }} WHERE {primary_key_field} = '{object_id}' LIMIT 1"
+        
+        try:
+            data = data_source_manager.execute_query(
+                data_source_id=business_model.data_source_id,
+                query=query,
+                max_rows=1
+            )
+            
+            if not data or len(data) == 0:
+                raise HTTPException(status_code=404, detail=f"未找到ID为 '{object_id}' 的{{ model.name }}对象")
+            
+            # 转换为响应模型
+            return {{ model.api_name }}Response(**data[0])
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"查询{{ model.name }}对象失败: {str(e)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取{{ model.name }}对象时发生错误: {str(e)}")
+
+{% endfor %}
