@@ -141,15 +141,26 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [alerts, setAlerts] = useState(alertMessages);
   const [searchText, setSearchText] = useState('');
-  const [lastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  const [lastRefresh, setLastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [layout, setLayout] = useState(INITIAL_LAYOUT);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { width: winWidth } = useWindowSize();
 
-  // 使用独立 KPI hooks
-  const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading } = usePurchaseOnTimeRate();
-  const { data: monthlySales, loading: monthlySalesLoading } = useMonthlySales(); // 使用合并的销售数据API
-  const { data: alertCount, loading: alertCountLoading } = useAlertCount();
-  const { data: alertExecCount, loading: alertExecCountLoading } = useAlertExecCount();
+  // 使用独立 KPI hooks（添加 key 触发刷新）
+  const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading, refetch: refetchPurchaseOnTimeRate } = usePurchaseOnTimeRate();
+  const { data: monthlySales, loading: monthlySalesLoading, refetch: refetchMonthlySales } = useMonthlySales();
+  const { data: alertCount, loading: alertCountLoading, refetch: refetchAlertCount } = useAlertCount();
+  const { data: alertExecCount, loading: alertExecCountLoading, refetch: refetchAlertExecCount } = useAlertExecCount();
+
+  // 刷新所有数据
+  const handleRefreshAll = useCallback(() => {
+    refetchPurchaseOnTimeRate();
+    refetchMonthlySales();
+    refetchAlertCount();
+    refetchAlertExecCount();
+    setLastRefresh(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    setRefreshKey(k => k + 1);
+  }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchAlertExecCount]);
 
   const handleStatusChange = (id, status) => { setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
     if (selectedAlert?.id === id) { setSelectedAlert(prev => prev ? { ...prev, status } : prev); } };
@@ -491,7 +502,7 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
 
       {/* 预警详情抽屉 */}
       {selectedAlert && (
-        <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} onStatusChange={handleStatusChange} />
+        <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} onStatusChange={handleStatusChange} onRefresh={handleRefreshAll} />
       )}
 
 

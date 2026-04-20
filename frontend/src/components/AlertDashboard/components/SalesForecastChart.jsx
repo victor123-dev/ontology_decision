@@ -1,35 +1,9 @@
 // 供应链控制塔 - 销售预测 vs 实际订单 vs 采购量图表
 // 支持：① 数据筛选（产品/时间范围）② 下钻（点击月份查看明细）
 import { useState, useMemo } from "react";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
-import { ChevronLeft, X } from "lucide-react";
-import { useChartData } from "../hooks/useApiData";
-
-// 下钻明细数据（模拟按产品拆解）
-const drillDownData = { '2025-01': [
-    { product: 'MOSFET晶体管', forecast: 2800, order: 2650, purchase: 3100 },
-    { product: 'MCU微控制器', forecast: 1900, order: 1820, purchase: 2200 },
-    { product: 'NAND Flash', forecast: 1500, order: 1450, purchase: 1800 },
-    { product: 'LPDDR4内存', forecast: 1200, order: 1150, purchase: 1400 },
-    { product: '电源管理IC', forecast: 800, order: 780, purchase: 600 },
-  ],
-  '2025-02': [
-    { product: 'MOSFET晶体管', forecast: 2600, order: 2400, purchase: 2900 },
-    { product: 'MCU微控制器', forecast: 1800, order: 1700, purchase: 2000 },
-    { product: 'NAND Flash', forecast: 1400, order: 1320, purchase: 1600 },
-    { product: 'LPDDR4内存', forecast: 1100, order: 1050, purchase: 1300 },
-    { product: '电源管理IC', forecast: 700, order: 730, purchase: 600 },
-  ] };
-// 补充其余月份
-['2025-03','2025-04','2025-05','2025-06','2025-07','2025-08','2025-09','2025-10','2025-11','2025-12'].forEach((m, i) => { const base = 9000 + i * 600;
-  drillDownData[m] = [
-    { product: 'MOSFET晶体管', forecast: Math.round(base * 0.34), order: Math.round(base * 0.33), purchase: Math.round(base * 0.37) },
-    { product: 'MCU微控制器', forecast: Math.round(base * 0.22), order: Math.round(base * 0.21), purchase: Math.round(base * 0.25) },
-    { product: 'NAND Flash', forecast: Math.round(base * 0.18), order: Math.round(base * 0.17), purchase: Math.round(base * 0.20) },
-    { product: 'LPDDR4内存', forecast: Math.round(base * 0.14), order: Math.round(base * 0.13), purchase: Math.round(base * 0.15) },
-    { product: '电源管理IC', forecast: Math.round(base * 0.12), order: Math.round(base * 0.12), purchase: Math.round(base * 0.03) },
-  ]; });
+import { LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from "recharts";
+import { ChevronLeft } from "lucide-react";
 
 const SERIES = [
   { key: 'salesForecast', label: '销售预测', color: '#3b82f6' },
@@ -37,7 +11,8 @@ const SERIES = [
   { key: 'purchaseQty', label: '采购量', color: '#f59e0b' },
 ];
 
-const CustomTooltip = ({ active, payload, label }) => { if (!active || !payload?.length) return null;
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
   return (
     <div style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '12px',
       background: '#0f1d35', border: '1px solid rgba(59,130,246,0.3)' }}>
@@ -48,9 +23,11 @@ const CustomTooltip = ({ active, payload, label }) => { if (!active || !payload?
         </p>
       ))}
     </div>
-  ); };
+  );
+};
 
-const DrillTooltip = ({ active, payload, label }) => { if (!active || !payload?.length) return null;
+const DrillTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
   return (
     <div style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '12px',
       background: '#0f1d35', border: '1px solid rgba(59,130,246,0.3)' }}>
@@ -61,27 +38,72 @@ const DrillTooltip = ({ active, payload, label }) => { if (!active || !payload?.
         </p>
       ))}
     </div>
-  ); };
+  );
+};
 
-export default function SalesForecastChart({ height = 220 }) {
-  const { data: chartData, loading } = useChartData();
+export default function SalesForecastChart({ height = 220, chartData = [], loading = false }) {
   const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder', 'purchaseQty']));
-  const [timeRange, setTimeRange] = useState('all');
   const [drillMonth, setDrillMonth] = useState(null);
+  const [timeRange, setTimeRange] = useState('all');
 
-  const filteredData = useMemo(() => { 
+  // 将按品号+月份的数据转换为按月合并的数据（用于折线图）
+  const monthlyData = useMemo(() => {
     if (!chartData || !Array.isArray(chartData)) return [];
-    if (timeRange === 'H1') return chartData.filter(d => parseInt(d.month.slice(5)) <= 6);
-    if (timeRange === 'H2') return chartData.filter(d => parseInt(d.month.slice(5)) >= 7);
-    return chartData; 
-  }, [timeRange, chartData]);
 
-  const toggleSeries = (key) => { setActiveSeries(prev => { const next = new Set(prev);
-      if (next.has(key)) { if (next.size > 1) next.delete(key); }
-      else next.add(key);
-      return next; }); };
+    const monthMap = {};
+    chartData.forEach(item => {
+      const month = item.month;
+      if (!monthMap[month]) {
+        monthMap[month] = { month, salesForecast: 0, salesOrder: 0, purchaseQty: 0 };
+      }
+      monthMap[month].salesForecast += item.salesForecast || 0;
+      monthMap[month].salesOrder += item.salesOrder || 0;
+      monthMap[month].purchaseQty += item.purchaseQty || 0;
+    });
 
-  const drillData = drillMonth ? drillDownData[drillMonth] || [] : [];
+    return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
+  }, [chartData]);
+
+  // 按时间范围筛选
+  const filteredMonthlyData = useMemo(() => {
+    if (drillMonth) return [];
+    if (timeRange === 'H1') return monthlyData.filter(d => parseInt(d.month.slice(5)) <= 6);
+    if (timeRange === 'H2') return monthlyData.filter(d => parseInt(d.month.slice(5)) >= 7);
+    return monthlyData;
+  }, [timeRange, monthlyData, drillMonth]);
+
+  const toggleSeries = (key) => {
+    setActiveSeries(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  // 下钻明细数据（按品号分组）
+  const drillData = useMemo(() => {
+    if (!drillMonth || !chartData || !Array.isArray(chartData)) return [];
+    return chartData.filter(item => item.month === drillMonth);
+  }, [drillMonth, chartData]);
+
+  // 加载状态
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <div style={{
+          width: '32px', height: '32px',
+          border: '3px solid rgba(59,130,246,0.2)',
+          borderTop: '3px solid #3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%',
@@ -165,63 +187,58 @@ export default function SalesForecastChart({ height = 220 }) {
       {/* 提示文字 */}
       {!drillMonth && (
         <p style={{ fontSize: '10px', color: '#475569', marginBottom: '4px', flexShrink: 0 }}>
-          点击柱/线可下钻查看月度产品明细
+          点击折线可下钻查看该月的产品明细
         </p>
       )}
 
       {/* 图表区 */}
       <div style={{ flex: 1, minHeight: 0, height }}>
         {drillMonth ? (
-          // 下钻柱状图
+          // 下钻柱状图（按品号显示明细）
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={drillData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="product" tick={{ fill: '#64748b', fontSize: 9 }} />
+              <XAxis dataKey="product" tick={{ fill: '#64748b', fontSize: 9 }}
+                angle={-45} textAnchor="end" height={60} />
               <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
               <Tooltip content={<DrillTooltip />} />
               <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
-              <Bar dataKey="forecast" name="销售预测" fill="#3b82f6" radius={[3,3,0,0]} />
-              <Bar dataKey="order" name="实际订单" fill="#22c55e" radius={[3,3,0,0]} />
-              <Bar dataKey="purchase" name="采购量" fill="#f59e0b" radius={[3,3,0,0]} />
+              <Bar dataKey="salesForecast" name="销售预测" fill="#3b82f6" radius={[3,3,0,0]} />
+              <Bar dataKey="salesOrder" name="实际订单" fill="#22c55e" radius={[3,3,0,0]} />
+              <Bar dataKey="purchaseQty" name="采购量" fill="#f59e0b" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          // 总览面积图
+          // 总览折线图（按月合并数据）
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={filteredData}
+            <LineChart
+              data={filteredMonthlyData}
               margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
               onClick={(data) => { if (data?.activeLabel) setDrillMonth(data.activeLabel); }}
               style={{ cursor: 'pointer' }}
             >
-              <defs>
-                {SERIES.map(s => (
-                  <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={s.color} stopOpacity={0} />
-                  </linearGradient>
-                ))}
-              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => v.slice(5)} />
+              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} 
+                tickFormatter={v => v ? v.slice(5) + '月' : ''} />
               <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
               <Tooltip content={<CustomTooltip />} />
+              <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
               {SERIES.filter(s => activeSeries.has(s.key)).map(s => (
-                <Area
+                <Line
                   key={s.key}
                   type="monotone"
                   dataKey={s.key}
                   name={s.label}
                   stroke={s.color}
-                  fill={`url(#grad-${s.key})`}
                   strokeWidth={2}
                   dot={{ r: 3, fill: s.color, strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
                 />
               ))}
-            </AreaChart>
+            </LineChart>
           </ResponsiveContainer>
         )}
       </div>
     </div>
-  ); }
+  );
+}

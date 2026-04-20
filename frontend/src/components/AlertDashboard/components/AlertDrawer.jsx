@@ -1,12 +1,13 @@
 // 供应链控制塔 - 预警详情抽屉组件
 // 包含：基本信息 + 根因分析 + 建议行动（自动执行/人工处理）
 import { useState } from "react";
-import { X, AlertTriangle, CheckCircle, Clock, Play, User, ChevronRight, ArrowRight } from "lucide-react";
-import { getRiskTextColor, getStatusColor } from "../lib/data";
+import { X, AlertTriangle, CheckCircle, Clock, Play, User, ArrowRight, Loader2 } from "lucide-react";
+import { getRiskTextColor, getStatusColor, alertDashboardApi } from "../lib/data";
 
-export default function AlertDrawer({ alert, onClose, onStatusChange }) { const [activeTab, setActiveTab] = useState('info');
+export default function AlertDrawer({ alert, onClose, onStatusChange, onRefresh }) { const [activeTab, setActiveTab] = useState('info');
   const [autoExecState, setAutoExecState] = useState('idle');
   const [progress, setProgress] = useState(0);
+  const [manualProcessing, setManualProcessing] = useState(false);
 
   if (!alert) return null;
 
@@ -18,9 +19,24 @@ export default function AlertDrawer({ alert, onClose, onStatusChange }) { const 
     const interval = setInterval(() => { if (i < steps.length) { setProgress(steps[i]);
         i++; } else { clearInterval(interval);
         setAutoExecState('done');
-        onStatusChange(alert.id, '已处理'); } }, 400); };
+        onStatusChange(alert.id, '已处理');
+        onRefresh && onRefresh(); } }, 400); };
 
-  const handleManualProcess = () => { onStatusChange(alert.id, '已处理'); };
+  const handleManualProcess = async () => {
+    if (manualProcessing) return;
+    setManualProcessing(true);
+    try {
+      await alertDashboardApi.processAlertManual(alert.id);
+      onStatusChange(alert.id, '已处理');
+      onRefresh && onRefresh();
+      onClose();
+    } catch (e) {
+      console.error('人工处理失败:', e);
+      alert('处理失败: ' + e.message);
+    } finally {
+      setManualProcessing(false);
+    }
+  };
 
   const riskColor = getRiskTextColor(alert.riskLevel);
   const statusColor = getStatusColor(alert.status);
@@ -320,18 +336,29 @@ export default function AlertDrawer({ alert, onClose, onStatusChange }) { const 
                         </button>
                         <button
                           onClick={handleManualProcess}
+                          disabled={manualProcessing}
                           style={{ flex: 1, display: 'flex', alignItems: 'center',
                             justifyContent: 'center', gap: '8px',
                             padding: '10px 0', borderRadius: '8px',
-                            fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+                            fontSize: '14px', fontWeight: 500, cursor: manualProcessing ? 'not-allowed' : 'pointer',
                             transition: 'all 0.2s',
-                            background: 'rgba(255,255,255,0.06)', color: '#94a3b8',
+                            background: manualProcessing ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
+                            color: manualProcessing ? '#64748b' : '#94a3b8',
                             border: '1px solid rgba(255,255,255,0.12)' }}
-                          onMouseOver={e => e.currentTarget.style.opacity = '0.9'}
+                          onMouseOver={e => { if (!manualProcessing) e.currentTarget.style.opacity = '0.9'; }}
                           onMouseOut={e => e.currentTarget.style.opacity = '1'}
                         >
-                          <User size={14} />
-                          人工处理
+                          {manualProcessing ? (
+                            <>
+                              <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                              处理中...
+                            </>
+                          ) : (
+                            <>
+                              <User size={14} />
+                              人工处理
+                            </>
+                          )}
                         </button>
                       </div>
                     )}

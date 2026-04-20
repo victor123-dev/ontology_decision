@@ -15,7 +15,7 @@ import SupplyChainMap from "./components/SupplyChainMap";
 import AlertDrawer from "./components/AlertDrawer";
 import SalesForecastChart from "./components/SalesForecastChart";
 import ForecastTable from "./components/ForecastTable";
-import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useAlertExecCount, useLogisticsData, useAlertMessages } from "./hooks/useApiData";
+import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useAlertExecCount, useLogisticsData, useAlertMessages, useChartData, useMapData, useForecastData } from "./hooks/useApiData";
 import { getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "./lib/data";
 import { useWindowSize } from "./hooks/useWindowSize";
 
@@ -171,13 +171,17 @@ export default function AlertDashboard() {
   const [containerWidth, setContainerWidth] = useState(1280);
 
   // 使用 API Hooks 获取数据
-  const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading } = usePurchaseOnTimeRate();
-  const { data: monthlySales, loading: monthlySalesLoading } = useMonthlySales();
-  const { data: alertCount, loading: alertCountLoading } = useAlertCount();
-  const { data: alertExecCount, loading: alertExecCountLoading } = useAlertExecCount();
-  const { data: logisticsData, loading: logisticsLoading } = useLogisticsData();
+  const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading, refetch: refetchPurchaseOnTimeRate } = usePurchaseOnTimeRate();
+  const { data: monthlySales, loading: monthlySalesLoading, refetch: refetchMonthlySales } = useMonthlySales();
+  const { data: alertCount, loading: alertCountLoading, refetch: refetchAlertCount } = useAlertCount();
+  const { data: alertExecCount, loading: alertExecCountLoading, refetch: refetchAlertExecCount } = useAlertExecCount();
+  const { data: logisticsData, loading: logisticsLoading, refetch: refetchLogistics } = useLogisticsData();
   const { data: alertsData, loading: alertsLoading, refetch: refetchAlerts } = useAlertMessages();
+  const { data: chartData, loading: chartLoading, refetch: refetchChart } = useChartData();
+  const { data: mapData, loading: mapLoading, refetch: refetchMap } = useMapData();
+  const { data: forecastData, loading: forecastLoading, refetch: refetchForecast } = useForecastData();
   const [alerts, setAlerts] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 监听容器宽度变化
   useEffect(() => {
@@ -197,6 +201,26 @@ export default function AlertDashboard() {
       setAlerts(alertsData);
     }
   }, [alertsData]);
+
+  // 刷新所有页面数据
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchPurchaseOnTimeRate(),
+        refetchMonthlySales(),
+        refetchAlertCount(),
+        refetchAlertExecCount(),
+        refetchLogistics(),
+        refetchAlerts(),
+        refetchChart(),
+        refetchMap(),
+        refetchForecast(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchAlertExecCount, refetchLogistics, refetchAlerts, refetchChart, refetchMap, refetchForecast]);
 
   const handleStatusChange = (id, status) => {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
@@ -297,9 +321,12 @@ export default function AlertDashboard() {
           <button style={{ width: '32px', height: '32px', borderRadius: '8px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#94a3b8', cursor: 'pointer',
-            background: 'transparent', border: 'none', transition: 'all 0.2s' }}
+            background: 'transparent', border: 'none', transition: 'all 0.2s',
+            animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }}
+            onClick={handleRefresh}
             onMouseOver={e => e.currentTarget.style.color = '#e2e8f0'}
             onMouseOut={e => e.currentTarget.style.color = '#94a3b8'}
+            title="刷新数据"
           >
             <RefreshCw size={14} />
           </button>
@@ -359,9 +386,9 @@ export default function AlertDashboard() {
                 <Widget
                   title="销售预测 vs 实际订单 vs 采购量"
                   subtitle="近12个月 · 点击月份可下钻查看产品明细"
-                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} />}
+                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} chartData={chartData} loading={chartLoading} />}
                 >
-                  <SalesForecastChart height={getItemPx('chart') - 72} />
+                  <SalesForecastChart height={getItemPx('chart') - 72} chartData={chartData} loading={chartLoading} />
                 </Widget>
               </div>
 
@@ -379,7 +406,7 @@ export default function AlertDashboard() {
                         backgroundPosition: 'center',
                         position: 'relative' }}
                     >
-                      <SupplyChainMap />
+                      <SupplyChainMap mapData={mapData} loading={mapLoading} />
                     </div> }
                 >
                   {/* 地图容器：背景图 + SVG节点，无任何蒙层 */}
@@ -391,56 +418,68 @@ export default function AlertDashboard() {
                       backgroundPosition: 'center',
                       position: 'relative' }}
                   >
-                    <SupplyChainMap />
+                    <SupplyChainMap mapData={mapData} loading={mapLoading} />
                   </div>
                 </Widget>
               </div>
 
               {/* ── 物流动态 ── */}
               <div key="logistics">
-                <Widget title="物流动态" subtitle={`今日 · ${logisticsData?.length ?? 0} 条`}>
+                <Widget title="物流动态" subtitle={logisticsLoading ? '加载中...' : `今日 · ${logisticsData?.length ?? 0} 条`}>
                   <div style={{ overflow: 'hidden', padding: '0 16px',
                     height: getItemPx('logistics') - 48 }}>
-                    <div style={{ height: '100%', overflowY: 'hidden' }}>
-                      <div className="sct-scroll-list">
-                        {[...logisticsData, ...logisticsData].map((item, idx) => (
-                          <div
-                            key={`${item.id}-${idx}`}
-                            style={{ padding: '14px 0',
-                              borderBottom: idx === logisticsData.length * 2 - 1 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
-                          >
-                            {/* 状态点 + 物料名称 + 状态标签 */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                              <div style={{ width: '6px', height: '6px', borderRadius: '50%',
-                                background: getLogisticsStatusColor(item.status),
-                                flexShrink: 0, alignSelf: 'center' }} />
-                              <p style={{ fontSize: '14px', color: '#e2e8f0',
-                                fontWeight: 500, flex: 1, lineHeight: '1.4',
-                                margin: 0 }}>
-                                {item.material}
-                              </p>
-                              <span
-                                style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
-                                  background: `${getLogisticsStatusColor(item.status)}20`,
-                                  color: getLogisticsStatusColor(item.status),
-                                  border: `1px solid ${getLogisticsStatusColor(item.status)}30`,
-                                  fontWeight: 500, flexShrink: 0 }}
-                              >
-                                {item.status}
-                              </span>
-                            </div>
-                            {/* 路线信息 */}
-                            <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
-                              {item.from} → {item.to}
-                            </p>
-                            {/* 物流商和时间 */}
-                            <p style={{ fontSize: '11px', color: '#475569' }}>
-                              {item.carrier} · {item.time}
-                            </p>
-                          </div>
-                        ))}
+                    {logisticsLoading ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                        <div style={{
+                          width: '32px', height: '32px',
+                          border: '3px solid rgba(59,130,246,0.2)',
+                          borderTop: '3px solid #3b82f6',
+                          borderRadius: '50%',
+                          animation: 'spin 0.8s linear infinite'
+                        }} />
                       </div>
-                    </div>
+                    ) : (
+                      <div style={{ height: '100%', overflowY: 'hidden' }}>
+                        <div className="sct-scroll-list">
+                          {[...logisticsData, ...logisticsData].map((item, idx) => (
+                            <div
+                              key={`${item.id}-${idx}`}
+                              style={{ padding: '14px 0',
+                                borderBottom: idx === logisticsData.length * 2 - 1 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
+                            >
+                              {/* 状态点 + 物料名称 + 状态标签 */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                <div style={{ width: '6px', height: '6px', borderRadius: '50%',
+                                  background: getLogisticsStatusColor(item.status),
+                                  flexShrink: 0, alignSelf: 'center' }} />
+                                <p style={{ fontSize: '14px', color: '#e2e8f0',
+                                  fontWeight: 500, flex: 1, lineHeight: '1.4',
+                                  margin: 0 }}>
+                                  {item.material}
+                                </p>
+                                <span
+                                  style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
+                                    background: `${getLogisticsStatusColor(item.status)}20`,
+                                    color: getLogisticsStatusColor(item.status),
+                                    border: `1px solid ${getLogisticsStatusColor(item.status)}30`,
+                                    fontWeight: 500, flexShrink: 0 }}
+                                >
+                                  {item.status}
+                                </span>
+                              </div>
+                              {/* 路线信息 */}
+                              <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+                                {item.from} → {item.to}
+                              </p>
+                              {/* 物流商和时间 */}
+                              <p style={{ fontSize: '11px', color: '#475569' }}>
+                                {item.carrier} · {item.time}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </Widget>
               </div>
@@ -450,9 +489,9 @@ export default function AlertDashboard() {
                 <Widget
                   title="需求预测（未来6个月）"
                   subtitle="点击产品可下钻查看月度明细与采购建议"
-                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} />}
+                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} forecastResult={forecastData} loading={forecastLoading} />}
                 >
-                  <ForecastTable maxHeight={getItemPx('forecast') - 56} />
+                  <ForecastTable maxHeight={getItemPx('forecast') - 56} forecastResult={forecastData} loading={forecastLoading} />
                 </Widget>
               </div>
 
@@ -473,45 +512,57 @@ export default function AlertDashboard() {
                       查看全部 <ChevronDown size={10} style={{ transform: 'rotate(-90deg)' }} />
                     </button> }
                 >
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: '12px', padding: '4px 16px 8px 16px', paddingTop: '4px' }}>
-                    {alerts.slice(0, 4).map(alert => (
-                      <div
-                        key={alert.id}
-                        style={{ padding: '12px', borderRadius: '8px', cursor: 'pointer',
-                          background: 'rgba(255,255,255,0.04)',
-                          border: `1px solid ${getRiskTextColor(alert.riskLevel)}30`,
-                          transition: 'opacity 0.2s' }}
-                        onMouseDown={e => e.stopPropagation()}
-                        onMouseOver={e => e.currentTarget.style.opacity = '0.8'}
-                        onMouseOut={e => e.currentTarget.style.opacity = '1'}
-                        onClick={() => { setSelectedAlert(alert); setActiveTab('alerts'); }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center',
-                          justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '10px', padding: '2px 6px',
-                            borderRadius: '9999px',
-                            background: `${getRiskTextColor(alert.riskLevel)}20`,
-                            color: getRiskTextColor(alert.riskLevel) }}>
-                            {alert.riskLevel}
-                          </span>
-                          <span style={{ fontSize: '10px',
-                            color: getStatusColor(alert.status) }}>
-                            {alert.status}
-                          </span>
+                  {alertsLoading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                      <div style={{
+                        width: '32px', height: '32px',
+                        border: '3px solid rgba(59,130,246,0.2)',
+                        borderTop: '3px solid #3b82f6',
+                        borderRadius: '50%',
+                        animation: 'spin 0.8s linear infinite'
+                      }} />
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+                      gap: '12px', padding: '4px 16px 8px 16px', paddingTop: '4px' }}>
+                      {alerts.slice(0, 4).map(alert => (
+                        <div
+                          key={alert.id}
+                          style={{ padding: '12px', borderRadius: '8px', cursor: 'pointer',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: `1px solid ${getRiskTextColor(alert.riskLevel)}30`,
+                            transition: 'opacity 0.2s' }}
+                          onMouseDown={e => e.stopPropagation()}
+                          onMouseOver={e => e.currentTarget.style.opacity = '0.8'}
+                          onMouseOut={e => e.currentTarget.style.opacity = '1'}
+                          onClick={() => { setSelectedAlert(alert); setActiveTab('alerts'); }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center',
+                            justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '10px', padding: '2px 6px',
+                              borderRadius: '9999px',
+                              background: `${getRiskTextColor(alert.riskLevel)}20`,
+                              color: getRiskTextColor(alert.riskLevel) }}>
+                              {alert.riskLevel}
+                            </span>
+                            <span style={{ fontSize: '10px',
+                              color: getStatusColor(alert.status) }}>
+                              {alert.status}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '12px', color: '#cbd5e1',
+                            lineHeight: '1.5',
+                            display: '-webkit-box', WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {alert.title.replace(/【.*?】/, '')}
+                          </p>
+                          <p style={{ fontSize: '10px', color: '#64748b', marginTop: '6px' }}>
+                            {alert.supplier}
+                          </p>
                         </div>
-                        <p style={{ fontSize: '12px', color: '#cbd5e1',
-                          lineHeight: '1.5',
-                          display: '-webkit-box', WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                          {alert.title.replace(/【.*?】/, '')}
-                        </p>
-                        <p style={{ fontSize: '10px', color: '#64748b', marginTop: '6px' }}>
-                          {alert.supplier}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </Widget>
               </div>
             </GridLayout>
@@ -727,7 +778,7 @@ export default function AlertDashboard() {
 
       {/* 预警详情抽屉 */}
       {selectedAlert && (
-        <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} onStatusChange={handleStatusChange} />
+        <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} onStatusChange={handleStatusChange} onRefresh={handleRefresh} />
       )}
 
 
