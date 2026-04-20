@@ -36,13 +36,16 @@ class ExcelImportExportService:
             # 1. 导出对象页签
             self._export_business_models(wb, db)
             
-            # 2. 导出关系页签
+            # 2. 导出对象字段页签
+            self._export_business_model_fields(wb, db)
+            
+            # 3. 导出关系页签
             self._export_business_model_links(wb, db)
             
-            # 3. 导出行动页签
+            # 4. 导出行动页签
             self._export_actions(wb)
             
-            # 4. 导出实例数据页签
+            # 5. 导出实例数据页签
             self._export_instance_data(wb, db)
             
             # 保存到doc目录
@@ -65,7 +68,7 @@ class ExcelImportExportService:
         """从doc目录下的固定Excel文件导入业务模型和实例数据"""
         try:
             # 定义输入文件路径
-            input_file = os.path.join(os.getcwd(), "doc", "business_model_import.xlsx")
+            input_file = os.path.join(os.getcwd(), "docs", "business_model_export.xlsx")
             
             if not os.path.exists(input_file):
                 return {
@@ -136,6 +139,31 @@ class ExcelImportExportService:
             ws.cell(row=row, column=4, value=model.description)
             ws.cell(row=row, column=5, value=model.primary_key_id)
             ws.cell(row=row, column=6, value=model.data_source_id)
+        
+        # 自动调整列宽
+        for col in range(1, len(headers) + 1):
+            ws.column_dimensions[get_column_letter(col)].auto_size = True
+    
+    def _export_business_model_fields(self, wb: Workbook, db: Session):
+        """导出对象字段页签"""
+        ws = wb.create_sheet("对象字段")
+        
+        # 表头
+        headers = ["ID", "模型ID", "字段ID", "数据类型", "中文名称", "中文说明"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        
+        # 数据
+        business_model_fields = db.query(BusinessModelField).all()
+        for row, field in enumerate(business_model_fields, 2):
+            ws.cell(row=row, column=1, value=field.id)
+            ws.cell(row=row, column=2, value=field.model_id)
+            ws.cell(row=row, column=3, value=field.field_id)
+            ws.cell(row=row, column=4, value=field.data_type)
+            ws.cell(row=row, column=5, value=field.name)
+            ws.cell(row=row, column=6, value=field.description)
         
         # 自动调整列宽
         for col in range(1, len(headers) + 1):
@@ -302,12 +330,14 @@ class ExcelImportExportService:
     def import_from_excel(self, file_path: str, db: Session) -> Dict[str, Any]:
         """从Excel文件导入业务模型和实例数据"""
         try:
+            logger.info(f"开始从Excel文件导入数据: {file_path}")
             wb = load_workbook(file_path)
             result = {
                 "success": True,
                 "message": "Import completed successfully",
                 "details": {
                     "business_models": {"imported": 0, "failed": 0, "errors": []},
+                    "business_model_fields": {"imported": 0, "failed": 0, "errors": []},
                     "business_model_links": {"imported": 0, "failed": 0, "errors": []},
                     "actions": {"imported": 0, "failed": 0, "errors": []},
                     "instance_data": {"imported": 0, "failed": 0, "errors": []}
@@ -316,23 +346,38 @@ class ExcelImportExportService:
             
             # 1. 导入对象配置
             if "对象" in wb.sheetnames:
+                logger.info("正在导入对象配置...")
                 self._import_business_models(wb["对象"], db, result["details"]["business_models"])
             
-            # 2. 导入关系配置
+            # 2. 导入对象字段配置
+            if "对象字段" in wb.sheetnames:
+                logger.info("正在导入对象字段配置...")
+                self._import_business_model_fields(wb["对象字段"], db, result["details"]["business_model_fields"])
+            
+            # 3. 导入关系配置
             if "关系" in wb.sheetnames:
+                logger.info("正在导入关系配置...")
                 self._import_business_model_links(wb["关系"], db, result["details"]["business_model_links"])
             
-            # 3. 导入行动配置
+            # 4. 导入行动配置
             if "行动" in wb.sheetnames:
+                logger.info("正在导入行动配置...")
                 self._import_actions(wb["行动"], result["details"]["actions"])
             
-            # 4. 导入实例数据
+            # 4. 同步所有业务模型的表结构
+            if "对象" in wb.sheetnames and "对象字段" in wb.sheetnames:
+                logger.info("正在同步业务模型表结构...")
+                self._sync_all_table_structures(wb["对象"], wb["对象字段"], db)
+            
+            # 5. 导入实例数据
+            logger.info("正在导入实例数据...")
             self._import_instance_data(wb, db, result["details"]["instance_data"])
             
+            logger.info("Excel文件导入完成")
             return result
             
         except Exception as e:
-            logger.error(f"Error importing from Excel: {e}")
+            logger.error(f"Excel文件导入失败: {e}")
             raise
     
     def _import_business_models(self, ws, db: Session, result_detail: Dict):
@@ -394,6 +439,76 @@ class ExcelImportExportService:
             
         except Exception as e:
             error_msg = f"Error processing business models sheet: {str(e)}"
+            result_detail["errors"].append(error_msg)
+            result_detail["failed"] += 1
+    
+    def _import_business_model_fields(self, ws, db: Session, result_detail: Dict):
+        """导入对象字段配置"""
+        try:
+            # 获取表头
+            headers = [cell.value for cell in ws[1]]
+            if not headers or not any(headers):
+                return
+            
+            # 查找必要的列索引
+            id_col = self._find_column_index(headers, "ID")
+            model_id_col = self._find_column_index(headers, "模型ID")
+            field_id_col = self._find_column_index(headers, "字段ID")
+            data_type_col = self._find_column_index(headers, "数据类型")
+            name_col = self._find_column_index(headers, "中文名称")
+            description_col = self._find_column_index(headers, "中文说明")
+            
+            if model_id_col is None or field_id_col is None or name_col is None:
+                result_detail["errors"].append("Missing required columns in business model fields sheet")
+                return
+            
+            # 处理数据行
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if not row[model_id_col] or not row[field_id_col] or not row[name_col]:
+                    continue
+                
+                try:
+                    # 检查是否已存在（基于ID或模型ID+字段ID）
+                    existing = None
+                    if id_col is not None and row[id_col]:
+                        existing = db.query(BusinessModelField).filter(BusinessModelField.id == row[id_col]).first()
+                    
+                    if not existing:
+                        # 基于模型ID和字段ID查找
+                        existing = db.query(BusinessModelField).filter(
+                            BusinessModelField.model_id == row[model_id_col],
+                            BusinessModelField.field_id == row[field_id_col]
+                        ).first()
+                    
+                    if existing:
+                        # 更新现有记录
+                        existing.model_id = row[model_id_col]
+                        existing.field_id = row[field_id_col]
+                        existing.data_type = row[data_type_col] if data_type_col is not None else existing.data_type
+                        existing.name = row[name_col]
+                        existing.description = row[description_col] if description_col is not None else existing.description
+                    else:
+                        # 创建新记录
+                        new_field = BusinessModelField(
+                            model_id=row[model_id_col],
+                            field_id=row[field_id_col],
+                            data_type=row[data_type_col] if data_type_col is not None else "TEXT",
+                            name=row[name_col],
+                            description=row[description_col] if description_col is not None else None
+                        )
+                        db.add(new_field)
+                    
+                    db.commit()
+                    result_detail["imported"] += 1
+                    
+                except Exception as e:
+                    db.rollback()
+                    error_msg = f"Failed to import business model field {row[field_id_col]} for model {row[model_id_col]}: {str(e)}"
+                    result_detail["errors"].append(error_msg)
+                    result_detail["failed"] += 1
+            
+        except Exception as e:
+            error_msg = f"Error processing business model fields sheet: {str(e)}"
             result_detail["errors"].append(error_msg)
             result_detail["failed"] += 1
     
@@ -572,6 +687,7 @@ class ExcelImportExportService:
             # 遍历所有工作表（除了标准页签）
             standard_sheets = {"对象", "关系", "行动"}
             for sheet_name in wb.sheetnames:
+                logger.info(f"正在导入工作表: {sheet_name}")
                 if sheet_name in standard_sheets:
                     continue
                 
@@ -615,6 +731,10 @@ class ExcelImportExportService:
                 result_detail["errors"].append(f"Data source not found for model {model.id}")
                 return
             
+            # 收集所有数据记录
+            records_to_import = []
+            row_indices = []  # 记录对应的行号，用于错误报告
+            
             # 处理数据行（从第3行开始）
             for row_idx, row in enumerate(ws.iter_rows(min_row=3, values_only=True), 3):
                 try:
@@ -627,27 +747,108 @@ class ExcelImportExportService:
                     if not record:
                         continue
                     
-                    # 执行插入
-                    success = data_source_manager.execute_insert(
-                        data_source_id=model.data_source_id,
-                        table_name=model.id,
-                        data=record
-                    )
+                    records_to_import.append(record)
+                    row_indices.append(row_idx)
                     
-                    if success:
-                        result_detail["imported"] += 1
-                    else:
-                        result_detail["failed"] += 1
-                        result_detail["errors"].append(f"Failed to import record at row {row_idx} for model {model.id}")
-                        
                 except Exception as e:
                     result_detail["failed"] += 1
-                    result_detail["errors"].append(f"Error importing record at row {row_idx} for model {model.id}: {str(e)}")
+                    result_detail["errors"].append(f"Error preparing record at row {row_idx} for model {model.id}: {str(e)}")
+            
+            if not records_to_import:
+                return
+            
+            logger.info(f"批量导入 {len(records_to_import)} 条记录到模型 {model.id}")
+            
+            # 批量执行UPSERT操作
+            primary_key_field = model.primary_key_id
+            batch_result = data_source_manager.execute_batch_upsert(
+                data_source_id=model.data_source_id,
+                table_name=model.id,
+                data_list=records_to_import,
+                primary_key=primary_key_field
+            )
+            
+            result_detail["imported"] += batch_result["success_count"]
+            result_detail["failed"] += batch_result["failed_count"]
+            
+            if batch_result["failed_count"] > 0:
+                # 简单记录失败信息（由于批量操作，无法精确定位到具体行）
+                result_detail["errors"].append(f"批量导入失败 {batch_result['failed_count']} 条记录到模型 {model.id}")
             
         except Exception as e:
             error_msg = f"Error importing instance data for model {model.id}: {str(e)}"
             result_detail["errors"].append(error_msg)
-            result_detail["failed"] += 1
+            result_detail["failed"] += len(records_to_import) if 'records_to_import' in locals() else 1
+    
+    def _sync_all_table_structures(self, business_models_ws, business_model_fields_ws, db: Session):
+        """同步所有业务模型的表结构"""
+        try:
+            # 获取业务模型字段数据
+            field_headers = [cell.value for cell in business_model_fields_ws[1]]
+            model_id_col = self._find_column_index(field_headers, "模型ID")
+            field_id_col = self._find_column_index(field_headers, "字段ID")
+            data_type_col = self._find_column_index(field_headers, "数据类型")
+            name_col = self._find_column_index(field_headers, "中文名称")
+            description_col = self._find_column_index(field_headers, "中文说明")
+            
+            if model_id_col is None or field_id_col is None:
+                logger.warning("对象字段页签缺少必要列，跳过表结构同步")
+                return
+            
+            # 构建模型字段映射
+            model_fields_map = {}
+            for row in business_model_fields_ws.iter_rows(min_row=2, values_only=True):
+                if not row[model_id_col] or not row[field_id_col]:
+                    continue
+                
+                model_id = row[model_id_col]
+                if model_id not in model_fields_map:
+                    model_fields_map[model_id] = []
+                
+                field_dict = {
+                    'field_id': row[field_id_col],
+                    'data_type': row[data_type_col] if data_type_col is not None else "TEXT",
+                    'name': row[name_col] if name_col is not None else row[field_id_col],
+                    'description': row[description_col] if description_col is not None else None
+                }
+                model_fields_map[model_id].append(field_dict)
+            
+            # 获取业务模型数据
+            model_headers = [cell.value for cell in business_models_ws[1]]
+            id_col = self._find_column_index(model_headers, "ID")
+            primary_key_col = self._find_column_index(model_headers, "主键ID")
+            data_source_col = self._find_column_index(model_headers, "数据源ID")
+            
+            if id_col is None:
+                logger.warning("对象页签缺少ID列，跳过表结构同步")
+                return
+            
+            # 同步每个业务模型的表结构
+            for row in business_models_ws.iter_rows(min_row=2, values_only=True):
+                if not row[id_col]:
+                    continue
+                
+                model_id = row[id_col]
+                data_source_id = row[data_source_col] if data_source_col is not None else None
+                primary_key_id = row[primary_key_col] if primary_key_col is not None else None
+                
+                if not data_source_id:
+                    continue
+                
+                model_fields = model_fields_map.get(model_id, [])
+                
+                success = data_source_manager.sync_table_structure(
+                    data_source_id=data_source_id,
+                    table_name=model_id,
+                    model_fields=model_fields,
+                    primary_key=primary_key_id
+                )
+                
+                if not success:
+                    logger.warning(f"同步表结构失败: {model_id}")
+                    
+        except Exception as e:
+            logger.error(f"同步所有表结构失败: {str(e)}")
     
     def _find_column_index(self, headers: List[str], target_header: str) -> Optional[int]:
         """在表头列表中查找目标列的索引"""
