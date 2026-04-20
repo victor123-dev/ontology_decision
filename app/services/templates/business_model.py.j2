@@ -192,9 +192,8 @@ class BusinessModel:
         
         session = self.client.get_session()
         response = session.put(f"/api/v1/business-data/{self._model_name}/update", json={
-            "id": primary_key_value,
             **data
-        })
+        }, params={"id": primary_key_value})
         if response.status_code == 200:
             # 使用服务器返回的完整数据更新本地状态
             result = response.json()
