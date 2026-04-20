@@ -26,6 +26,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  useThreadChat,
+} from "@/components/workspace/chats";
 import { Input } from "@/components/ui/input";
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { MessageList } from "@/components/workspace/messages";
@@ -98,14 +101,19 @@ export default function NewAgentPage() {
   const [showSaveHint, setShowSaveHint] = useState(false);
   const [setupAgentStatus, setSetupAgentStatus] =
     useState<SetupAgentStatus>("idle");
+  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } =
+    useThreadChat();
 
-  const threadId = useMemo(() => uuid(), []);
 
   const [thread, sendMessage] = useThreadStream({
-    threadId: step === "chat" ? threadId : undefined,
+    threadId: isNewThread ? undefined : threadId,
     context: {
       mode: "flash",
-      is_bootstrap: true,
+      is_bootstrap: true
+    },
+    onStart: (createdThreadId) => {
+      setThreadId(createdThreadId);
+      setIsNewThread(false);
     },
     onFinish() {
       if (!agent && setupAgentStatus === "requested") {
@@ -192,6 +200,8 @@ export default function NewAgentPage() {
     await sendMessage(threadId, {
       text: t.agents.nameStepBootstrapMessage.replace("{name}", trimmed),
       files: [],
+    }, {
+      agent_name: trimmed
     });
   }, [
     nameInput,
