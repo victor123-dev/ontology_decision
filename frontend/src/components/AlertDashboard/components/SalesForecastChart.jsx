@@ -41,36 +41,46 @@ const DrillTooltip = ({ active, payload, label }) => {
   );
 };
 
+// 生成最近12个月的月份列表
+const getLast12Months = () => {
+  const months = [];
+  const today = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    months.push(`${year}-${String(month).padStart(2, '0')}`);
+  }
+  return months;
+};
+
 export default function SalesForecastChart({ height = 220, chartData = [], loading = false }) {
   const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder', 'purchaseQty']));
   const [drillMonth, setDrillMonth] = useState(null);
-  const [timeRange, setTimeRange] = useState('all');
 
-  // 将按品号+月份的数据转换为按月合并的数据（用于折线图）
+  // 将按品号+月份的数据转换为按月合并的数据（用于折线图），补全12个月
   const monthlyData = useMemo(() => {
-    if (!chartData || !Array.isArray(chartData)) return [];
-
+    const last12Months = getLast12Months();
+    // 初始化12个月的数据，值都为0
     const monthMap = {};
-    chartData.forEach(item => {
-      const month = item.month;
-      if (!monthMap[month]) {
-        monthMap[month] = { month, salesForecast: 0, salesOrder: 0, purchaseQty: 0 };
-      }
-      monthMap[month].salesForecast += item.salesForecast || 0;
-      monthMap[month].salesOrder += item.salesOrder || 0;
-      monthMap[month].purchaseQty += item.purchaseQty || 0;
+    last12Months.forEach(month => {
+      monthMap[month] = { month, salesForecast: 0, salesOrder: 0, purchaseQty: 0 };
     });
 
-    return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
-  }, [chartData]);
+    // 用chartData填充
+    if (chartData && Array.isArray(chartData)) {
+      chartData.forEach(item => {
+        const month = item.month;
+        if (monthMap[month]) {
+          monthMap[month].salesForecast += item.salesForecast || 0;
+          monthMap[month].salesOrder += item.salesOrder || 0;
+          monthMap[month].purchaseQty += item.purchaseQty || 0;
+        }
+      });
+    }
 
-  // 按时间范围筛选
-  const filteredMonthlyData = useMemo(() => {
-    if (drillMonth) return [];
-    if (timeRange === 'H1') return monthlyData.filter(d => parseInt(d.month.slice(5)) <= 6);
-    if (timeRange === 'H2') return monthlyData.filter(d => parseInt(d.month.slice(5)) >= 7);
-    return monthlyData;
-  }, [timeRange, monthlyData, drillMonth]);
+    return Object.values(monthMap);
+  }, [chartData]);
 
   const toggleSeries = (key) => {
     setActiveSeries(prev => {
@@ -128,35 +138,7 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
             <span style={{ fontSize: '12px', color: '#cbd5e1', fontWeight: 500 }}>{drillMonth} 月度明细</span>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
-            {(['all', 'H1', 'H2']).map((r, idx) => (
-              <button
-                key={r}
-                onClick={() => setTimeRange(r)}
-                style={{ fontSize: '12px', padding: '4px 12px',
-                  transition: 'all 0.2s', cursor: 'pointer',
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: idx === 0 ? '4px 0 0 4px' : idx === 2 ? '0 4px 4px 0' : '0',
-                  ...(timeRange === r
-                    ? { background: 'rgba(59,130,246,0.2)', color: '#60a5fa',
-                        border: '1px solid rgba(59,130,246,0.4)' }
-                    : { color: '#94a3b8' }) }}
-                onMouseOver={e => {
-                  if (timeRange !== r) {
-                    e.currentTarget.style.color = '#e2e8f0';
-                  }
-                }}
-                onMouseOut={e => {
-                  if (timeRange !== r) {
-                    e.currentTarget.style.color = '#94a3b8';
-                  }
-                }}
-              >
-                {r === 'all' ? '全年' : r === 'H1' ? '上半年' : '下半年'}
-              </button>
-            ))}
-          </div>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>总览</span>
         )}
 
         {/* 系列筛选（仅总览时显示） */}
@@ -187,7 +169,7 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
       {/* 提示文字 */}
       {!drillMonth && (
         <p style={{ fontSize: '10px', color: '#475569', marginBottom: '4px', flexShrink: 0 }}>
-          点击折线可下钻查看该月的产品明细
+          {/*点击折线可下钻查看该月的产品明细*/}
         </p>
       )}
 
@@ -195,31 +177,37 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
       <div style={{ flex: 1, minHeight: 0, height }}>
         {drillMonth ? (
           // 下钻柱状图（按品号显示明细）
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={drillData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="product" tick={{ fill: '#64748b', fontSize: 9 }}
-                angle={-45} textAnchor="end" height={60} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
-              <Tooltip content={<DrillTooltip />} />
-              <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
-              <Bar dataKey="salesForecast" name="销售预测" fill="#3b82f6" radius={[3,3,0,0]} />
-              <Bar dataKey="salesOrder" name="实际订单" fill="#22c55e" radius={[3,3,0,0]} />
-              <Bar dataKey="purchaseQty" name="采购量" fill="#f59e0b" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          drillData.length === 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <span style={{ fontSize: '13px', color: '#64748b' }}>该月份暂无明细数据</span>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={drillData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="product" tick={{ fill: '#64748b', fontSize: 9 }}
+                  angle={-45} textAnchor="end" height={60} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
+                <Tooltip content={<DrillTooltip />} />
+                <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
+                <Bar dataKey="salesForecast" name="销售预测" fill="#3b82f6" radius={[3,3,0,0]} />
+                <Bar dataKey="salesOrder" name="实际订单" fill="#22c55e" radius={[3,3,0,0]} />
+                <Bar dataKey="purchaseQty" name="采购量" fill="#f59e0b" radius={[3,3,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )
         ) : (
           // 总览折线图（按月合并数据）
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
-              data={filteredMonthlyData}
+              data={monthlyData}
               margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
               onClick={(data) => { if (data?.activeLabel) setDrillMonth(data.activeLabel); }}
               style={{ cursor: 'pointer' }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} 
-                tickFormatter={v => v ? v.slice(5) + '月' : ''} />
+              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }}
+                tickFormatter={v => v ? v.replace('-', '年') + '月' : ''} />
               <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />

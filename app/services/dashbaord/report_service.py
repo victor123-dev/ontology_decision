@@ -13,26 +13,33 @@ logger = get_logger(__name__)
 class ReportService:
     """报表服务类，提供销售预测等报表数据查询功能"""
 
-    def get_sale_forecast_by_year(self, year: str) -> List[CharVO]:
+    def get_sale_forecast(self, start_month: str, end_month: str) -> List[CharVO]:
         """
-        按年查询销售预测数据，按月份和品号分组合并
+        查询指定月份范围内的销售预测数据，按月份和品号分组合并
 
         Args:
-            year: 年份字符串，格式如"2025"
+            start_month: 开始月份，格式如"2025-01"
+            end_month: 结束月份，格式如"2025-12"
 
         Returns:
             CharVO 对象列表，包含合并后的预测数据
         """
         client = get_ontology_client()
 
-        # 计算年的开始和结束日期
-        year_start = f"{year}-01-01"
-        year_end = f"{int(year) + 1}-01-01"
+        # 计算开始和结束日期
+        start_date = f"{start_month}-01"
+        # 结束月的下一个月第一天
+        year, month = map(int, end_month.split('-'))
+        if month == 12:
+            end_year, end_month_next = year + 1, 1
+        else:
+            end_year, end_month_next = year, month + 1
+        end_date = f"{end_year:04d}-{end_month_next:02d}-01"
 
-        # 查询该年份内的销售预测数据
+        # 查询指定月份范围内的销售预测数据
         forecasts = client.models.SalesForecast.find(
-            demand_date__gte=year_start,
-            demand_date__lt=year_end
+            demand_date__gte=start_date,
+            demand_date__lt=end_date
         )
 
         if not forecasts:
@@ -78,26 +85,33 @@ class ReportService:
         return result
 
 
-    def get_purchase_by_year(self, year: str) -> List[CharVO]:
+    def get_purchase(self, start_month: str, end_month: str) -> List[CharVO]:
         """
-        按年查询采购订单数据，按月份和品号分组合并
+        查询指定月份范围内的采购订单数据，按月份和品号分组合并
 
         Args:
-            year: 年份字符串，格式如"2025"
+            start_month: 开始月份，格式如"2025-01"
+            end_month: 结束月份，格式如"2025-12"
 
         Returns:
             CharVO 对象列表，包含合并后的采购数据
         """
         client = get_ontology_client()
 
-        # 计算年的开始和结束日期
-        year_start = f"{year}-01-01"
-        year_end = f"{int(year) + 1}-01-01"
+        # 计算开始和结束日期
+        start_date = f"{start_month}-01"
+        # 结束月的下一个月第一天
+        year, month = map(int, end_month.split('-'))
+        if month == 12:
+            end_year, end_month_next = year + 1, 1
+        else:
+            end_year, end_month_next = year, month + 1
+        end_date = f"{end_year:04d}-{end_month_next:02d}-01"
 
-        # 查询该年份内的采购订单数据
+        # 查询指定月份范围内的采购订单数据
         purchase_orders = client.models.PurchaseOrder.find(
-            document_date__gte=year_start,
-            document_date__lt=year_end,
+            document_date__gte=start_date,
+            document_date__lt=end_date,
             status__ne="已取消"
         )
 
@@ -162,26 +176,33 @@ class ReportService:
         return result
 
 
-    def get_sale_orders_by_year(self, year: str) -> List[CharVO]:
+    def get_sale_orders(self, start_month: str, end_month: str) -> List[CharVO]:
         """
-        按年查询销售订单数据，按月份和品号分组合并
+        查询指定月份范围内的销售订单数据，按月份和品号分组合并
 
         Args:
-            year: 年份字符串，格式如"2025"
+            start_month: 开始月份，格式如"2025-01"
+            end_month: 结束月份，格式如"2025-12"
 
         Returns:
             CharVO 对象列表，包含合并后的订单数据
         """
         client = get_ontology_client()
 
-        # 计算年的开始和结束日期
-        year_start = f"{year}-01-01"
-        year_end = f"{int(year) + 1}-01-01"
+        # 计算开始和结束日期
+        start_date = f"{start_month}-01"
+        # 结束月的下一个月第一天
+        year, month = map(int, end_month.split('-'))
+        if month == 12:
+            end_year, end_month_next = year + 1, 1
+        else:
+            end_year, end_month_next = year, month + 1
+        end_date = f"{end_year:04d}-{end_month_next:02d}-01"
 
-        # 查询该年份内的销售订单数据
+        # 查询指定月份范围内的销售订单数据
         sales_orders = client.models.SalesOrder.find(
-            document_date__gte=year_start,
-            document_date__lt=year_end,
+            document_date__gte=start_date,
+            document_date__lt=end_date,
             status__ne="已取消"
         )
 

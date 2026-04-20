@@ -29,8 +29,7 @@ report_service = ReportService()
 def get_purchase_on_time_rate():
     """获取采购准时率KPI"""
     try:
-        day = "2025-08-31"
-        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_date = datetime.today()
         current_month = current_date.strftime("%Y-%m")
         last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
 
@@ -50,8 +49,7 @@ def get_purchase_on_time_rate():
 def get_monthly_sales():
     """获取月销售数据KPI（合并金额和数量）"""
     try:
-        day = "2025-06-30"
-        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_date = datetime.today()
         current_month = current_date.strftime("%Y-%m")
         last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
 
@@ -78,8 +76,7 @@ def get_monthly_sales():
 def get_alert_count():
     """获取预警数量KPI"""
     try:
-        day = "2025-04-20"
-        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_date = datetime.today()
         current_month = current_date.strftime("%Y-%m")
         last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
 
@@ -99,8 +96,7 @@ def get_alert_count():
 def get_alert_exec_count():
     """获取预警执行数量KPI"""
     try:
-        day = "2025-08-31"
-        current_date = datetime.strptime(day, "%Y-%m-%d")
+        current_date = datetime.today()
         current_month = current_date.strftime("%Y-%m")
         last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
 
@@ -131,11 +127,15 @@ def get_logistics_data() -> list[dict]:
 
 @router.get("/forecast")
 def get_forecast_data():
-    """获取需求预测数据"""
+    """获取需求预测数据（当前下一个月开始的6个月）"""
     try:
-        # 固定查询未来6个月的数据
-        start_month = "2026-05"
-        end_month = "2026-10"
+        # 计算当前时间的下一个月和后6个月
+        today = datetime.today()
+        # start_month: 当前下一个月
+        next_month = today + relativedelta(months=1)
+        start_month = next_month.strftime("%Y-%m")
+        # end_month: 当前时间后6个月
+        end_month = (today + relativedelta(months=6)).strftime("%Y-%m")
         return report_service.get_forecast_data(start_month, end_month)
     except Exception as e:
         logger.error(f"获取需求预测数据失败: {str(e)}\n{traceback.format_exc()}")
@@ -181,14 +181,20 @@ def process_alert(request: dict):
 
 @router.get("/chart")
 def get_chart_data():
-    """获取销售预测 vs 实际订单 vs 采购量"""
+    """获取销售预测 vs 实际订单 vs 采购量（最近12个月）"""
     try:
-        year = "2025"
-        
+        # 计算当前时间最近12个月
+        today = datetime.today()
+        # 结束月为当前月
+        end_month = today.strftime("%Y-%m")
+        # 开始月为11个月前
+        start_date = today - relativedelta(months=11)
+        start_month = start_date.strftime("%Y-%m")
+
         # 获取销售预测、销售订单、采购订单数据（各自已按品号+月份合并）
-        forecast_list = report_service.get_sale_forecast_by_year(year)
-        order_list = report_service.get_sale_orders_by_year(year)
-        purchase_list = report_service.get_purchase_by_year(year)
+        forecast_list = report_service.get_sale_forecast(start_month, end_month)
+        order_list = report_service.get_sale_orders(start_month, end_month)
+        purchase_list = report_service.get_purchase(start_month, end_month)
 
         logger.info(f"销售预测: {len(forecast_list)}, 销售订单: {len(order_list)}, 采购订单: {len(purchase_list)}")
 

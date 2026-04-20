@@ -165,7 +165,7 @@ export default function AlertDashboard() {
   const [riskFilter, setRiskFilter] = useState('all');
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [searchText, setSearchText] = useState('');
-  const [lastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  const [lastRefresh, setLastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [layout, setLayout] = useState(INITIAL_LAYOUT);
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(1280);
@@ -219,6 +219,7 @@ export default function AlertDashboard() {
       ]);
     } finally {
       setIsRefreshing(false);
+      setLastRefresh(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }
   }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchAlertExecCount, refetchLogistics, refetchAlerts, refetchChart, refetchMap, refetchForecast]);
 
@@ -525,7 +526,7 @@ export default function AlertDashboard() {
                   ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
                       gap: '12px', padding: '4px 16px 8px 16px', paddingTop: '4px' }}>
-                      {alerts.slice(0, 4).map(alert => (
+                      {alerts.filter(a => a.status !== '已处理').slice(0, 4).map(alert => (
                         <div
                           key={alert.id}
                           style={{ padding: '12px', borderRadius: '8px', cursor: 'pointer',

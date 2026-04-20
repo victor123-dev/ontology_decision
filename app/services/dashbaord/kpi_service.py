@@ -116,7 +116,8 @@ class KpiService:
         # 查询预警消息
         alerts = client.models.AlertMessage.find(
             create_time__gte=month_start,
-            create_time__lt=month_end
+            create_time__lt=month_end,
+            status__ne="已处理"
         )
 
         return len(alerts)
