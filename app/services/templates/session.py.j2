@@ -28,6 +28,10 @@ class Session:
         """发送PUT请求"""
         url = f"{self.api_url}{endpoint}"
         return self.session.put(url, headers=self.headers, json=json)
+     def put(self, endpoint: str, json: Optional[Dict[str, Any]] = None, params: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """发送PUT请求"""
+        url = f"{self.api_url}{endpoint}"
+        return self.session.put(url, headers=self.headers, json=json, params=params)
     
     def delete(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> requests.Response:
         """发送DELETE请求"""

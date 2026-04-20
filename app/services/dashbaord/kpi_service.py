@@ -79,46 +79,24 @@ class KpiService:
 
         orders = client.models.SalesOrder.find(
             document_date__gte=month_start,
-            document_date__lt=month_end
+            document_date__lt=month_end,
+            status__ne="已取消"
         )
 
         if not orders:
             return {"amount": 0.0, "qty": 0}
 
+        # 收集所有订单的 order_number
+        order_numbers = [order.order_number for order in orders]
+
+        # 使用 IN 查询一次性获取所有订单明细
+        all_details = client.models.OrderDetail.find(order_number__in=order_numbers)
+
         # 从订单明细中同时计算总金额和总数量
-        total_amount = 0.0
-        total_qty = 0
-        for order in orders:
-            details = order.getOrderDetail()
-            if details:
-                total_amount += sum(detail.amount for detail in details)
-                total_qty += sum(detail.quantity for detail in details)
+        total_amount = sum(detail.amount for detail in all_details if detail.amount is not None)
+        total_qty = sum(detail.quantity for detail in all_details if detail.quantity is not None)
 
         return {"amount": round(total_amount, 2), "qty": total_qty}
-
-    def get_monthly_sales_amount(self, month: str) -> float:
-        """
-        计算月销售金额
-
-        Args:
-            month: 月份字符串，格式如"2024-01"
-
-        Returns:
-            月销售金额
-        """
-        return self.get_monthly_sales_data(month)["amount"]
-
-    def get_monthly_sales_qty(self, month: str) -> int:
-        """
-        计算月销售数量
-
-        Args:
-            month: 月份字符串，格式如"2024-01"
-
-        Returns:
-            月销售数量
-        """
-        return self.get_monthly_sales_data(month)["qty"]
 
     def get_alert_count(self, month: str) -> int:
         """
@@ -136,20 +114,13 @@ class KpiService:
         month_start, month_end = _get_month_date_range(month)
 
         # 查询预警消息
-        query_builder = client.models.AlertMessage
-        alerts = query_builder.execute()
+        alerts = client.models.AlertMessage.find(
+            create_time__gte=month_start,
+            create_time__lt=month_end,
+            status__ne="已处理"
+        )
 
-        # 通过关联的预警规则的生效时间来过滤
-        filtered_alerts = []
-        for alert in alerts:
-            alert_rule = alert.getAlertRule()
-            if alert_rule and alert_rule.effective_time:
-                effective_time = alert_rule.effective_time
-                # 检查预警规则生效时间是否在指定月份
-                if month_start <= effective_time < month_end:
-                    filtered_alerts.append(alert)
-
-        return len(filtered_alerts)
+        return len(alerts)
 
 
     def get_alert_exec_count(self, month: str) -> int:

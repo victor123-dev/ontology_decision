@@ -2,10 +2,8 @@
 // 支持：① 产品筛选 ② 下钻（点击产品查看月度明细+采购建议）
 import { useState, useMemo } from "react";
 import { ChevronLeft, Search, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { useForecastData } from "../hooks/useApiData";
 
-export default function ForecastTable({ maxHeight = 260 }) {
-  const { data: forecastResult, loading } = useForecastData();
+export default function ForecastTable({ maxHeight = 260, forecastResult = { data: [], months: [] }, loading = false }) {
   const [searchText, setSearchText] = useState('');
   const [drillProduct, setDrillProduct] = useState(null);
   const [sortField, setSortField] = useState('');
@@ -38,6 +36,21 @@ export default function ForecastTable({ maxHeight = 260 }) {
     else { setSortField(field); setSortAsc(false); } };
 
   const drillDetails = drillProduct ? getDrillDetails(drillProduct) : [];
+
+  // 加载状态
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <div style={{
+          width: '32px', height: '32px',
+          border: '3px solid rgba(59,130,246,0.2)',
+          borderTop: '3px solid #3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%',
@@ -185,8 +198,8 @@ export default function ForecastTable({ maxHeight = 260 }) {
                     <p style={{ color: '#64748b', fontSize: '10px', margin: '2px 0 0 0' }}>{row.productCode}</p>
                   </td>
                   {forecastMonths.map(m => { const val = row.months[m] || 0;
-                    const max = Math.max(...forecastMonths.map(mm => row.months[mm] || 0));
-                    const pct = max > 0 ? (val / max) * 100 : 0;
+                    const maxVal = Math.max(...forecastMonths.map(mm => row.months[mm] || 0));
+                    const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
                     // 环比趋势
                     const mIdx = forecastMonths.indexOf(m);
                     const prevVal = mIdx > 0 ? (row.months[forecastMonths[mIdx - 1]] || 0) : val;

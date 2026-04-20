@@ -2,7 +2,6 @@
 // 只渲染：图例 + SVG节点 + 路线连线
 // 无任何背景填充、无蒙层、无遮罩
 import { useState, useEffect } from "react";
-import { useMapData } from "../hooks/useApiData";
 
 // 城市坐标映射（相对于SVG画布 viewBox="300 60 480 440"）
 const cityCoords = { '上海':   { x: 620, y: 290 },
@@ -25,13 +24,27 @@ const routeTypeConfig = { supply:    { color: '#f59e0b', dash: '6,4' },
   delivery:  { color: '#22c55e', dash: '6,4' },
   logistics: { color: '#8b5cf6', dash: '4,6' } };
 
-export default function SupplyChainMap() {
-  const { data: mapData, loading } = useMapData();
+export default function SupplyChainMap({ mapData = { nodes: [], routes: [] }, loading = false }) {
   const [hoveredNode, setHoveredNode] = useState(null);
   const [animFrame, setAnimFrame] = useState(0);
 
   useEffect(() => { const interval = setInterval(() => { setAnimFrame(f => (f + 1) % 60); }, 50);
     return () => clearInterval(interval); }, []);
+
+  // 加载状态
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <div style={{
+          width: '32px', height: '32px',
+          border: '3px solid rgba(59,130,246,0.2)',
+          borderTop: '3px solid #3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+      </div>
+    );
+  }
 
   const mapNodes = mapData?.nodes || [];
   const mapRoutes = mapData?.routes || [];
