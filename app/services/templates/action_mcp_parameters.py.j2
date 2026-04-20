@@ -21,5 +21,5 @@ Any
 class {{ action.api_name }}Parameters(BaseModel):
     """{{ action.description or action.name }} Parameters"""
     {% for param in action.parameters %}
-    {{ param.name }}: {% if param.required %}{{ python_type_for_param(param) }}{% else %}Optional[{{ python_type_for_param(param) }}]{% endif %} = Field({% if not param.required %}default=None, {% elif param.default_value is not none %}default={{ param.default_value | tojson }}, {% endif %}description="{{ param.description or '' }}")
+    {{ param.name }}: {% if param.required %}{{ python_type_for_param(param) }}{% else %}Optional[{{ python_type_for_param(param) }}]{% endif %} = Field({% if not param.required %}{% if param.default_value is not none %}default={{ param.default_value | tojson }}, {% else %}default=None, {% endif %}{% endif %}description="{{ param.description or '' }}")
     {% endfor %}

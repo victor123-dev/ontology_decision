@@ -59,6 +59,7 @@ function ActionManager({ businessModels, modelLinks }) {
     setEditingAction(record)
     form.setFieldsValue({
       id: record.id,
+      api_name: record.api_name,
       name: record.name,
       description: record.description,
       action_type: record.action_type,

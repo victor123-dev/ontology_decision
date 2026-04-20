@@ -18,7 +18,7 @@ router = APIRouter()
     description="""
     获取当前本体的精选上下文，以Markdown格式返回，便于Agent理解和使用。
     返回的内容包含三个主要部分：
-    - 对象类型 (Objects): 所有业务模型的详细信息，包括字段定义
+    - 对象类型 (Objects): 所有业务模型的详细信息
     - 关系类型 (Links): 所有业务模型关系的详细信息  
     - 动作类型 (Actions): 所有可执行动作的详细信息
     """,
@@ -53,14 +53,14 @@ def get_ontology_context(db: Session = Depends(get_db)):
                 else:
                     markdown_parts.append("- **描述**: 无")
                 
-                if model.fields:
-                    markdown_parts.append("- **字段**:")
-                    for field in sorted(model.fields, key=lambda x: x.field_id):
-                        field_desc = f"{field.name} ({field.data_type})"
-                        is_primary = " [主键]" if field.field_id == (model.primary_key_id ) else ""
-                        markdown_parts.append(f"  - {field.field_id}: {field_desc}{is_primary}")
-                else:
-                    markdown_parts.append("- **字段**: 无")
+                # if model.fields:
+                #     markdown_parts.append("- **字段**:")
+                #     for field in sorted(model.fields, key=lambda x: x.field_id):
+                #         field_desc = f"{field.name} ({field.data_type})"
+                #         is_primary = " [主键]" if field.field_id == (model.primary_key_id ) else ""
+                #         markdown_parts.append(f"  - {field.field_id}: {field_desc}{is_primary}")
+                # else:
+                #     markdown_parts.append("- **字段**: 无")
                 markdown_parts.append("")  # 空行分隔
         
         # 获取所有业务模型关系（链接）
@@ -69,7 +69,7 @@ def get_ontology_context(db: Session = Depends(get_db)):
             markdown_parts.append("### 关系类型 (Links)\n")
             for link in model_links:
                 markdown_parts.append(f"#### {link.id}")
-                markdown_parts.append(f"- **关系标识 (link_type_id)**: {link.id}")
+                markdown_parts.append(f"- **关系类型ID (link_type_id)**: {link.id}")
                 if link.description:
                     markdown_parts.append(f"- **描述**: {link.description}")
                 else:
