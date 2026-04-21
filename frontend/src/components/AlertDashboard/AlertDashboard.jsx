@@ -397,7 +397,7 @@ export default function AlertDashboard() {
               {/* ── 销售预测图表 ── */}
               <div key="chart">
                 <Widget
-                  title="销售预测 vs 实际订单 vs 采购量"
+                  title="销售预测 vs 实际订单"
                   subtitle="近12个月 · 点击月份可下钻查看产品明细"
                   fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} chartData={chartData} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />}
                 >

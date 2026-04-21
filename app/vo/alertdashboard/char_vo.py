@@ -8,4 +8,3 @@ class CharVO(BaseModel):
     product: str = Field(..., description="产品名称")
     salesForecast: int = Field(0, description="预测数量")
     salesOrder: int = Field(0, description="订单数量")
-    purchaseQty: int = Field(0, description="采购数量")

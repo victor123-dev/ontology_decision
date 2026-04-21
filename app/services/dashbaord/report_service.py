@@ -49,7 +49,6 @@ class ReportService:
         grouped_data = defaultdict(lambda: {
             'forecast': 0,
             'order': 0,
-            'purchase': 0,
             'product': ''
         })
 
@@ -74,8 +73,7 @@ class ReportService:
                 month=month,
                 product=data['product'] or f"{item_code}产品",
                 salesForecast=int(data['forecast']),
-                salesOrder=int(data['order']),
-                purchaseQty=int(data['purchase'])
+                salesOrder=int(data['order'])
             )
             result.append(char_vo)
 
@@ -84,96 +82,6 @@ class ReportService:
 
         return result
 
-
-    def get_purchase(self, start_month: str, end_month: str) -> List[CharVO]:
-        """
-        查询指定月份范围内的采购订单数据，按月份和品号分组合并
-
-        Args:
-            start_month: 开始月份，格式如"2025-01"
-            end_month: 结束月份，格式如"2025-12"
-
-        Returns:
-            CharVO 对象列表，包含合并后的采购数据
-        """
-        client = get_ontology_client()
-
-        # 计算开始和结束日期
-        start_date = f"{start_month}-01"
-        # 结束月的下一个月第一天
-        year, month = map(int, end_month.split('-'))
-        if month == 12:
-            end_year, end_month_next = year + 1, 1
-        else:
-            end_year, end_month_next = year, month + 1
-        end_date = f"{end_year:04d}-{end_month_next:02d}-01"
-
-        # 查询指定月份范围内的采购订单数据
-        purchase_orders = client.models.PurchaseOrder.find(
-            document_date__gte=start_date,
-            document_date__lt=end_date,
-            status__ne="已取消"
-        )
-
-        logger.info(f"查询到 {len(purchase_orders) if purchase_orders else 0} 条采购订单数据")
-
-        if not purchase_orders:
-            return []
-
-        # 收集所有采购订单号
-        purchase_order_numbers = [order.purchase_order_number for order in purchase_orders]
-
-        # 使用 IN 查询一次性获取所有采购订单明细
-        all_details = client.models.PurchaseOrderDetail.find(purchase_order_number__in=purchase_order_numbers)
-
-        logger.info(f"查询到 {len(all_details)} 条采购订单明细数据")
-
-        # 建立订单号到日期的映射
-        order_date_map = {order.purchase_order_number: order.document_date for order in purchase_orders}
-
-        # 按月份和item_code分组合并数据
-        grouped_data = defaultdict(lambda: {
-            'forecast': 0,
-            'order': 0,
-            'purchase': 0,
-            'product': ''
-        })
-
-        for detail in all_details:
-            purchase_order_number = detail.purchase_order_number
-
-            # 从映射中获取订单日期
-            document_date_str = str(order_date_map.get(purchase_order_number, '')) if order_date_map.get(purchase_order_number) else ''
-            month = document_date_str[:7] if document_date_str else '1970-01'
-
-            item_code = detail.item_code or 'UNKNOWN'
-
-            # 累加采购数量
-            qty = detail.quantity or 0
-            grouped_data[(month, item_code)]['purchase'] += qty
-            logger.debug(f"  明细: {item_code}, 数量: {qty}, 月份: {month}")
-
-            # 保存产品名称
-            if detail.item_name:
-                grouped_data[(month, item_code)]['product'] = detail.item_name
-
-        # 构建CharVO对象列表
-        result = []
-        for (month, item_code), data in grouped_data.items():
-            char_vo = CharVO(
-                item_code=item_code,
-                month=month,
-                product=data['product'],
-                salesForecast=int(data['forecast']),
-                salesOrder=int(data['order']),
-                purchaseQty=int(data['purchase'])
-            )
-            result.append(char_vo)
-
-        # 按月份排序
-        result.sort(key=lambda x: (x.month, x.item_code))
-
-        return result
 
 
     def get_sale_orders(self, start_month: str, end_month: str) -> List[CharVO]:
@@ -226,7 +134,6 @@ class ReportService:
         grouped_data = defaultdict(lambda: {
             'forecast': 0,
             'order': 0,
-            'purchase': 0,
             'product': ''
         })
 
@@ -256,8 +163,7 @@ class ReportService:
                 month=month,
                 product=data['product'],
                 salesForecast=int(data['forecast']),
-                salesOrder=int(data['order']),
-                purchaseQty=int(data['purchase'])
+                salesOrder=int(data['order'])
             )
             result.append(char_vo)
 

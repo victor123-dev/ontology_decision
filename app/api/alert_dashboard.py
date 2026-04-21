@@ -193,7 +193,7 @@ def process_alert_auto(request: dict):
 
 @router.get("/chart")
 def get_chart_data():
-    """获取销售预测 vs 实际订单 vs 采购量（最近12个月）"""
+    """获取销售预测 vs 实际订单（最近12个月）"""
     try:
         # 计算当前时间最近12个月
         today = datetime.today()
@@ -203,14 +203,13 @@ def get_chart_data():
         start_date = today - relativedelta(months=11)
         start_month = start_date.strftime("%Y-%m")
 
-        # 获取销售预测、销售订单、采购订单数据（各自已按品号+月份合并）
+        # 获取销售预测、销售订单数据（各自已按品号+月份合并）
         forecast_list = report_service.get_sale_forecast(start_month, end_month)
         order_list = report_service.get_sale_orders(start_month, end_month)
-        purchase_list = report_service.get_purchase(start_month, end_month)
 
-        logger.info(f"销售预测: {len(forecast_list)}, 销售订单: {len(order_list)}, 采购订单: {len(purchase_list)}")
+        logger.info(f"销售预测: {len(forecast_list)}, 销售订单: {len(order_list)}")
 
-        # 按品号+年月将三种数据合并成CharVO
+        # 按品号+年月将两种数据合并成CharVO
         merged_data = {}
         def add_to_merged(item_list, vo_field_name):
             """将数据添加到合并字典"""
@@ -222,8 +221,7 @@ def get_chart_data():
                         "month": item.month,
                         "product": "",
                         "salesForecast": 0,
-                        "salesOrder": 0,
-                        "purchaseQty": 0
+                        "salesOrder": 0
                     }
                 # 累加对应字段值
                 merged_data[key][vo_field_name] += getattr(item, vo_field_name)
@@ -231,10 +229,9 @@ def get_chart_data():
                 if item.product:
                     merged_data[key]["product"] = item.product
 
-        # 合并三种数据
+        # 合并两种数据
         add_to_merged(forecast_list, "salesForecast")
         add_to_merged(order_list, "salesOrder")
-        add_to_merged(purchase_list, "purchaseQty")
 
         # 转换为CharVO对象列表并排序
         result = [
@@ -243,8 +240,7 @@ def get_chart_data():
                 month=data["month"],
                 product=data["product"],
                 salesForecast=data["salesForecast"],
-                salesOrder=data["salesOrder"],
-                purchaseQty=data["purchaseQty"]
+                salesOrder=data["salesOrder"]
             )
             for data in merged_data.values()
         ]

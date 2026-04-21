@@ -1,4 +1,4 @@
-// 供应链控制塔 - 销售预测 vs 实际订单 vs 采购量图表
+// 供应链控制塔 - 销售预测 vs 实际订单图表
 // 支持：① 数据筛选（产品/时间范围）② 下钻（点击月份查看明细）
 import { useState, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -8,7 +8,6 @@ import { ChevronLeft } from "lucide-react";
 const SERIES = [
   { key: 'salesForecast', label: '销售预测', color: '#3b82f6' },
   { key: 'salesOrder', label: '实际订单', color: '#22c55e' },
-  { key: 'purchaseQty', label: '采购量', color: '#f59e0b' },
 ];
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -55,7 +54,7 @@ const getLast12Months = () => {
 };
 
 export default function SalesForecastChart({ height = 220, chartData = [], loading = false, drillMonth: externalDrillMonth, onDrillMonthChange }) {
-  const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder', 'purchaseQty']));
+  const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder']));
   const [internalDrillMonth, setInternalDrillMonth] = useState(null);
 
   // 外部传入的 drillMonth 优先，否则使用内部状态
@@ -74,7 +73,7 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
     // 初始化12个月的数据，值都为0
     const monthMap = {};
     last12Months.forEach(month => {
-      monthMap[month] = { month, salesForecast: 0, salesOrder: 0, purchaseQty: 0 };
+      monthMap[month] = { month, salesForecast: 0, salesOrder: 0 };
     });
 
     // 用chartData填充
@@ -84,7 +83,6 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
         if (monthMap[month]) {
           monthMap[month].salesForecast += item.salesForecast || 0;
           monthMap[month].salesOrder += item.salesOrder || 0;
-          monthMap[month].purchaseQty += item.purchaseQty || 0;
         }
       });
     }
@@ -202,7 +200,6 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
                 <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
                 <Bar dataKey="salesForecast" name="销售预测" fill="#3b82f6" radius={[3,3,0,0]} />
                 <Bar dataKey="salesOrder" name="实际订单" fill="#22c55e" radius={[3,3,0,0]} />
-                <Bar dataKey="purchaseQty" name="采购量" fill="#f59e0b" radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           )
