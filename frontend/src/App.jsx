@@ -9,7 +9,6 @@ import DataSource from './components/DataSource/DataSource'
 import BusinessModel from './components/BusinessModel/BusinessModel'
 import DataSensing from './components/DataSensing/DataSensing'
 import DriveLogic from './components/DriveLogic/DriveLogic'
-import Agent from './components/Agent/Agent'
 import BusinessData from './components/BusinessData/BusinessData'
 import DriveLog from './components/DriveLog/DriveLog'
 import TestExecution from './components/TestExecution/TestExecution'
@@ -68,19 +67,7 @@ function AppContent() {
             },
             {
               key: 'group-2',
-              label: '智能体管理',
-              type: 'group',
-              children: [
-                {
-                  key: 'agent',
-                  icon: <span>🤖</span>,
-                  label: <Link to="/agent">Agent管理</Link>,
-                }
-              ]
-            },
-            {
-              key: 'group-3',
-              label: '核心驱动配置',
+              label: '数据驱动配置',
               type: 'group',
               children: [
                 {
@@ -101,7 +88,7 @@ function AppContent() {
               ]
             },
             {
-              key: 'group-4',
+              key: 'group-3',
               label: '测试监控',
               type: 'group',
               children: [
@@ -118,7 +105,7 @@ function AppContent() {
               ]
             },
             {
-              key: 'group-5',
+              key: 'group-4',
               label: '可视化分析',
               type: 'group',
               children: [
@@ -130,7 +117,7 @@ function AppContent() {
               ]
             },
             {
-              key: 'group-6',
+              key: 'group-5',
               label: '业务案例',
               type: 'group',
               children: [
@@ -159,7 +146,6 @@ function AppContent() {
             <Route path="/data-source" element={<DataSource />} />
             <Route path="/business-model" element={<BusinessModel />} />
             <Route path="/business-data" element={<BusinessData />} />
-            <Route path="/agent" element={<Agent />} />
             <Route path="/document-import" element={<DocumentImport />} />
             <Route path="/data-sensing" element={<DataSensing />} />
             <Route path="/drive-logic" element={<DriveLogic />} />

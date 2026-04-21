@@ -60,25 +60,6 @@ export const driveLogicApi = {
   get: (id) => api.get(`/drive-logics/${id}`),
   update: (id, data) => api.put(`/drive-logics/${id}`, data),
   delete: (id) => api.delete(`/drive-logics/${id}`),
-  createTask: (data) => api.post('/tasks', data),
-  getAllTasks: () => api.get('/tasks'),
-  updateTask: (id, data) => api.put(`/tasks/${id}`, data),
-  deleteTask: (id) => api.delete(`/tasks/${id}`),
-  getAllTaskInstances: () => api.get('/task-instances'),
-  getTaskInstancesByTask: (taskId) => api.get(`/tasks/${taskId}/instances`),
-};
-
-// Agent管理
-export const agentApi = {
-  create: (data) => api.post('/agents', data),
-  getAll: () => api.get('/agents'),
-  get: (id) => api.get(`/agents/${id}`),
-  update: (id, data) => api.put(`/agents/${id}`, data),
-  delete: (id) => api.delete(`/agents/${id}`),
-  createCapability: (data) => api.post('/capabilities', data),
-  getAllCapabilities: () => api.get('/capabilities'),
-  updateCapability: (id, data) => api.put(`/capabilities/${id}`, data),
-  deleteCapability: (id) => api.delete(`/capabilities/${id}`),
 };
 
 // 业务数据管理

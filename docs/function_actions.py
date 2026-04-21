@@ -134,8 +134,8 @@ result = execute_emergency_procurement(parameters)
     action_data = {
         "id": "emergency_procurement",
         "api_name": "EmergencyProcurement",
-        "name": "紧急采购",
-        "description": "为关键物料供应中断触发紧急采购流程，参数与业务模型字段完全对齐",
+        "name": "发起紧急采购流程",
+        "description": "触发紧急采购流程",
         "action_type": "function",
         "function_code": function_code,
         "parameters": [
@@ -299,7 +299,7 @@ def execute_material_substitution(parameters):
                 return {"success": False, "error": f"Missing required parameter: {param}"}
         
         # 初始化 SDK 客户端
-        client = OntologyClient("http://localhost:8080")
+        client = OntologyClient("http://localhost:8080", api_key="your-api-key")
         
         # 1. 验证替代物料的认证状态（简化逻辑）
         certification_status = parameters.get("certification_status", "NotCertified")
@@ -379,8 +379,8 @@ result = execute_material_substitution(parameters)
     action_data = {
         "id": "material_substitution",
         "api_name": "MaterialSubstitution",
-        "name": "物料替代方案",
-        "description": "为供应中断的关键物料启用已认证的替代物料方案，参数与业务模型字段完全对齐",
+        "name": "启用物料替代方案",
+        "description": "为供应中断的关键物料启用已认证的替代物料方案",
         "action_type": "function",
         "function_code": function_code,
         "parameters": [
@@ -449,6 +449,124 @@ result = execute_material_substitution(parameters)
     }
     return action_data
 
+def create_auto_approve_purchase_function_action():
+    """Create auto approve purchase function action"""
+    function_code = '''
+# 自动审核采购函数实现 - 使用 Ontology SDK
+import json
+from datetime import datetime
+
+# 使用 SDK（必须在脚本末尾定义 result 变量）
+from my_ontology_sdk import OntologyClient
+
+def execute_auto_approve_purchase(parameters):
+    """
+    执行自动审核采购流程
+    Args:
+        parameters: 包含对齐模型字段的参数字典
+    Returns:
+        dict: 执行结果
+    """
+    try:
+        # 验证必需参数（使用模型字段名）
+        required_params = ['requisition_number']
+        
+        for param in required_params:
+            if param not in parameters:
+                return {"success": False, "error": f"Missing required parameter: {param}"}
+        
+        # 初始化 SDK 客户端
+        client = OntologyClient("http://localhost:8080", api_key="your-api-key")
+        
+        # 1. 查找关联的采购订单 (purchase_order) - 基于请购单号
+        purchase_orders = client.models.PurchaseOrder.find(
+            source_document="requisition",
+            source_number=parameters["requisition_number"]
+        )
+        
+        if not purchase_orders or len(purchase_orders) == 0:
+            return {"success": False, "error": f"未找到关联的采购订单，请购单号: {parameters['requisition_number']}"}
+        
+        # 2. 更新采购订单状态为已审核
+        approved_orders = []
+        for purchase_order in purchase_orders:
+            success = purchase_order.update(status="已审核")
+            if success:
+                approved_orders.append(purchase_order.purchase_order_number)
+            else:
+                return {"success": False, "error": f"Failed to update purchase order status: {purchase_order.purchase_order_number}"}
+        
+        # 3. 记录审核消息 (alert_message) - 直接使用参数
+        alert_message_data = {
+            "message_id": f"ALERT-APV-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "message_title": parameters.get("message_title", "采购订单自动审核"),
+            "message_content": parameters.get("message_content", f"请购单 {parameters['requisition_number']} 关联的采购订单已自动审核通过"),
+            "rule_code": "AUTO_APPROVE_PURCHASE",
+            "recipient": parameters.get("approver", "SYSTEM"),
+            "risk_level": "Low"
+        }
+        
+        alert_message = client.models.AlertMessage.create(**alert_message_data)
+        
+        return {
+            "success": True,
+            "message": "采购订单已自动审核",
+            "result": {
+                "requisition_number": parameters["requisition_number"],
+                "approved_purchase_orders": approved_orders,
+                "approver": parameters.get("approver", "SYSTEM")
+            }
+        }
+    
+    except Exception as e:
+        return {"success": False, "error": f"Auto approve purchase failed: {str(e)}"}
+
+# 执行函数并定义 result 变量（必须）
+result = execute_auto_approve_purchase(parameters)
+'''
+    
+    action_data = {
+        "id": "auto_approve_purchase",
+        "api_name": "AutoApprovePurchase",
+        "name": "自动审核采购",
+        "description": "基于传入的请购信息，找到关联的采购订单，并将其状态修改为已审核",
+        "action_type": "function",
+        "function_code": function_code,
+        "parameters": [
+            # 核心必需字段
+            {
+                "name": "requisition_number",
+                "type": "string",
+                "required": True,
+                "description": "请购单编号"
+            },
+            # 可选字段
+            {
+                "name": "approver",
+                "type": "string",
+                "required": False,
+                "default_value": "SYSTEM",
+                "description": "审核人"
+            },
+            {
+                "name": "message_title",
+                "type": "string",
+                "required": False,
+                "default_value": "采购订单自动审核",
+                "description": "消息标题"
+            },
+            {
+                "name": "message_content",
+                "type": "string",
+                "required": False,
+                "default_value": "",
+                "description": "消息内容"
+            }
+        ],
+        "submission_criteria": []
+    }
+    return action_data
+
 def create_production_schedule_adjustment_function_action():
     """Create production schedule adjustment function action"""
     function_code = '''
@@ -476,7 +594,7 @@ def execute_production_schedule_adjustment(parameters):
                 return {"success": False, "error": f"Missing required parameter: {param}"}
         
         # 初始化 SDK 客户端
-        client = OntologyClient("http://localhost:8080")
+        client = OntologyClient("http://localhost:8080", api_key="your-api-key")
         
         # 1. 获取并更新工单 (work_order) - 直接使用参数
         work_order = client.models.WorkOrder.get(parameters["work_order_number"])
@@ -542,7 +660,7 @@ result = execute_production_schedule_adjustment(parameters)
         "id": "production_schedule_adjustment",
         "api_name": "ProductionScheduleAdjustment",
         "name": "生产计划调整",
-        "description": "根据物料供应情况调整受影响工单的生产计划，参数与业务模型字段完全对齐",
+        "description": "根据物料供应情况调整受影响工单的生产计划",
         "action_type": "function",
         "function_code": function_code,
         "parameters": [
@@ -641,7 +759,7 @@ def execute_customer_communication(parameters):
                 return {"success": False, "error": f"Missing required parameter: {param}"}
         
         # 初始化 SDK 客户端
-        client = OntologyClient("http://localhost:8080")
+        client = OntologyClient("http://localhost:8080", api_key="your-api-key")
         
         # 1. 创建客户通知记录 (alert_message) - 直接使用参数
         alert_message_data = {
@@ -695,7 +813,7 @@ result = execute_customer_communication(parameters)
         "id": "customer_communication",
         "api_name": "CustomerCommunication",
         "name": "客户沟通",
-        "description": "向受影响的客户发送供应中断通知并提供解决方案，参数与业务模型字段完全对齐",
+        "description": "向受影响的客户发送供应中断通知并提供解决方案",
         "action_type": "function",
         "function_code": function_code,
         "parameters": [
@@ -766,6 +884,7 @@ def main():
     # Delete existing function actions first
     action_ids_to_delete = [
         "emergency_procurement",
+        "auto_approve_purchase",
         "material_substitution", 
         "production_schedule_adjustment",
         "customer_communication"
@@ -781,6 +900,7 @@ def main():
     # Create all four function actions
     actions = [
         create_emergency_procurement_function_action(),
+        create_auto_approve_purchase_function_action(),
         create_material_substitution_function_action(),
         create_production_schedule_adjustment_function_action(),
         create_customer_communication_function_action()

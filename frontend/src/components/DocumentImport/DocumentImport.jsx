@@ -22,33 +22,34 @@ const DocumentImport = () => {
   const [sensingForm] = Form.useForm();
   const [driveLogicForm] = Form.useForm();
   
-  // 新增状态：业务模型和任务数据
+  // 新增状态：业务模型和行动数据
   const [businessModels, setBusinessModels] = useState([]);
-  const [tasks, setTasks] = useState([]);
+  const [actions, setActions] = useState([]);
   
   // 类型相关的状态
   const [selectedSensingType, setSelectedSensingType] = useState('data_change');
   const [selectedDriveLogicType, setSelectedDriveLogicType] = useState('first_order');
 
   useEffect(() => {
-    // 获取业务模型和任务数据
-    fetchBusinessModelsAndTasks();
+    // 获取业务模型和行动数据
+    fetchBusinessModelsAndActions();
   }, []);
 
-  const fetchBusinessModelsAndTasks = async () => {
+  const fetchBusinessModelsAndActions = async () => {
     try {
       // 获取业务模型
       const businessModelResponse = await api.get('/business-models');
       setBusinessModels(businessModelResponse.data || []);
       
-      // 获取任务
-      const taskResponse = await api.get('/tasks');
-      setTasks(taskResponse.data || []);
+      // 获取行动
+      const actionResponse = await api.get('/actions');
+      setActions(actionResponse.data || []);
       
       // 设置当前的感知配置用于驱动逻辑选择
         // setSensingConfigs(configs.sensing_configs || []);
-    } catch (_error) {
-      message.error('获取业务模型或任务数据失败');
+    } catch (error) {
+      console.error('获取业务模型或行动数据失败:', error);
+      message.error('获取业务模型或行动数据失败');
     }
   };
 
@@ -66,7 +67,8 @@ const DocumentImport = () => {
       setFileName(response.data.filename);
       setCurrentStep(1);
       message.success('文档解析成功');
-    } catch (_error) {
+    } catch (error) {
+      console.error('文档解析失败:', error);
       message.error('文档解析失败');
     } finally {
       setLoading(false);
@@ -85,7 +87,8 @@ const DocumentImport = () => {
       setConfigs(response.data);
       setCurrentStep(2);
       message.success('配置生成成功');
-    } catch (_error) {
+    } catch (error) {
+      console.error('配置生成失败:', error);
       message.error('配置生成失败');
     } finally {
       setLoading(false);
@@ -106,7 +109,8 @@ const DocumentImport = () => {
       setDocumentContent('');
       setFileName('');
       setConfigs({ sensing_configs: [], drive_logics: [] });
-    } catch (_error) {
+    } catch (error) {
+      console.error('配置应用失败:', error);
       message.error('配置应用失败');
     } finally {
       setLoading(false);
@@ -215,14 +219,14 @@ const DocumentImport = () => {
       }
     },
     {
-      title: '关联任务',
-      dataIndex: 'task_ids',
-      key: 'task_ids',
-      render: (taskIds) => {
-        if (!taskIds || taskIds.length === 0) return '-';
-        return taskIds.map((taskId, idx) => {
-          const task = tasks.find(t => t.id === taskId);
-          return <Tag key={idx} color="cyan">{task ? task.name : taskId}</Tag>;
+      title: '关联行动',
+      dataIndex: 'action_ids',
+      key: 'action_ids',
+      render: (actionIds) => {
+        if (!actionIds || actionIds.length === 0) return '-';
+        return actionIds.map((actionId, idx) => {
+          const action = actions.find(a => a.id === actionId);
+          return <Tag key={idx} color="cyan">{action ? action.name : actionId}</Tag>;
         });
       }
     },
@@ -372,8 +376,8 @@ const DocumentImport = () => {
     if (values.event_temp_ids && typeof values.event_temp_ids === 'string') {
       processedValues.event_temp_ids = values.event_temp_ids.split(',').map(id => id.trim()).filter(id => id);
     }
-    if (values.task_ids && typeof values.task_ids === 'string') {
-      processedValues.task_ids = values.task_ids.split(',').map(id => id.trim()).filter(id => id);
+    if (values.action_ids && typeof values.action_ids === 'string') {
+      processedValues.action_ids = values.action_ids.split(',').map(id => id.trim()).filter(id => id);
     }
     
     // 提取config相关的字段
@@ -743,11 +747,11 @@ const DocumentImport = () => {
             </Select>
           </Form.Item>
           
-          <Form.Item name="task_ids" label="关联任务">
-            <Select mode="multiple" placeholder="选择触发后要执行的任务">
-              {tasks.map(task => (
-                <Option key={task.id} value={task.id}>
-                  {task.name}
+          <Form.Item name="action_ids" label="关联行动">
+            <Select mode="multiple" placeholder="选择触发后要执行的行动">
+              {actions.map(action => (
+                <Option key={action.id} value={action.id}>
+                  {action.name}
                 </Option>
               ))}
             </Select>

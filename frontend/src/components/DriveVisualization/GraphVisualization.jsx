@@ -58,7 +58,7 @@ const GraphVisualization = ({ data, onNodeClick }) => {
       { type: 'business_model', name: '业务模型', color: '#2196F3' },
       { type: 'sensing_config', name: '数据感知配置', color: '#FF9800' },
       { type: 'drive_logic', name: '驱动逻辑', color: '#9C27B0' },
-      { type: 'task', name: '任务', color: '#E91E63' }
+      { type: 'action', name: '行动', color: '#E91E63' }
     ];
 
     const legendRow = legend.selectAll('.legend-row')
@@ -197,12 +197,8 @@ const GraphVisualization = ({ data, onNodeClick }) => {
         case 'drive_logic':
           tooltipContent += `<div style="margin-top: 4px; font-size: 11px;">
             逻辑ID: ${d.data.id}<br/>
-            类型: ${d.data.type}
-          </div>`;
-          break;
-        case 'task':
-          tooltipContent += `<div style="margin-top: 4px; font-size: 11px;">
-            任务ID: ${d.data.id}
+            类型: ${d.data.type}<br/>
+            关联行动: ${(d.data.action_ids || []).length}个
           </div>`;
           break;
       }
@@ -291,7 +287,7 @@ const GraphVisualization = ({ data, onNodeClick }) => {
         'business_model': '#2196F3',
         'sensing_config': '#FF9800',
         'drive_logic': '#9C27B0',
-        'task': '#E91E63'
+        'action': '#E91E63'
       };
       return colorMap[nodeType] || '#9E9E9E';
     }
@@ -302,7 +298,7 @@ const GraphVisualization = ({ data, onNodeClick }) => {
         'business_model': '业务模型',
         'sensing_config': '数据感知配置',
         'drive_logic': '驱动逻辑',
-        'task': '任务'
+        'action': '行动'
       };
       return typeMap[nodeType] || nodeType;
     }

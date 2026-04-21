@@ -3,14 +3,16 @@ from sqlalchemy.orm import Session
 from app.models.data_source import DataSource
 from app.models.business_model import BusinessModel
 from app.models.data_sensing import DataSensingConfig
-from app.models.drive_logic import DriveLogic, Task
-from app.models.agent import Agent, Capability
+from app.models.drive_logic import DriveLogic
 from app.utils.shared_utils import get_db
+from app.services.action_service import get_action_service, ActionService
+from app.utils.logger import get_logger
 
+logger = get_logger(__name__)
 router = APIRouter()
 
 @router.get("/drive-visualization/full-graph")
-def get_full_drive_graph(db: Session = Depends(get_db)):
+def get_full_drive_graph(db: Session = Depends(get_db), action_service: ActionService = Depends(get_action_service)):
     """获取完整的驱动全景图数据"""
     
     # 获取所有业务模型（包含字段）
@@ -21,29 +23,26 @@ def get_full_drive_graph(db: Session = Depends(get_db)):
     # 获取所有数据感知配置
     sensing_configs = db.query(DataSensingConfig).all()
     
-    # 获取所有驱动逻辑（包含关联的事件和任务）
+    # 获取所有驱动逻辑（包含关联的事件）
     drive_logics = db.query(DriveLogic).all()
     for logic in drive_logics:
-        db.refresh(logic)  # 确保加载events和tasks关系
-    
-    # 获取所有任务（包含关联的能力）
-    tasks = db.query(Task).all()
-    for task in tasks:
-        db.refresh(task)  # 确保加载capabilities关系
+        db.refresh(logic)  # 确保加载events关系
+    actions = action_service.get_actions()
+    logger.info(f"Total actions: {actions}")
     
     return {
         "nodes": _build_nodes(
             business_models, sensing_configs, 
-            drive_logics, tasks
+            drive_logics, actions
         ),
         "edges": _build_edges(
             business_models, sensing_configs, 
-            drive_logics, tasks
+            drive_logics, actions
         )
     }
 
 @router.get("/drive-visualization/model/{model_id}")
-def get_model_driven_graph(model_id: str, db: Session = Depends(get_db)):
+def get_model_driven_graph(model_id: str, db: Session = Depends(get_db), action_service: ActionService = Depends(get_action_service)):
     """获取指定业务模型的驱动链路图"""
     # 获取指定业务模型
     business_model = db.query(BusinessModel).filter(
@@ -67,33 +66,32 @@ def get_model_driven_graph(model_id: str, db: Session = Depends(get_db)):
         DriveLogic.id.in_(list(drive_logic_ids))
     ).all() if drive_logic_ids else []
     
-    # 获取关联的任务
-    task_ids = set()
+    # 获取关联的行动
+    action_ids = set()
     for logic in drive_logics:
-        for task in logic.tasks:
-            task_ids.add(task.id)
+        if logic.action_ids:
+            for action_id in logic.action_ids:
+                action_ids.add(action_id)
     
-    tasks = db.query(Task).filter(
-        Task.id.in_(list(task_ids))
-    ).all() if task_ids else []
+    actions = action_service.get_actions({"id": {"$:in": list(action_ids)}}) if action_ids else []
     
     return {
         "nodes": _build_nodes(
             [business_model], 
             sensing_configs, 
-            drive_logics, 
-            tasks
+            drive_logics,
+            actions
         ),
         "edges": _build_edges(
             [business_model], 
             sensing_configs, 
-            drive_logics, 
-            tasks
+            drive_logics,
+            actions
         )
     }
 
 def _build_nodes(business_models, sensing_configs, 
-                drive_logics, tasks):
+                drive_logics, actions):
     """构建节点列表"""
     nodes = []
     
@@ -136,27 +134,27 @@ def _build_nodes(business_models, sensing_configs,
             "data": {
                 "id": logic.id,
                 "type": logic.type,
-                "config": logic.config
+                "config": logic.config,
+                "action_ids": logic.action_ids or []
             }
         })
-    
-    # 任务节点
-    for task in tasks:
+    # 行动节点
+    for action in actions:
         nodes.append({
-            "id": f"task_{task.id}",
-            "type": "task",
-            "name": task.name,
-            "description": task.description or "",
+            "id": f"action_{action.get('id')}",
+            "type": "action",
+            "name": action.get('name'),
+            "description": action.get('description') or "",
             "data": {
-                "id": task.id,
-                "config": task.config
+                "id": action.get('id'),
+                "type": action.get('action_type')
             }
         })
     
     return nodes
 
 def _build_edges(business_models, sensing_configs, 
-                drive_logics, tasks):
+                drive_logics, actions):
     """构建边列表"""
     edges = []
     
@@ -187,14 +185,19 @@ def _build_edges(business_models, sensing_configs,
                 "description": f"{config.name} → {logic.name}"
             })
     
-    # 驱动逻辑 -> 任务 (多对多)
+    # 创建 action_id 到 action 对象的映射
+    action_map = {action.get('id'): action for action in actions}
+    
+    # 驱动逻辑 -> 行动 (多对多)
     for logic in drive_logics:
-        for task in logic.tasks:
-            edges.append({
-                "source": f"logic_{logic.id}",
-                "target": f"task_{task.id}",
-                "type": "logic_to_task",
-                "description": f"{logic.name} → {task.name}"
-            })
+        for action_id in logic.action_ids or []:
+            action = action_map.get(action_id)
+            if action:
+                edges.append({
+                    "source": f"logic_{logic.id}",
+                    "target": f"action_{action_id}",
+                    "type": "logic_to_action",
+                    "description": f"{logic.name} → {action.get('name')}"
+                })
     
     return edges

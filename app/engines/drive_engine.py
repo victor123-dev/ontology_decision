@@ -2,14 +2,9 @@ import threading
 import time
 from typing import Dict, Any, List
 from datetime import datetime
-from app.models.drive_logic import DriveLogic, Task, TaskInstance
+from app.models.drive_logic import DriveLogic
 from app.models.drive_log import DriveLog
-from app.models.agent import Agent
-from app.utils.db_client import Base, create_engine, sessionmaker
-from app.config import settings
 from app.utils.logger import get_logger
-from app.engines.agent_executor import agent_executor
-from app.engines.task_manager import task_manager
 from .logic_executor import LogicExecutor
 from app.utils.shared_utils import get_db_session, log_event_with_parent
 
@@ -29,7 +24,7 @@ class DriveEngine:
         self.stats = {
             'events_received': 0,
             'logics_matched': 0,
-            'tasks_created': 0,
+            'actions_executed': 0,
             'errors': 0
         }
     
@@ -59,7 +54,7 @@ class DriveEngine:
         logger.info("=" * 60)
         logger.info(f"接收事件数: {self.stats['events_received']}")
         logger.info(f"匹配逻辑数: {self.stats['logics_matched']}")
-        logger.info(f"创建任务数: {self.stats['tasks_created']}")
+        logger.info(f"执行行动数: {self.stats['actions_executed']}")
         logger.info(f"错误数: {self.stats['errors']}")
         logger.info("=" * 60)
 

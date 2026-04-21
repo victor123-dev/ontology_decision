@@ -54,16 +54,21 @@ def get_all_traces(limit: int = 100,offset: int = 0,db: Session = Depends(get_db
         traces = []
         for trace_id_tuple in trace_ids:
             trace_id = trace_id_tuple[0]
-            # 获取该trace的最新日志作为摘要
-            latest_log = db.query(DriveLog).filter(DriveLog.trace_id == trace_id).order_by(DriveLog.created_at.desc()).first()
-            if latest_log:
+            # 获取该trace的所有日志
+            all_logs = db.query(DriveLog).filter(DriveLog.trace_id == trace_id).order_by(DriveLog.created_at.desc()).all()
+            if all_logs:
+                latest_log = all_logs[0]  # 最新日志
+                
+                # 检查是否有error级别的日志
+                has_error = any(log.level == 'error' for log in all_logs)
+                
                 traces.append({
                     "trace_id": trace_id,
                     "latest_message": latest_log.message,
-                    "latest_level": latest_log.level,
+                    "latest_level": 'error' if has_error else latest_log.level,
                     "latest_category": latest_log.category,
                     "latest_time": latest_log.created_at,
-                    "log_count": db.query(DriveLog).filter(DriveLog.trace_id == trace_id).count()
+                    "log_count": len(all_logs)
                 })
         
         return {

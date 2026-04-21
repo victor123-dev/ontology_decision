@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from app.utils.llm_translator import llm_translator
 from app.models.business_model import BusinessModel
 from app.models.data_sensing import DataSensingConfig
-from app.models.drive_logic import Task
 from app.utils.shared_utils import get_db
+from app.services.action_service import get_action_service
 
 router = APIRouter()
 
@@ -56,17 +56,9 @@ def parse_natural_language_to_drive_logic(
         raise HTTPException(status_code=400, detail="自然语言描述不能为空")
     
     try:
-        # 获取所有任务和事件
-        tasks = []
-        task_list = db.query(Task).all()
-        for task in task_list:
-            db.refresh(task)
-            tasks.append({
-                "id": task.id,
-                "name": task.name,
-                "capability_ids": [cap.id for cap in task.capabilities] if task.capabilities else [],
-                "capability_names": [cap.name for cap in task.capabilities] if task.capabilities else []
-            })
+        # 获取所有行动和事件
+        action_service = get_action_service()
+        actions = action_service.get_actions()
         
         events = []
         event_list = db.query(DataSensingConfig).all()
@@ -81,7 +73,7 @@ def parse_natural_language_to_drive_logic(
         
         # 调用LLM解析（已包含少样本示例和验证）
         logic = llm_translator.parse_natural_language_to_drive_logic(
-            natural_language, tasks, events
+            natural_language, actions, events
         )
         
         if not logic:
@@ -98,26 +90,12 @@ def parse_natural_language_to_drive_logic(
 def explain_sensing_config_in_natural_language(
     config: dict
 ):
-    """将数据感知配置转换为自然语言描述"""
+    """将数据感知配置解释为自然语言"""
     try:
-        explanation = llm_translator.convert_sensing_config_to_natural_language(config)
+        explanation = llm_translator.explain_sensing_config_in_natural_language(config)
         return {
             "success": True,
             "explanation": explanation
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"转换失败: {str(e)}")
-
-@router.post("/nl-rule-interface/explain-drive-logic")
-def explain_drive_logic_in_natural_language(
-    logic: dict
-):
-    """将驱动逻辑配置转换为自然语言描述"""
-    try:
-        explanation = llm_translator.convert_drive_logic_to_natural_language(logic)
-        return {
-            "success": True,
-            "explanation": explanation
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"转换失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"解释失败: {str(e)}")
