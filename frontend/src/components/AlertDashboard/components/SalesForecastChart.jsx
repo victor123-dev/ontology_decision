@@ -54,9 +54,19 @@ const getLast12Months = () => {
   return months;
 };
 
-export default function SalesForecastChart({ height = 220, chartData = [], loading = false }) {
+export default function SalesForecastChart({ height = 220, chartData = [], loading = false, drillMonth: externalDrillMonth, onDrillMonthChange }) {
   const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder', 'purchaseQty']));
-  const [drillMonth, setDrillMonth] = useState(null);
+  const [internalDrillMonth, setInternalDrillMonth] = useState(null);
+
+  // 外部传入的 drillMonth 优先，否则使用内部状态
+  const drillMonth = externalDrillMonth !== undefined ? externalDrillMonth : internalDrillMonth;
+  const setDrillMonth = (month) => {
+    if (onDrillMonthChange !== undefined) {
+      onDrillMonthChange(month);
+    } else {
+      setInternalDrillMonth(month);
+    }
+  };
 
   // 将按品号+月份的数据转换为按月合并的数据（用于折线图），补全12个月
   const monthlyData = useMemo(() => {

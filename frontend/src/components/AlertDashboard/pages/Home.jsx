@@ -39,7 +39,18 @@ const ROW_HEIGHT = 8; // px per grid row unit
 const GRID_MARGIN = [12, 12];
 
 // ─── 内联 Widget 容器（支持拖拽手柄 + 全屏） ───────────────────────────────
-function Widget({ title, subtitle, children, headerRight, fullscreenContent, fullscreenNoPadding }) { const [isFullscreen, setIsFullscreen] = useState(false);
+function Widget({ title, subtitle, children, headerRight, fullscreenContent, fullscreenNoPadding }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenProps = { isFullscreen };
+
+  // 获取全屏内容：支持函数形式或 React 元素形式
+  const getFullscreenContent = () => {
+    if (!fullscreenContent) return children;
+    if (typeof fullscreenContent === 'function') {
+      return fullscreenContent(fullscreenProps);
+    }
+    return fullscreenContent;
+  };
 
   // 全屏 overlay 通过 Portal 渲染到 document.body，确保覆盖整个页面
   const fullscreenOverlay = isFullscreen ? createPortal(
@@ -71,7 +82,7 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
         </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: fullscreenNoPadding ? 0 : 24, display: 'flex', flexDirection: 'column' }}>
-        {fullscreenContent ?? children}
+        {getFullscreenContent()}
       </div>
     </div>,
     document.body
@@ -144,6 +155,8 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
   const [lastRefresh, setLastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [layout, setLayout] = useState(INITIAL_LAYOUT);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [forecastDrillProduct, setForecastDrillProduct] = useState(null);  // 需求预测下钻状态（与全屏共享）
+  const [salesDrillMonth, setSalesDrillMonth] = useState(null);  // 销售预测下钻状态（与全屏共享）
   const { width: winWidth } = useWindowSize();
 
   // 使用独立 KPI hooks（添加 key 触发刷新）
@@ -271,9 +284,9 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
                 <Widget
                   title="销售预测 vs 实际订单 vs 采购量"
                   subtitle="近12个月 · 点击月份可下钻查看产品明细"
-                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} />}
+                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />}
                 >
-                  <SalesForecastChart height={getItemPx('chart') - 72} />
+                  <SalesForecastChart height={getItemPx('chart') - 72} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />
                 </Widget>
               </div>
 
@@ -347,9 +360,9 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
                 <Widget
                   title="需求预测（未来6个月）"
                   subtitle="点击产品可下钻查看月度明细与采购建议"
-                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} />}
+                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} drillProduct={forecastDrillProduct} onDrillProductChange={setForecastDrillProduct} />}
                 >
-                  <ForecastTable maxHeight={getItemPx('forecast') - 56} />
+                  <ForecastTable maxHeight={getItemPx('forecast') - 56} drillProduct={forecastDrillProduct} onDrillProductChange={setForecastDrillProduct} />
                 </Widget>
               </div>
 

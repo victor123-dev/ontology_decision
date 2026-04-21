@@ -43,6 +43,15 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenProps = { isFullscreen };
 
+  // 获取全屏内容：支持函数形式或 React 元素形式
+  const getFullscreenContent = () => {
+    if (!fullscreenContent) return children;
+    if (typeof fullscreenContent === 'function') {
+      return fullscreenContent(fullscreenProps);
+    }
+    return fullscreenContent;
+  };
+
   // 全屏 overlay 通过 Portal 渲染到 document.body，确保覆盖整个页面
   const fullscreenOverlay = isFullscreen ? createPortal(
     <div
@@ -73,7 +82,7 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
         </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: fullscreenNoPadding ? 0 : 24, display: 'flex', flexDirection: 'column' }}>
-        {fullscreenContent ? fullscreenContent(fullscreenProps) : children}
+        {getFullscreenContent()}
       </div>
     </div>,
     document.body
@@ -183,6 +192,8 @@ export default function AlertDashboard() {
   const { data: forecastData, loading: forecastLoading, refetch: refetchForecast } = useForecastData();
   const [alerts, setAlerts] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [forecastDrillProduct, setForecastDrillProduct] = useState(null);  // 需求预测下钻状态（与全屏共享）
+  const [salesDrillMonth, setSalesDrillMonth] = useState(null);  // 销售预测下钻状态（与全屏共享）
 
   // 监听容器宽度变化
   useEffect(() => {
@@ -388,9 +399,9 @@ export default function AlertDashboard() {
                 <Widget
                   title="销售预测 vs 实际订单 vs 采购量"
                   subtitle="近12个月 · 点击月份可下钻查看产品明细"
-                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} chartData={chartData} loading={chartLoading} />}
+                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} chartData={chartData} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />}
                 >
-                  <SalesForecastChart height={getItemPx('chart') - 72} chartData={chartData} loading={chartLoading} />
+                  <SalesForecastChart height={getItemPx('chart') - 72} chartData={chartData} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />
                 </Widget>
               </div>
 
@@ -491,9 +502,9 @@ export default function AlertDashboard() {
                 <Widget
                   title="需求预测（未来6个月）"
                   subtitle="点击产品可下钻查看月度明细与采购建议"
-                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} forecastResult={forecastData} loading={forecastLoading} />}
+                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} forecastResult={forecastData} loading={forecastLoading} drillProduct={forecastDrillProduct} onDrillProductChange={setForecastDrillProduct} />}
                 >
-                  <ForecastTable maxHeight={getItemPx('forecast') - 56} forecastResult={forecastData} loading={forecastLoading} />
+                  <ForecastTable maxHeight={getItemPx('forecast') - 56} forecastResult={forecastData} loading={forecastLoading} drillProduct={forecastDrillProduct} onDrillProductChange={setForecastDrillProduct} />
                 </Widget>
               </div>
 

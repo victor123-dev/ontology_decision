@@ -3,11 +3,21 @@
 import { useState, useMemo } from "react";
 import { ChevronLeft, Search, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-export default function ForecastTable({ maxHeight = 260, forecastResult = { data: [], months: [] }, loading = false }) {
+export default function ForecastTable({ maxHeight = 260, forecastResult = { data: [], months: [] }, loading = false, drillProduct: externalDrillProduct, onDrillProductChange }) {
+  const [internalDrillProduct, setInternalDrillProduct] = useState(null);
   const [searchText, setSearchText] = useState('');
-  const [drillProduct, setDrillProduct] = useState(null);
   const [sortField, setSortField] = useState('');
   const [sortAsc, setSortAsc] = useState(true);
+
+  // 外部传入的 drillProduct 优先，否则使用内部状态
+  const drillProduct = externalDrillProduct !== undefined ? externalDrillProduct : internalDrillProduct;
+  const setDrillProduct = (product) => {
+    if (onDrillProductChange !== undefined) {
+      onDrillProductChange(product);
+    } else {
+      setInternalDrillProduct(product);
+    }
+  };
 
   const forecastData = forecastResult?.data || [];
   const forecastMonths = forecastResult?.months || [];

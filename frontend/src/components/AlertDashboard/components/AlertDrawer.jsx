@@ -11,16 +11,35 @@ export default function AlertDrawer({ alert, onClose, onStatusChange, onRefresh 
 
   if (!alert) return null;
 
-  const handleAutoExec = () => { if (autoExecState !== 'idle') return;
+  const handleAutoExec = async () => {
+    if (autoExecState !== 'idle') return;
     setAutoExecState('running');
     setProgress(0);
-    const steps = [0, 15, 32, 48, 65, 78, 90, 100];
-    let i = 0;
-    const interval = setInterval(() => { if (i < steps.length) { setProgress(steps[i]);
-        i++; } else { clearInterval(interval);
-        setAutoExecState('done');
-        onStatusChange(alert.id, '已处理');
-        onRefresh && onRefresh(); } }, 400); };
+
+    try {
+      // 调用自动执行 API
+      await alertDashboardApi.processAlertAuto(alert.id);
+
+      // 模拟进度动画
+      const steps = [0, 15, 32, 48, 65, 78, 90, 100];
+      let i = 0;
+      const interval = setInterval(() => {
+        if (i < steps.length) {
+          setProgress(steps[i]);
+          i++;
+        } else {
+          clearInterval(interval);
+          setAutoExecState('done');
+          onStatusChange(alert.id, '已处理');
+          onRefresh && onRefresh();
+        }
+      }, 200);
+    } catch (e) {
+      console.error('自动执行失败:', e);
+      alert('自动执行失败: ' + e.message);
+      setAutoExecState('idle');
+    }
+  };
 
   const handleManualProcess = async () => {
     if (manualProcessing) return;

@@ -39,6 +39,9 @@ export const alertDashboardApi = {
 
   // 人工处理预警
   processAlertManual: (alertId) => api.post('/alerts/process/manul', { alert_id: alertId }),
+
+  // 自动执行预警
+  processAlertAuto: (alertId) => api.post('/alerts/process/auto', { alert_id: alertId }),
 };
 
 // ==================== 工具函数 ====================
