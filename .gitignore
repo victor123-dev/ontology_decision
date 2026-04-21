@@ -78,5 +78,3 @@ frontend/build/
 app/api/dynamic_mcp/action_execute_mcp.py
 app/api/dynamic_mcp/object_get_by_id_mcp.py
 app/api/dynamic_mcp/object_link_query_mcp.py
-
-docs/business_model_export.xlsx
