@@ -204,6 +204,10 @@ export interface Translations {
     clickToViewContent: string;
     writeTodos: string;
     skillInstallTooltip: string;
+    // Ontology tools
+    ontologySemanticUnderstanding: string;
+    ontologyDataAnalysis: string;
+    ontologyActionExecution: string;
   };
 
   // Uploads

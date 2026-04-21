@@ -260,6 +260,10 @@ export const zhCN: Translations = {
     clickToViewContent: "点击查看文件内容",
     writeTodos: "更新 To-do 列表",
     skillInstallTooltip: "安装技能并使其可在智体中使用",
+    // Ontology tools
+    ontologySemanticUnderstanding: "本体语义理解",
+    ontologyDataAnalysis: "本体数据分析", 
+    ontologyActionExecution: "本体行动执行",
   },
 
   uploads: {
