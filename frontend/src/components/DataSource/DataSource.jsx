@@ -113,7 +113,13 @@ function DataSource() {
   //     ),
   //   },
   // ]
-
+  const token = import.meta.env.VITE_SSO_TOKEN || '';
+  // 免密登录至采集设计页面
+  const iframeUrl = `https://es-dcp-pre.digiwincloud.com.cn/#/login/sso?token=${token}&eid=DWDSE2026POC&projectId=121&sourceAppCode=DMP&routerLink=/collect-process-manage/collect-process-design/collection-design&pageMode=add&&accId=&&adcdId=&sourceEnv=dmp_dev`;
+  // 免密登录至首页(无菜单)
+  // const iframeUrl = `https://es-dcp-pre.digiwincloud.com.cn/#/login/sso?token=${token}&eid=DWDSE2026POC&projectId=121&sourceAppCode=DMP`;
+  // 跳转至登录页(有菜单)
+  // const iframeUrl = `https://es-dcp-pre.digiwincloud.com.cn/#/home`;
   return (
     <div style={{ width: '100%', height: '100%' }}>
       {/* 
@@ -153,17 +159,14 @@ function DataSource() {
       
       {/* 嵌入外部数据管理页面 */}
       <iframe 
-        src="https://es-dcp-pre.digiwincloud.com.cn/#/home" 
+        id="dcdpIframe"
+        src={iframeUrl} 
         style={{ 
           width: '100%', 
           height: 'calc(100vh - 64px)', // 减去顶部导航栏高度
           border: 'none',
           minHeight: '600px'
         }}
-        title="数据管理"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
-        loading="lazy"
-        referrerPolicy="no-referrer"
       />
     </div>
   )
