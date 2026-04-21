@@ -52,7 +52,7 @@ function AppContent() {
                 {
                   key: 'data-source',
                   icon: <span>📊</span>,
-                  label: <Link to="/data-source">数据源管理</Link>,
+                  label: <Link to="/data-source">数据采集</Link>,
                 },
                 {
                   key: 'business-model',
