@@ -4,16 +4,30 @@
 import { useState, useEffect } from "react";
 
 // 城市坐标映射（相对于SVG画布 viewBox="300 60 480 440"）
-const cityCoords = { '上海':   { x: 620, y: 290 },
-  '深圳':   { x: 575, y: 400 },
-  '北京':   { x: 560, y: 170 },
-  '武汉':   { x: 540, y: 310 },
-  '上海港': { x: 635, y: 285 },
-  '天津港': { x: 575, y: 185 },
-  '广州港': { x: 560, y: 395 },
-  '深圳港': { x: 580, y: 405 },
-  '天津':   { x: 575, y: 190 },
-  '广州':   { x: 555, y: 392 } };
+const cityCoords = {
+  '北京':   { x: 650, y: 215 },
+  '武汉':   { x: 628, y: 308 },
+  '上海':   { x: 693, y: 300 },
+  '上海港': { x: 695, y: 302 },
+  '天津港': { x: 662, y: 232 },
+  '天津':   { x: 660, y: 230 },
+  '深圳':   { x: 630, y: 390 },
+  '深圳港': { x: 632, y: 391 },
+  '广州港': { x: 621, y: 389 },
+  '广州':   { x: 619, y: 387 } };
+
+// 全屏模式城市坐标
+const cityCoordsFullscreen = {
+  '深圳':   { x: 660, y: 413 },
+  '深圳港': { x: 663, y: 414 },
+  '北京':   { x: 670, y: 215 },
+  '武汉':   { x: 650, y: 330 },
+  '上海':   { x: 720, y: 320 },
+  '上海港': { x: 722, y: 319 },
+  '天津港': { x: 686, y: 232 },
+  '天津':   { x: 685, y: 230 },
+  '广州港': { x: 636, y: 412 },
+  '广州':   { x: 638, y: 414 } };
 
 const nodeTypeConfig = { factory:   { color: '#3b82f6', size: 12, label: '工厂' },
   customer:  { color: '#22c55e', size: 9,  label: '客户' },
@@ -24,9 +38,12 @@ const routeTypeConfig = { supply:    { color: '#f59e0b', dash: '6,4' },
   delivery:  { color: '#22c55e', dash: '6,4' },
   logistics: { color: '#8b5cf6', dash: '4,6' } };
 
-export default function SupplyChainMap({ mapData = { nodes: [], routes: [] }, loading = false }) {
+export default function SupplyChainMap({ mapData = { nodes: [], routes: [] }, loading = false, isFullscreen = false }) {
   const [hoveredNode, setHoveredNode] = useState(null);
   const [animFrame, setAnimFrame] = useState(0);
+
+  // 根据全屏状态选择对应的城市坐标
+  const coords = isFullscreen ? cityCoordsFullscreen : cityCoords;
 
   useEffect(() => { const interval = setInterval(() => { setAnimFrame(f => (f + 1) % 60); }, 50);
     return () => clearInterval(interval); }, []);
@@ -82,8 +99,8 @@ export default function SupplyChainMap({ mapData = { nodes: [], routes: [] }, lo
           {mapRoutes.map((route, idx) => { const fromNode = mapNodes.find(n => n.id === route.from);
             const toNode   = mapNodes.find(n => n.id === route.to);
             if (!fromNode || !toNode) return null;
-            const fromCoord = cityCoords[fromNode.city];
-            const toCoord   = cityCoords[toNode.city];
+            const fromCoord = coords[fromNode.city];
+            const toCoord   = coords[toNode.city];
             if (!fromCoord || !toCoord) return null;
             const cfg = routeTypeConfig[route.type];
             const midX = (fromCoord.x + toCoord.x) / 2;
@@ -103,7 +120,7 @@ export default function SupplyChainMap({ mapData = { nodes: [], routes: [] }, lo
             ); })}
 
           {/* 节点 */}
-          {mapNodes.map((node) => { const coord = cityCoords[node.city];
+          {mapNodes.map((node) => { const coord = coords[node.city];
             if (!coord) return null;
             const cfg = nodeTypeConfig[node.type];
             const isHovered = hoveredNode?.id === node.id;
@@ -158,7 +175,7 @@ export default function SupplyChainMap({ mapData = { nodes: [], routes: [] }, lo
             ); })}
 
           {/* 悬停提示框 */}
-          {hoveredNode && (() => { const coord = cityCoords[hoveredNode.city];
+          {hoveredNode && (() => { const coord = coords[hoveredNode.city];
             if (!coord) return null;
             const cfg = nodeTypeConfig[hoveredNode.type];
             const boxX = Math.min(coord.x + 15, 700);
