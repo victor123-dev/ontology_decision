@@ -8,7 +8,7 @@ from app.utils.logger import get_logger
 from app.utils.llm_translator import llm_translator
 from app.models.business_model import BusinessModel
 from app.models.data_sensing import DataSensingConfig
-from app.models.drive_logic import DriveLogic, Task
+from app.models.drive_logic import DriveLogic
 from app.services.document_parser import DocumentParser
 from app.engines.data_sensing_engine import data_sensing_engine
 from app.utils.background_task_processor import background_task_processor
@@ -322,17 +322,10 @@ def generate_configs_from_document(
                 "fields": [{"field_id": f.field_id, "name": f.name, "data_type": f.data_type} for f in model.fields] if model.fields else []
             })
         
-        # 获取所有任务
-        tasks = []
-        task_list = db.query(Task).all()
-        for task in task_list:
-            db.refresh(task)  # 确保加载能力
-            tasks.append({
-                "id": task.id,
-                "name": task.name,
-                "capability_ids": [cap.id for cap in task.capabilities] if task.capabilities else [],
-                "capability_names": [cap.name for cap in task.capabilities] if task.capabilities else []
-            })
+        # 获取所有行动
+        from app.services.action_service import get_action_service
+        action_service = get_action_service()
+        actions = action_service.get_actions()
         
         # 提取数据感知配置
         sensing_configs = llm_translator.extract_sensing_configs_from_document(
@@ -416,11 +409,10 @@ def apply_configs_from_document(
                     events = db.query(DataSensingConfig).filter(DataSensingConfig.id.in_(actual_event_ids)).all()
                     db_logic.events = events
             
-            # 关联任务
-            task_ids = logic_data.get("task_ids", [])
-            if task_ids:
-                tasks = db.query(Task).filter(Task.id.in_(task_ids)).all()
-                db_logic.tasks = tasks
+            # 关联行动
+            action_ids = logic_data.get("action_ids", [])
+            if action_ids:
+                db_logic.action_ids = action_ids
             
             db.commit()
             db.refresh(db_logic)

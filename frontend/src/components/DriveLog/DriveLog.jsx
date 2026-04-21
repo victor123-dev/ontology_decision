@@ -23,7 +23,7 @@ const LogNode = ({ data }) => {
     switch (category) {
       case 'data_sensing': return '数据感知';
       case 'drive_logic': return '驱动逻辑';
-      case 'agent_task': return 'Agent任务';
+      case 'agent_task': return '行动执行';
       default: return category;
     }
   };
@@ -221,7 +221,7 @@ function DriveLog() {
     switch (category) {
       case 'data_sensing': return '数据感知'
       case 'drive_logic': return '驱动逻辑'
-      case 'agent_task': return 'Agent任务'
+      case 'agent_task': return '行动执行'
       default: return category
     }
   }

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, agent, \
+from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, \
     drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk, \
     alert_dashboard, excel_import_export
 from app.api.general_mcp import ontology_type_mcp, object_query_mcp, object_query_by_link_mcp
@@ -12,7 +12,6 @@ from app.middleware_config.middleware import RequestLoggingMiddleware
 from app.utils.logger import get_logger
 from app.engines.data_sensing_engine import data_sensing_engine
 from app.engines.drive_engine import drive_engine
-from app.engines.task_manager import task_manager
 from app.utils.background_task_processor import background_task_processor
 from fastapi_mcp import FastApiMCP
 
@@ -31,7 +30,6 @@ async def lifespan(app: FastAPI):
     logger.info("启动所有引擎...")
     data_sensing_engine.start()
     drive_engine.start()
-    task_manager.start()
     background_task_processor.start()
     
     yield
@@ -39,7 +37,6 @@ async def lifespan(app: FastAPI):
     # 关闭时
     logger.info("停止所有引擎...")
     background_task_processor.stop()
-    task_manager.stop()
     drive_engine.stop()
     data_sensing_engine.stop()
 
@@ -71,7 +68,6 @@ app.include_router(business_data.router, prefix="/api/v1", tags=["Business Data"
 app.include_router(business_model_link.router, prefix="/api/v1", tags=["Business Model Link"])
 app.include_router(data_sensing.router, prefix="/api/v1", tags=["Data Sensing"])
 app.include_router(drive_logic.router, prefix="/api/v1", tags=["Drive Logic"])
-app.include_router(agent.router, prefix="/api/v1", tags=["Agent"])
 app.include_router(drive_log.router, prefix="/api/v1", tags=["Drive Log"])
 app.include_router(test_execution.router, prefix="/api/v1", tags=["Test Execution"])
 app.include_router(document_import.router, prefix="/api/v1", tags=["Document Import"])

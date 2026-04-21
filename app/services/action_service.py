@@ -262,52 +262,48 @@ class ActionService:
         
         try:
             import ast
-            import builtins
-            
-            safe_globals = {
-                "__builtins__": {
-                    name: getattr(builtins, name)
-                    for name in [
-                        "abs", "all", "any", "bool", "float", "int", "len",
-                        "list", "dict", "max", "min", "range", "str", "sum",
-                        "tuple", "set"
-                    ]
-                },
-                "parameters": parameters,
-                "data_source_manager": data_source_manager
-            }
-            
+            # 只保留对危险函数调用的基本检查
             tree = ast.parse(function_code)
             for node in ast.walk(tree):
-                # 安全的导入限制：只允许 my_ontology_sdk 及其子模块
-                if isinstance(node, (ast.Import, ast.ImportFrom)):
-                    unsafe_imports = []
-                    
-                    if isinstance(node, ast.Import):
-                        # 检查 import 语句
-                        for alias in node.names:
-                            module_name = alias.name
-                            if not module_name.startswith('my_ontology_sdk'):
-                                unsafe_imports.append(module_name)
-                    
-                    elif isinstance(node, ast.ImportFrom):
-                        # 检查 from ... import ... 语句
-                        if node.module:
-                            if not node.module.startswith('my_ontology_sdk'):
-                                unsafe_imports.append(node.module)
-                    
-                    if unsafe_imports:
-                        raise ValueError(f"Only my_ontology_sdk imports are allowed. Unsafe imports: {unsafe_imports}")
-                
                 # 禁止危险函数调用
-                if isinstance(node, ast.Call) and hasattr(node.func, 'id') and node.func.id in ['eval', 'exec', 'open', '__import__']:
+                if isinstance(node, ast.Call) and hasattr(node.func, 'id') and node.func.id in ['eval', 'exec', 'open']:
                     raise ValueError(f"Disallowed function call: {node.func.id}")
             
-            local_vars = {}
-            exec(function_code, safe_globals, local_vars)
+            local_vars = {
+                "parameters": parameters,
+            }
+            exec(function_code, local_vars)
             
-            result = local_vars.get("result", {"message": "Function executed successfully"})
-            return {"success": True, "result": result}
+            function_result = local_vars.get("result")
+            
+            # 安全地提取各个字段，构建标准化响应
+            if isinstance(function_result, dict):
+                success = function_result.get("success", True)
+                result_data = function_result.get("result", function_result)
+                message = function_result.get("message")
+                error = function_result.get("error")
+            else:
+                # 如果 function_result 不是字典，视为成功的结果数据
+                success = True
+                result_data = function_result
+                message = "Function executed successfully"
+                error = None
+            
+            # 构建最终响应
+            response = {"success": success}
+            if success:
+                response["result"] = result_data
+                if message:
+                    response["message"] = message
+            else:
+                if error:
+                    response["error"] = error
+                elif message:
+                    response["error"] = message
+                else:
+                    response["error"] = "Function execution failed"
+            
+            return response
         
         except Exception as e:
             logger.error(f"Function execution error: {e}")

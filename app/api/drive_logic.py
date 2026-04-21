@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.models.drive_logic import DriveLogic, Task, TaskInstance
+from app.models.drive_logic import DriveLogic
 from app.models.data_sensing import DataSensingConfig
-from app.models.agent import Capability
 from app.utils.shared_utils import get_db
 from app.utils.background_task_processor import background_task_processor
 from app.utils.natural_language_generator import generate_natural_language_description_for_drive_logic
@@ -30,11 +29,10 @@ def create_drive_logic(logic: dict, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(db_logic)
     
-    # 关联任务
-    task_ids = logic.get("task_ids", [])
-    if task_ids:
-        tasks = db.query(Task).filter(Task.id.in_(task_ids)).all()
-        db_logic.tasks = tasks
+    # 关联行动
+    action_ids = logic.get("action_ids", [])
+    if action_ids:
+        db_logic.action_ids = action_ids
         db.commit()
         db.refresh(db_logic)
     
@@ -59,7 +57,7 @@ def get_drive_logics(db: Session = Depends(get_db)):
             "description": logic.description,
             "natural_language_description": logic.natural_language_description,
             "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
-            "tasks": [{"id": t.id, "name": t.name, "capability_ids": [cap.id for cap in t.capabilities]} for t in logic.tasks],
+            "action_ids": logic.action_ids or [],
             "created_at": logic.created_at,
             "updated_at": logic.updated_at
         })
@@ -79,7 +77,7 @@ def get_drive_logic(logic_id: int, db: Session = Depends(get_db)):
             "description": logic.description,
             "natural_language_description": logic.natural_language_description,
             "events": [{"id": e.id, "name": e.name, "type": e.type} for e in logic.events],
-            "tasks": [{"id": t.id, "name": t.name, "capability_ids": [cap.id for cap in t.capabilities]} for t in logic.tasks],
+            "action_ids": logic.action_ids or [],
             "created_at": logic.created_at,
             "updated_at": logic.updated_at
         }
@@ -130,18 +128,14 @@ def update_drive_logic(logic_id: int, logic: dict, db: Session = Depends(get_db)
         else:
             db_logic.events = []
     
-    # 检查任务关联是否变化
-    if "task_ids" in logic:
-        old_task_ids = [t.id for t in db_logic.tasks]
-        new_task_ids = logic["task_ids"] or []
-        if set(old_task_ids) != set(new_task_ids):
+    # 检查行动关联是否变化
+    if "action_ids" in logic:
+        old_action_ids = db_logic.action_ids or []
+        new_action_ids = logic["action_ids"] or []
+        if set(old_action_ids) != set(new_action_ids):
             should_regenerate_description = True
             
-        if new_task_ids:
-            tasks = db.query(Task).filter(Task.id.in_(new_task_ids)).all()
-            db_logic.tasks = tasks
-        else:
-            db_logic.tasks = []
+        db_logic.action_ids = new_action_ids
     
     db.commit()
     db.refresh(db_logic)
@@ -164,136 +158,3 @@ def delete_drive_logic(logic_id: int, db: Session = Depends(get_db)):
     db.delete(db_logic)
     db.commit()
     return {"message": "DriveLogic deleted successfully"}
-
-@router.post("/tasks")
-def create_task(task: dict, db: Session = Depends(get_db)):
-    db_task = Task(
-        name=task.get("name"),
-        config=task.get("config"),
-        description=task.get("description")
-    )
-    db.add(db_task)
-    db.commit()
-    db.refresh(db_task)
-    
-    # 关联能力
-    capability_ids = task.get("capability_ids", [])
-    if capability_ids:
-        capabilities = db.query(Capability).filter(Capability.id.in_(capability_ids)).all()
-        db_task.capabilities = capabilities
-        db.commit()
-        db.refresh(db_task)
-    
-    return db_task
-
-@router.get("/tasks")
-def get_tasks(db: Session = Depends(get_db)):
-    tasks = db.query(Task).all()
-    result = []
-    for task in tasks:
-        task_dict = {
-            "id": task.id,
-            "name": task.name,
-            "capability_ids": [cap.id for cap in task.capabilities],
-            "config": task.config,
-            "description": task.description,
-            "created_at": task.created_at,
-            "updated_at": task.updated_at
-        }
-        result.append(task_dict)
-    return result
-
-@router.put("/tasks/{task_id}")
-def update_task(task_id: int, task: dict, db: Session = Depends(get_db)):
-    db_task = db.query(Task).filter(Task.id == task_id).first()
-    if not db_task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    if "name" in task:
-        db_task.name = task["name"]
-    if "config" in task:
-        db_task.config = task["config"]
-    if "description" in task:
-        db_task.description = task["description"]
-    
-    # 更新能力关联
-    if "capability_ids" in task:
-        capability_ids = task["capability_ids"]
-        if capability_ids:
-            capabilities = db.query(Capability).filter(Capability.id.in_(capability_ids)).all()
-            db_task.capabilities = capabilities
-        else:
-            db_task.capabilities = []
-    
-    db.commit()
-    db.refresh(db_task)
-    return db_task
-
-@router.delete("/tasks/{task_id}")
-def delete_task(task_id: int, db: Session = Depends(get_db)):
-    db_task = db.query(Task).filter(Task.id == task_id).first()
-    if not db_task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    # 先删除关联的任务实例
-    db.query(TaskInstance).filter(TaskInstance.task_id == task_id).delete()
-    # 再删除任务
-    db.delete(db_task)
-    db.commit()
-    return {"message": "Task deleted successfully"}
-
-# TaskInstance相关端点
-@router.get("/task-instances")
-def get_task_instances(db: Session = Depends(get_db)):
-    instances = db.query(TaskInstance).all()
-    result = []
-    for instance in instances:
-        instance_dict = {
-            "id": instance.id,
-            "task_id": instance.task_id,
-            "task_name": instance.task.name if instance.task else None,
-            "status": instance.status,
-            "result": instance.result,
-            "assigned_agent_id": instance.assigned_agent_id,
-            "assigned_agent_name": instance.assigned_agent.name if instance.assigned_agent else None,
-            "started_at": instance.started_at,
-            "completed_at": instance.completed_at
-        }
-        result.append(instance_dict)
-    return result
-
-@router.get("/task-instances/{instance_id}")
-def get_task_instance(instance_id: int, db: Session = Depends(get_db)):
-    instance = db.query(TaskInstance).filter(TaskInstance.id == instance_id).first()
-    if not instance:
-        raise HTTPException(status_code=404, detail="TaskInstance not found")
-    
-    return {
-        "id": instance.id,
-        "task_id": instance.task_id,
-        "task_name": instance.task.name if instance.task else None,
-        "status": instance.status,
-        "result": instance.result,
-        "assigned_agent_id": instance.assigned_agent_id,
-        "assigned_agent_name": instance.assigned_agent.name if instance.assigned_agent else None,
-        "started_at": instance.started_at,
-        "completed_at": instance.completed_at
-    }
-
-@router.get("/tasks/{task_id}/instances")
-def get_task_instances_by_task(task_id: int, db: Session = Depends(get_db)):
-    instances = db.query(TaskInstance).filter(TaskInstance.task_id == task_id).all()
-    result = []
-    for instance in instances:
-        instance_dict = {
-            "id": instance.id,
-            "task_id": instance.task_id,
-            "status": instance.status,
-            "result": instance.result,
-            "assigned_agent_id": instance.assigned_agent_id,
-            "assigned_agent_name": instance.assigned_agent.name if instance.assigned_agent else None,
-            "started_at": instance.started_at,
-            "completed_at": instance.completed_at
-        }
-        result.append(instance_dict)
-    return result

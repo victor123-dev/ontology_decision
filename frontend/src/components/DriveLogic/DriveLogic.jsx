@@ -1,33 +1,28 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Tooltip, Tag, Card } from 'antd'
 import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { driveLogicApi, dataSensingApi, agentApi, nlRuleApi } from '../../services/api'
+import { driveLogicApi, dataSensingApi, actionApi } from '../../services/api'
 
 const { Option } = Select
 
 function DriveLogic() {
   const [logics, setLogics] = useState([])
-  const [tasks, setTasks] = useState([])
+  const [actions, setActions] = useState([])
 
   const [sensingConfigs, setSensingConfigs] = useState([])
-  const [capabilities, setCapabilities] = useState([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
-  const [taskModalVisible, setTaskModalVisible] = useState(false)
 
   const [editingLogic, setEditingLogic] = useState(null)
-  const [editingTask, setEditingTask] = useState(null)
   const [selectedType, setSelectedType] = useState('first_order')
   const [form] = Form.useForm()
-  const [taskForm] = Form.useForm()
   const [showAILogicModal, setShowAILogicModal] = useState(false)
   const [aiInput, setAiInput] = useState('')
 
   useEffect(() => {
     fetchLogics()
-    fetchTasks()
+    fetchActions()
     fetchSensingConfigs()
-    fetchCapabilities()
   }, [])
 
   const fetchLogics = async () => {
@@ -35,39 +30,31 @@ function DriveLogic() {
     try {
       const response = await driveLogicApi.getAll()
       setLogics(response.data)
-    } catch (_error) {
+    } catch (error) {
+      console.error('获取驱动逻辑失败:', error);
       message.error('获取驱动逻辑失败')
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchTasks = async () => {
+  const fetchActions = async () => {
     try {
-      const response = await driveLogicApi.getAllTasks()
-      setTasks(response.data)
-    } catch (_error) {
-      message.error('获取任务失败')
+      const response = await actionApi.getAll()
+      setActions(response.data)
+    } catch (error) {
+      console.error('获取行动失败:', error);
+      message.error('获取行动失败')
     }
   }
-
-
 
   const fetchSensingConfigs = async () => {
     try {
       const response = await dataSensingApi.getAll()
       setSensingConfigs(response.data)
-    } catch (_error) {
+    } catch (error) {
+      console.error('获取数据感知配置失败:', error);
       message.error('获取数据感知配置失败')
-    }
-  }
-
-  const fetchCapabilities = async () => {
-    try {
-      const response = await agentApi.getAllCapabilities()
-      setCapabilities(response.data)
-    } catch (_error) {
-      message.error('获取能力失败')
     }
   }
 
@@ -98,8 +85,8 @@ function DriveLogic() {
       formValues.event_ids = record.events.map(e => e.id)
     }
     
-    if (record.tasks && record.tasks.length > 0) {
-      formValues.task_ids = record.tasks.map(t => t.id)
+    if (record.action_ids && record.action_ids.length > 0) {
+      formValues.action_ids = record.action_ids
     }
     
     form.setFieldsValue(formValues)
@@ -112,15 +99,15 @@ function DriveLogic() {
 
   // 添加配置验证函数
   const isValidDriveLogic = (logic) => {
-    if (!logic.name || !logic.type || !logic.config || !logic.event_ids || !logic.task_ids) {
+    if (!logic.name || !logic.type || !logic.config || !logic.event_ids || !logic.action_ids) {
       return false;
     }
     
     if (logic.type === 'first_order') {
       // first_order类型可以没有pre_condition
-      return Array.isArray(logic.event_ids) && Array.isArray(logic.task_ids);
+      return Array.isArray(logic.event_ids) && Array.isArray(logic.action_ids);
     } else if (logic.type === 'script') {
-      return logic.config.script_content && Array.isArray(logic.event_ids) && Array.isArray(logic.task_ids);
+      return logic.config.script_content && Array.isArray(logic.event_ids) && Array.isArray(logic.action_ids);
     }
     
     return true;
@@ -135,7 +122,7 @@ function DriveLogic() {
     
     setLoading(true);
     try {
-      const response = await nlRuleApi.parseDriveLogic(aiInput);
+      const response = await driveLogicApi.parseDriveLogic(aiInput);
       if (response.data.success && response.data.logic) {
         const parsedLogic = response.data.logic;
         
@@ -151,7 +138,7 @@ function DriveLogic() {
           type: parsedLogic.type || 'first_order',
           description: parsedLogic.description || '',
           event_ids: parsedLogic.event_ids || [],
-          task_ids: parsedLogic.task_ids || []
+          action_ids: parsedLogic.action_ids || []
         };
         
         // 根据类型设置配置字段
@@ -170,7 +157,8 @@ function DriveLogic() {
       } else {
         message.error('生成失败，请参考以下示例：\n• 如果订单金额大于10000，则需要经理审批\n• 当温度异常时发送邮件通知\n• 计算风险评分并根据结果分配不同处理流程');
       }
-    } catch (_error) {
+    } catch (error) {
+      console.error('生成失败:', error);
       message.error('生成失败');
     } finally {
       setLoading(false);
@@ -182,7 +170,8 @@ function DriveLogic() {
       await driveLogicApi.delete(id)
       message.success('删除成功')
       fetchLogics()
-    } catch (_error) {
+    } catch (error) {
+      console.error('删除失败:', error);
       message.error('删除失败')
     }
   }
@@ -207,7 +196,7 @@ function DriveLogic() {
         config: configObj,
         description: values.description,
         event_ids: values.event_ids || [],
-        task_ids: values.task_ids || []
+        action_ids: values.action_ids || []
       }
       
       if (editingLogic) {
@@ -219,63 +208,9 @@ function DriveLogic() {
       }
       setModalVisible(false)
       fetchLogics()
-    } catch (_error) {
+    } catch (error) {
+      console.error('操作失败:', error);
       message.error('操作失败')
-    }
-  }
-
-  const handleAddTask = () => {
-    setEditingTask(null)
-    taskForm.resetFields()
-    setTaskModalVisible(true)
-  }
-
-  const handleEditTask = (record) => {
-    setEditingTask(record)
-    // 深拷贝record对象
-    const formValues = { ...record }
-    // 将config对象转换为JSON字符串
-    if (record.config) {
-      formValues.config = JSON.stringify(record.config, null, 2)
-    }
-    // 确保capability_ids是数组格式
-    if (record.capability_ids && !Array.isArray(record.capability_ids)) {
-      formValues.capability_ids = [record.capability_ids];
-    }
-    taskForm.setFieldsValue(formValues)
-    setTaskModalVisible(true)
-  }
-
-  const handleSubmitTask = async (values) => {
-    try {
-      const taskData = {
-        name: values.name,
-        capability_ids: values.capability_ids || [],
-        config: values.config ? JSON.parse(values.config) : null,
-        description: values.description
-      }
-      
-      if (editingTask) {
-        await driveLogicApi.updateTask(editingTask.id, taskData)
-        message.success('任务更新成功')
-      } else {
-        await driveLogicApi.createTask(taskData)
-        message.success('任务创建成功')
-      }
-      setTaskModalVisible(false)
-      fetchTasks()
-    } catch (_error) {
-      message.error('操作失败')
-    }
-  }
-
-  const handleDeleteTask = async (id) => {
-    try {
-      await driveLogicApi.deleteTask(id)
-      message.success('任务删除成功')
-      fetchTasks()
-    } catch (_error) {
-      message.error('删除失败')
     }
   }
 
@@ -315,14 +250,15 @@ function DriveLogic() {
       }
     },
     {
-      title: '关联任务',
-      dataIndex: 'tasks',
-      key: 'tasks',
-      render: (tasks) => {
-        if (!tasks || tasks.length === 0) return '-'
-        return tasks.map((t, idx) => (
-          <Tag key={idx} color="cyan">{t.name}</Tag>
-        ))
+      title: '关联行动',
+      dataIndex: 'action_ids',
+      key: 'action_ids',
+      render: (actionIds) => {
+        if (!actionIds || actionIds.length === 0) return '-'
+        return actionIds.map((actionId, idx) => {
+          const action = actions.find(a => a.id === actionId);
+          return <Tag key={idx} color="cyan">{action ? action.name : actionId}</Tag>;
+        })
       }
     },
     {
@@ -353,52 +289,6 @@ function DriveLogic() {
     },
   ]
 
-  const taskColumns = [
-    {
-      title: '名称',
-      dataIndex: 'name',
-      key: 'name',
-    },
-    {
-      title: '能力',
-      dataIndex: 'capability_ids',
-      key: 'capability_ids',
-      render: (capabilityIds) => {
-        if (!capabilityIds || capabilityIds.length === 0) return '-';
-        return capabilityIds.map((capId, idx) => {
-          const capability = capabilities.find(cap => cap.id === capId);
-          return <Tag key={idx} color="blue">{capability ? capability.name : capId}</Tag>;
-        });
-      }
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_, record) => (
-        <div>
-          <Button type="primary" size="small" icon={<EditOutlined />} style={{ marginRight: 8 }} onClick={() => handleEditTask(record)}>
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除这个任务吗？"
-            onConfirm={() => handleDeleteTask(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button danger size="small" icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </div>
-      ),
-    },
-  ]
-
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -409,15 +299,7 @@ function DriveLogic() {
       </div>
 
       <h3>驱动逻辑列表</h3>
-      <Table columns={logicColumns} dataSource={logics} rowKey="id" loading={loading} style={{ marginBottom: 24 }} />
-
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3>任务列表</h3>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddTask}>
-          添加任务
-        </Button>
-      </div>
-      <Table columns={taskColumns} dataSource={tasks} rowKey="id" loading={loading} />
+      <Table columns={logicColumns} dataSource={logics} rowKey="id" loading={loading} />
 
       {/* 驱动逻辑模态框 */}
       <Modal
@@ -469,19 +351,13 @@ function DriveLogic() {
             </Select>
           </Form.Item>
           
-          <Form.Item name="task_ids" label="关联任务">
-            <Select mode="multiple" placeholder="选择触发后要执行的任务">
-              {tasks.map(task => {
-                const capabilityNames = task.capability_ids?.map(capId => {
-                  const cap = capabilities.find(c => c.id === capId);
-                  return cap ? cap.name : capId;
-                }) || [];
-                return (
-                  <Option key={task.id} value={task.id}>
-                    {task.name} (能力: {capabilityNames.join(', ')})
-                  </Option>
-                );
-              })}
+          <Form.Item name="action_ids" label="关联行动">
+            <Select mode="multiple" placeholder="选择触发后要执行的行动">
+              {actions.map(action => (
+                <Option key={action.id} value={action.id}>
+                  {action.name}
+                </Option>
+              ))}
             </Select>
           </Form.Item>
           
@@ -515,39 +391,6 @@ function DriveLogic() {
         </Form>
       </Modal>
 
-      {/* 任务模态框 */}
-      <Modal
-        title={editingTask ? '编辑任务' : '添加任务'}
-        open={taskModalVisible}
-        onOk={taskForm.submit}
-        onCancel={() => setTaskModalVisible(false)}
-        width={600}
-      >
-        <Form form={taskForm} layout="vertical" onFinish={handleSubmitTask}>
-          <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
-            <Input placeholder="例如：发送温度告警通知" />
-          </Form.Item>
-          
-          <Form.Item name="capability_ids" label="能力" rules={[{ required: true, message: '请选择至少一个能力' }]}>
-            <Select mode="multiple" placeholder="选择任务需要的能力">
-              {capabilities.map(cap => (
-                <Option key={cap.id} value={cap.id}>
-                  {cap.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item name="config" label="任务配置 (JSON格式)">
-            <Input.TextArea rows={4} placeholder='例如: {"recipient": "admin@example.com", "message": "温度异常"}' />
-          </Form.Item>
-          
-          <Form.Item name="description" label="描述">
-            <Input.TextArea placeholder="描述此任务的作用" />
-          </Form.Item>
-        </Form>
-      </Modal>
-      
       {/* AI智能生成模态框 */}
       <Modal
         title="AI智能配置生成"

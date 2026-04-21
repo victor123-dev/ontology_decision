@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Card, Divider, InputNumber, Switch, Typography, Steps, Tabs, Space, List, Tag, Popover } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Card, Divider, InputNumber, Switch, Typography, Steps, Tabs, Space, List, Tag, Popover, DatePicker } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { actionApi } from '../../services/api'
 import { modelEventBus } from '../../utils/modelEventBus'
@@ -59,6 +59,7 @@ function ActionManager({ businessModels, modelLinks }) {
     setEditingAction(record)
     form.setFieldsValue({
       id: record.id,
+      api_name: record.api_name,
       name: record.name,
       description: record.description,
       action_type: record.action_type,
@@ -752,6 +753,8 @@ result = {
               {param.type === 'boolean' && <Switch />}
               {param.type === 'object' && <TextArea rows={4} placeholder={param.description} />}
               {param.type === 'array' && <TextArea rows={4} placeholder={param.description} />}
+              {param.type === 'date' && <DatePicker format="YYYY-MM-DD" placeholder={param.description} />}
+              {param.type === 'datetime' && <DatePicker showTime format="YYYY-MM-DD HH:mm:ss" placeholder={param.description} />}
             </Form.Item>
           ))}
           {(!selectedAction?.parameters || selectedAction.parameters.length === 0) && (

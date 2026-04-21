@@ -26,8 +26,9 @@ router = APIRouter()
 )
 def execute_{{ action.id }}(
     {%- if action.parameters %}
-    parameters: {{ action.api_name }}Parameters
+    parameters: {{ action.api_name }}Parameters,
     {%- endif %}
+    db: Session = Depends(get_db)
 ):
     """
     Execute the {{ action.name }} action
@@ -48,9 +49,9 @@ def execute_{{ action.id }}(
         {%- endif %}
         
         return {
-            "success": True,
-            "message": "{{ action.name }} executed successfully",
-            "result": result
+            "success": result["success"],
+            "message": result["success"] and "{{ action.name }} executed successfully" or result["error"],
+            "result": result["result"]
         }
     except Exception as e:
         raise HTTPException(

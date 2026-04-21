@@ -1,6 +1,7 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import {
   BookOpenTextIcon,
+  BrainIcon,
   ChevronDownIcon,
   ChevronUp,
   FolderOpenIcon,
@@ -12,6 +13,7 @@ import {
   SearchIcon,
   SquareTerminalIcon,
   WrenchIcon,
+  ZapIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -411,6 +413,222 @@ function ToolCall({
         label={t.toolCalls.writeTodos}
         icon={ListTodoIcon}
       ></ChainOfThoughtStep>
+    );
+  } else if (name.startsWith("ontology-mcp_get_ontology_context") || 
+             name.startsWith("ontology-mcp_search_ontology") || 
+             name.startsWith("ontology-mcp_view_object_type") || 
+             name.startsWith("ontology-mcp_view_link_type") || 
+             name.startsWith("ontology-mcp_view_action_type")) {
+    // Ontology Semantic Understanding Tools
+    const description: string | undefined = (args as { description: string })?.description;
+    const formattedArgs = args && Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : undefined;
+    const formattedResult = result 
+      ? typeof result === "string" 
+        ? result 
+        : JSON.stringify(result, null, 2)
+      : undefined;
+    
+    const hasDetails = formattedArgs || formattedResult;
+    
+    if (!hasDetails) {
+      return (
+        <ChainOfThoughtStep
+          key={id}
+          label={description ?? t.toolCalls.ontologySemanticUnderstanding}
+          icon={BrainIcon}
+        ></ChainOfThoughtStep>
+      );
+    }
+    
+    return (
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <ChainOfThoughtStep
+            key={id}
+            label={
+              <div className="flex items-center justify-between">
+                <span>{description ?? t.toolCalls.ontologySemanticUnderstanding}</span>
+                <ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </div>
+            }
+            icon={BrainIcon}
+            className="cursor-pointer group"
+          ></ChainOfThoughtStep>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 space-y-2 bg-muted/30 rounded-lg p-3">
+            {formattedArgs && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Arguments
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedArgs}
+                />
+              </div>
+            )}
+            {formattedResult && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Result
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedResult}
+                />
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  } else if (name.startsWith("ontology-mcp_query_objects") || 
+             name.startsWith("ontology-mcp_query_objects_by_link")) {
+    // Ontology Data Analysis Tools
+    const description: string | undefined = (args as { description: string })?.description;
+    const formattedArgs = args && Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : undefined;
+    const formattedResult = result 
+      ? typeof result === "string" 
+        ? result 
+        : JSON.stringify(result, null, 2)
+      : undefined;
+    
+    const hasDetails = formattedArgs || formattedResult;
+    
+    if (!hasDetails) {
+      return (
+        <ChainOfThoughtStep
+          key={id}
+          label={description ?? t.toolCalls.ontologyDataAnalysis}
+          icon={SearchIcon}
+        ></ChainOfThoughtStep>
+      );
+    }
+    
+    return (
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <ChainOfThoughtStep
+            key={id}
+            label={
+              <div className="flex items-center justify-between">
+                <span>{description ?? t.toolCalls.ontologyDataAnalysis}</span>
+                <ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </div>
+            }
+            icon={SearchIcon}
+            className="cursor-pointer group"
+          ></ChainOfThoughtStep>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 space-y-2 bg-muted/30 rounded-lg p-3">
+            {formattedArgs && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Arguments
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedArgs}
+                />
+              </div>
+            )}
+            {formattedResult && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Result
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedResult}
+                />
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  } else if (name.startsWith("ontology-mcp_execute_")) {
+    // Ontology Action Execution Tools - show generic label with specific tool name (without prefix)
+    const description: string | undefined = (args as { description: string })?.description;
+    const formattedArgs = args && Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : undefined;
+    const formattedResult = result 
+      ? typeof result === "string" 
+        ? result 
+        : JSON.stringify(result, null, 2)
+      : undefined;
+    
+    const hasDetails = formattedArgs || formattedResult;
+    // Remove the "ontology-mcp_execute_" prefix from the tool name
+    const cleanToolName = name.replace("ontology-mcp_execute_", "");
+    // Show "Ontology Action Execution: clean_tool_name" format
+    const displayLabel = description ?? `${t.toolCalls.ontologyActionExecution}: ${cleanToolName}`;
+    
+    if (!hasDetails) {
+      return (
+        <ChainOfThoughtStep
+          key={id}
+          label={displayLabel}
+          icon={ZapIcon}
+        ></ChainOfThoughtStep>
+      );
+    }
+    
+    return (
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <ChainOfThoughtStep
+            key={id}
+            label={
+              <div className="flex items-center justify-between">
+                <span>{displayLabel}</span>
+                <ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </div>
+            }
+            icon={ZapIcon}
+            className="cursor-pointer group"
+          ></ChainOfThoughtStep>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 space-y-2 bg-muted/30 rounded-lg p-3">
+            {formattedArgs && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Arguments
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedArgs}
+                />
+              </div>
+            )}
+            {formattedResult && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-xs font-medium">
+                  Result
+                </div>
+                <CodeBlock
+                  className="mx-0 cursor-pointer border-none px-0"
+                  showLineNumbers={false}
+                  language="json"
+                  code={formattedResult}
+                />
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     );
   } else {
     const description: string | undefined = (args as { description: string })

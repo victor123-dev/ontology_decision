@@ -273,6 +273,10 @@ export const enUS: Translations = {
     clickToViewContent: "Click to view file content",
     writeTodos: "Update to-do list",
     skillInstallTooltip: "Install skill and make it available to ZhiTi",
+    // Ontology tools
+    ontologySemanticUnderstanding: "Ontology Semantic Understanding",
+    ontologyDataAnalysis: "Ontology Data Analysis", 
+    ontologyActionExecution: "Ontology Action Execution",
   },
 
   // Subtasks

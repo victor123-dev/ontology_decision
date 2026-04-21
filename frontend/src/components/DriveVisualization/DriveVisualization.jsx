@@ -25,7 +25,8 @@ const DriveVisualization = () => {
     try {
       const response = await api.get('/business-models');
       setBusinessModels(response.data);
-    } catch (_error) {
+    } catch (error) {
+      console.error('获取业务模型失败:', error);
       message.error('获取业务模型失败');
     }
   };
@@ -35,7 +36,8 @@ const DriveVisualization = () => {
     try {
       const response = await api.get('/drive-visualization/full-graph');
       setGraphData(response.data);
-    } catch (_error) {
+    } catch (error) {
+      console.error('获取全景图失败:', error);
       message.error('获取全景图失败');
     } finally {
       setLoading(false);
@@ -47,7 +49,8 @@ const DriveVisualization = () => {
     try {
       const response = await api.get(`/drive-visualization/model/${modelId}`);
       setGraphData(response.data);
-    } catch (_error) {
+    } catch (error) {
+      console.error('获取模型驱动图失败:', error);
       message.error('获取模型驱动图失败');
     } finally {
       setLoading(false);
@@ -78,8 +81,8 @@ const DriveVisualization = () => {
       case 'drive_logic':
         navigate('/drive-logic');
         break;
-      case 'task':
-        navigate('/drive-logic');
+      case 'action':
+        navigate('/business-model');
         break;
       default:
         break;

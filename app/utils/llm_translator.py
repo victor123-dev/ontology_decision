@@ -100,332 +100,177 @@ class LLMTranslator:
         formatted_tables = self._format_tables_for_prompt(tables_info)
         
         prompt = f"""
-你是一位资深的数据架构师和业务分析师，请基于以下数据库表结构信息，分析并推断表之间的业务关系。
+你是一个数据库专家，请基于以下表结构信息推断业务关系。
 
-## 数据库表结构信息
-
+表结构信息：
 {formatted_tables}
 
-## 分析要求
+请分析表之间的外键关系、业务语义，并生成JSON格式的关系列表。每个关系必须包含以下字段：
+- source_table: 源表名
+- source_field: 源字段名  
+- target_table: 目标表名
+- target_field: 目标字段名
+- cardinality: 关系基数 ("one-to-one", "one-to-many", "many-to-one", "many-to-many")
+- name: 关系名称（中文）
+- description: 关系描述（中文）
+- intermediate_table: 中间表名（仅many-to-many关系需要）
 
-1. **关系识别**: 仔细分析字段名、表名的语义，识别潜在的业务关系
-2. **基数判断**: 根据业务逻辑判断正确的基数类型
-3. **多对多检测**: 特别注意识别中间表（包含两个外键引用的表）
-4. **业务语义**: 使用清晰、准确的中文描述业务含义
+输出格式示例：
+[
+  {{
+    "source_table": "orders",
+    "source_field": "customer_id", 
+    "target_table": "customers",
+    "target_field": "id",
+    "cardinality": "many-to-one",
+    "name": "订单客户关系",
+    "description": "订单属于某个客户"
+  }}
+]
 
-## 基数类型定义
-
-- **one-to-one (一对一)**: 一个记录对应另一个表的一个记录（如：用户 ↔ 用户详情）
-- **one-to-many (一对多)**: 一个记录对应另一个表的多个记录（如：客户 → 多个订单）
-- **many-to-one (多对一)**: 多个记录对应另一个表的一个记录（如：多个订单 → 一个客户）
-- **many-to-many (多对多)**: 多个记录对应另一个表的多个记录，通过中间表实现（如：产品 ↔ 物料）
-
-## 输出格式要求
-
-请严格按照以下JSON格式输出，不要包含任何其他内容：
-
-{{
-  "relationships": [
-    {{
-      "source_table": "源表名",
-      "source_field": "源字段名",
-      "target_table": "目标表名", 
-      "target_field": "目标字段名",
-      "cardinality": "基数类型",
-      "name": "关系中文名称",
-      "description": "关系详细业务说明",
-      "intermediate_table": "中间表名（仅many-to-many时提供）",
-      "intermediate_source_key": "中间表中指向源表的外键字段（仅many-to-many时提供）",
-      "intermediate_target_key": "中间表中指向目标表的外键字段（仅many-to-many时提供）"
-    }}
-  ]
-}}
-
-## 输出示例
-
-{{
-  "relationships": [
-    {{
-      "source_table": "md_partner",
-      "source_field": "id", 
-      "target_table": "demand_order",
-      "target_field": "customer_id",
-      "cardinality": "one-to-many",
-      "name": "客户发起需求单",
-      "description": "`md_partner`表中类型为\"CUSTOMER\"的合作伙伴作为客户，发起`demand_order`表中的需求单；一个客户可发起多个需求单，一个需求单仅属于一个客户。"
-    }},
-    {{
-      "source_table": "product",
-      "source_field": "id",
-      "target_table": "md_material", 
-      "target_field": "id",
-      "cardinality": "many-to-many",
-      "name": "产品由物料组成",
-      "description": "`product`表中的产品通过`product_bom`表（中间载体）与`md_material`表中的物料关联；一个产品由多个物料组成，一个物料可用于多个产品。",
-      "intermediate_table": "product_bom",
-      "intermediate_source_key": "product_id",
-      "intermediate_target_key": "material_id"
-    }}
-  ]
-}}
-
-## 特别注意事项
-
-1. **字段匹配**: 优先匹配字段名相似的字段（如 customer_id → id）
-2. **业务逻辑**: 考虑实际业务场景，不要仅依赖技术约束
-3. **完整性**: 尽可能发现所有合理的业务关系
-4. **准确性**: 确保基数类型符合业务实际
-5. **中间表识别**: 如果发现某个表包含两个外键引用，考虑它是否是中间表
-
-现在请基于上述表结构信息，输出完整的业务关系分析结果。
+请只输出JSON数组，不要包含其他内容。
 """
         
+        response = self.llm_client.chat.completions.create(
+            model=self.llm_client.model_name,
+            messages=[
+                {"role": "system", "content": "你是一个专业的数据库架构师"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            extra_body={"enable_thinking": False}
+        )
+        
         try:
-            response = self.llm_client.chat.completions.create(
-                model=self.llm_client.model_name,
-                messages=[
-                    {"role": "system", "content": "你是一个专业的数据架构师和业务分析师"},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                extra_body={"enable_thinking": False}
-            )
-            
             result_text = response.choices[0].message.content.strip()
-            
-            # 提取JSON部分（处理可能的markdown代码块）
-            if result_text.startswith("```json"):
-                result_text = result_text[7:]  # 移除 ```json
-                if result_text.endswith("```"):
-                    result_text = result_text[:-3]  # 移除 ```
-            
-            result_json = json.loads(result_text)
-            return result_json.get("relationships", [])
-            
+            # 提取JSON数组
+            json_match = re.search(r'\[.*\]', result_text, re.DOTALL)
+            if json_match:
+                relationships = json.loads(json_match.group())
+                return relationships
+            else:
+                return []
         except Exception as e:
-            logger.error(f"Failed to infer relationships: {e}")
+            logger.error(f"解析关系推断结果失败: {e}")
             return []
     
     def _format_tables_for_prompt(self, tables_info: Dict[str, Any]) -> str:
-        """将表信息格式化为提示词友好的格式"""
+        """格式化表信息用于提示词"""
         formatted = []
-        
-        for table_name, table_info in tables_info.items():
-            columns = table_info.get('columns', [])
-            pk = table_info.get('primary_key')
-            fk_info = table_info.get('foreign_keys', [])
+        for table_name, info in tables_info.items():
+            columns = info.get('columns', [])
+            pk = info.get('primary_key')
+            fks = info.get('foreign_keys', [])
             
-            table_str = f"### 表: {table_name}\n"
-            table_str += f"- **主键**: {pk if pk else '无'}\n"
-            table_str += "- **字段列表**:\n"
-            
-            for col in columns:
-                col_info = f"  - `{col}`"
-                # 添加外键信息（如果有）
-                fk_target = None
-                for fk in fk_info:
-                    if col in fk.get('constrained_columns', []):
-                        referred_table = fk.get('referred_table', '未知')
-                        fk_target = f" → {referred_table}"
-                        break
-                
-                if fk_target:
-                    col_info += f" {fk_target}"
-                table_str += f"{col_info}\n"
-            
+            table_str = f"表名: {table_name}\n"
+            table_str += f"  主键: {pk}\n"
+            table_str += f"  字段: {', '.join(columns)}\n"
+            if fks:
+                fk_strs = []
+                for fk in fks:
+                    fk_strs.append(f"{fk['column']} -> {fk['referenced_table']}.{fk['referenced_column']}")
+                table_str += f"  外键: {', '.join(fk_strs)}\n"
             formatted.append(table_str)
         
         return "\n".join(formatted)
     
     def batch_translate(self, texts: List[str]) -> Dict[str, str]:
-        """批量翻译多个英文术语为中文（带缓存）"""
+        """批量翻译文本（带缓存）"""
+        results = {}
+        texts_to_translate = []
+        
+        # 先检查缓存
+        for text in texts:
+            cache_key = _generate_cache_key('translate', text)
+            if cache_key in _translate_cache:
+                results[text] = _translate_cache[cache_key]
+            else:
+                texts_to_translate.append(text)
+        
+        if not texts_to_translate:
+            return results
+        
+        # 批量翻译未缓存的文本
         if not self.llm_client:
             raise Exception("LLM client is not initialized")
         
-        # 检查缓存
-        cache_key = _generate_cache_key('batch_translate', texts)
-        if cache_key in _batch_translate_cache:
-            return _batch_translate_cache[cache_key]
-        
-        prompt = "请将以下英文技术术语批量翻译为中文，保持专业准确性，不要添加任何英文原文或解释，只返回中文翻译结果。\n\n"
-        for i, text in enumerate(texts):
-            prompt += f"{i+1}. {text}\n"
-        
+        prompt = "请将以下英文技术术语翻译为中文，保持专业准确性，每行一个翻译结果：\n" + "\n".join(texts_to_translate)
         response = self.llm_client.chat.completions.create(
             model=self.llm_client.model_name,
             messages=[
-                {"role": "system", "content": "你是一个专业的翻译和内容生成助手，能够批量翻译术语"},
+                {"role": "system", "content": "你是一个专业的翻译和内容生成助手"},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
             extra_body={"enable_thinking": False}
         )
         
-        result = {}
-        lines = response.choices[0].message.content.strip().split('\n')
-        for i, line in enumerate(lines):
-            if i < len(texts):
-                # 提取翻译结果，假设格式为 "1. 翻译结果"
-                parts = line.split('. ', 1)
-                if len(parts) == 2:
-                    result[texts[i]] = parts[1].strip()
-                else:
-                    result[texts[i]] = line.strip()
+        translations = response.choices[0].message.content.strip().split('\n')
         
-        # 存入缓存
-        _batch_translate_cache[cache_key] = result
-        return result
+        # 处理结果并存入缓存
+        for i, text in enumerate(texts_to_translate):
+            if i < len(translations):
+                translation = translations[i].strip()
+                results[text] = translation
+                cache_key = _generate_cache_key('translate', text)
+                _translate_cache[cache_key] = translation
+            else:
+                results[text] = text
+        
+        return results
     
     def batch_generate_descriptions(self, texts: List[str]) -> Dict[str, str]:
-        """批量为多个术语生成中文描述（带缓存）"""
+        """批量生成描述（带缓存）"""
+        results = {}
+        texts_to_describe = []
+        
+        # 先检查缓存
+        for text in texts:
+            cache_key = _generate_cache_key('description', text)
+            if cache_key in _description_cache:
+                results[text] = _description_cache[cache_key]
+            else:
+                texts_to_describe.append(text)
+        
+        if not texts_to_describe:
+            return results
+        
+        # 批量生成未缓存的描述
         if not self.llm_client:
             raise Exception("LLM client is not initialized")
         
-        # 检查缓存
-        cache_key = _generate_cache_key('batch_description', texts)
-        if cache_key in _batch_description_cache:
-            return _batch_description_cache[cache_key]
-        
-        prompt = "请为以下数据库表名或字段名批量生成简洁的中文描述（每个1-2句话），只返回描述内容，不要包含字段名。\n\n"
-        for i, text in enumerate(texts):
-            prompt += f"{i+1}. {text}\n"
-        
+        prompt = "请为以下数据库字段名生成简洁的中文描述（1-2句话），每行一个描述：\n" + "\n".join(texts_to_describe)
         response = self.llm_client.chat.completions.create(
             model=self.llm_client.model_name,
             messages=[
-                {"role": "system", "content": "你是一个专业的翻译和内容生成助手，能够批量生成描述"},
+                {"role": "system", "content": "你是一个专业的翻译和内容生成助手"},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
             extra_body={"enable_thinking": False}
         )
         
-        result = {}
-        lines = response.choices[0].message.content.strip().split('\n')
-        for i, line in enumerate(lines):
-            if i < len(texts):
-                # 提取描述结果，假设格式为 "1. 描述内容"
-                parts = line.split('. ', 1)
-                if len(parts) == 2:
-                    result[texts[i]] = parts[1].strip()
-                else:
-                    result[texts[i]] = line.strip()
+        descriptions = response.choices[0].message.content.strip().split('\n')
         
-        # 存入缓存
-        _batch_description_cache[cache_key] = result
-        return result
+        # 处理结果并存入缓存
+        for i, text in enumerate(texts_to_describe):
+            if i < len(descriptions):
+                description = descriptions[i].strip()
+                results[text] = description
+                cache_key = _generate_cache_key('description', text)
+                _description_cache[cache_key] = description
+            else:
+                results[text] = ""
+        
+        return results
     
-    def _generate_sensing_config_prompt(self, document_content: str, business_models: List[Dict]) -> str:
-        """生成数据感知配置的提示词"""
-        models_info = "\n".join([
-            f"- 模型ID: {model['id']}, 名称: {model['name']}, 字段: {', '.join([f'{f['field_id']}({f['data_type']})' for f in model.get('fields', [])])}"
-            for model in business_models
-        ])
-        
-        return f"""
-你是一个专业的数据驱动系统配置专家。请根据以下文档内容和可用的业务模型，生成数据感知配置。
-
-文档内容：
-{document_content}
-
-可用业务模型：
-{models_info}
-
-请分析文档中提到的数据监控需求，并生成JSON格式的数据感知配置。每个配置应包含：
-- name: 配置名称
-- type: 感知类型 ("data_change" 或 "threshold")
-- model_id: 关联的业务模型ID
-- config: 配置参数（必须严格按照以下格式）
-
-**对于数据变化感知 (type: "data_change")，config必须包含：**
-- trigger_conditions: 触发条件数组，可选值: ["create", "update", "delete"]
-- monitored_fields: 监控字段数组，使用业务模型中的field_id
-- check_interval: 检查间隔（秒），数字类型，默认5
-
-**对于阈值触发感知 (type: "threshold")，config必须包含：**
-- monitored_field: 监控字段，使用业务模型中的field_id
-- threshold_type: 阈值类型，"static"（固定阈值）或"dynamic"（动态阈值）
-- 如果threshold_type是"static"，则包含:
-  - threshold_value: 固定阈值，数字类型
-- 如果threshold_type是"dynamic"，则包含:
-  - threshold_field: 阈值字段，使用业务模型中的field_id  
-- operator: 操作符，可选值: "gt"（大于）, "lt"（小于）, "eq"（等于）, "ne"（不等于）, "gte"（大于等于）, "lte"（小于等于）
-- check_interval: 检查间隔（秒），数字类型，默认5
-
-- description: 配置描述
-
-只返回JSON数组，不要包含任何其他文本。
-"""
-
-    def _generate_drive_logic_prompt(self, document_content: str, sensing_configs: List[Dict], tasks: List[Dict]) -> str:
-        """生成驱动逻辑的提示词"""
-        # 注意：sensing_configs 是新生成的配置，使用临时ID进行标识
-        configs_info = "\n".join([
-            f"- 临时ID: {config['temp_id']}, 名称: {config['name']}, 类型: {config['type']}, 模型ID: {config.get('model_id', 'N/A')}"
-            for config in sensing_configs
-        ])
-        
-        tasks_info = "\n".join([
-            f"- 任务ID: {task['id']}, 名称: {task['name']}, 所需能力: {', '.join(task.get('capability_names', []))}"
-            for task in tasks
-        ])
-        
-        return f"""
-你是一个专业的数据驱动系统配置专家。请根据以下文档内容、数据感知配置和可用任务，生成驱动逻辑配置。
-
-文档内容：
-{document_content}
-
-可用数据感知配置：
-{configs_info}
-
-可用任务：
-{tasks_info}
-
-请分析文档中的业务规则，并生成JSON格式的驱动逻辑配置。每个配置应包含：
-- name: 逻辑名称
-- type: 逻辑类型 ("first_order" 或 "script")
-- config: 逻辑配置参数（必须严格按照以下格式）
-- description: 逻辑描述
-- event_temp_ids: 关联的数据感知配置临时ID列表（使用上面列出的临时ID）
-- task_ids: 关联的任务ID列表
-
-**对于一阶函数 (type: "first_order")，config必须包含：**
-- pre_condition: Python条件表达式（字符串类型，可选）
-  - 必须是有效的Python表达式语法
-  - 可以使用data字典访问事件数据，格式为: data.get('字段名', 默认值)
-  - 支持比较操作符: ==, !=, >, <, >=, <=
-  - 支持逻辑操作符: and, or, not
-  - 示例: "data.get('status', '') == 'CONFIRMED'"
-  - 示例: "data.get('total_amount', 0) > 10000 and data.get('currency', '') == 'CNY'"
-
-**对于脚本函数 (type: "script")，config必须包含：**
-- script_content: Python脚本内容（字符串类型，可选）
-  - 脚本必须设置一个名为'result'的变量
-  - result可以是布尔值，也可以是元组(True/False, processed_data)
-  - 可以访问'event'变量（包含完整的事件数据）和'data_source'变量
-  - 示例:
-    ```python
-    event_data = event.get('data', {{}})
-    record_data = event_data.get('affected_records', [{{}}])[0].get('record', {{}})
-    
-    if record_data.get('total_amount', 0) > 10000:
-        # 执行特殊审批和风险评估
-        result = (True, event_data)
-    else:
-        result = (False, event_data)
-    ```
-
-只返回JSON数组，不要包含任何其他文本。
-"""
-
-    def extract_sensing_configs_from_document(self, document_content: str, business_models: List[Dict]) -> List[Dict]:
-        """从文档内容中提取数据感知配置"""
-        prompt = self._generate_sensing_config_prompt(document_content, business_models)
+    def parse_natural_language_to_drive_logic(self, natural_language: str, actions: List[Dict], events: List[Dict]) -> Dict:
+        """将自然语言解析为驱动逻辑配置（带少样本示例和验证）"""
+        prompt = self._build_drive_logic_parsing_prompt_with_examples(natural_language, actions, events)
         response = self.llm_client.chat.completions.create(
             model=self.llm_client.model_name,
             messages=[
-                {"role": "system", "content": "你是一个专业的数据驱动系统配置专家，能够从文档中提取结构化配置"},
+                {"role": "system", "content": "你是一个专业的数据驱动系统配置专家，能够准确解析自然语言并生成结构化配置"},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
@@ -434,133 +279,27 @@ class LLMTranslator:
         
         try:
             result_text = response.choices[0].message.content.strip()
-            # 提取JSON部分
-            json_match = re.search(r'\[.*\]', result_text, re.DOTALL)
+            # 提取JSON对象
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                logic = json.loads(json_match.group())
+                # 验证配置
+                is_valid, message = self.validate_drive_logic(logic)
+                if not is_valid:
+                    logger.warning(f"配置验证失败: {message}")
+                    return {}
+                return logic
             else:
-                return []
-        except Exception as e:
-            logger.error(f"解析数据感知配置失败: {e}")
-            return []
-
-    def extract_drive_logics_from_document(self, document_content: str, sensing_configs: List[Dict], tasks: List[Dict]) -> List[Dict]:
-        """从文档内容中提取驱动逻辑配置"""
-        prompt = self._generate_drive_logic_prompt(document_content, sensing_configs, tasks)
-        response = self.llm_client.chat.completions.create(
-            model=self.llm_client.model_name,
-            messages=[
-                {"role": "system", "content": "你是一个专业的数据驱动系统配置专家，能够从文档中提取结构化配置"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            extra_body={"enable_thinking": False}
-        )
-        
-        try:
-            result_text = response.choices[0].message.content.strip()
-            # 提取JSON部分
-            json_match = re.search(r'\[.*\]', result_text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            else:
-                return []
+                return {}
         except Exception as e:
             logger.error(f"解析驱动逻辑配置失败: {e}")
-            return []
+            return {}
     
-    def _build_sensing_config_parsing_prompt_with_examples(self, natural_language: str, business_models: List[Dict]) -> str:
-        """构建数据感知配置解析提示词（带少样本示例和详细约束）"""
-        models_info = "\n".join([
-            f"- 模型ID: {model['id']}, 名称: {model['name']}, 字段: {', '.join([f'{f['field_id']}({f['data_type']})' for f in model.get('fields', [])])}"
-            for model in business_models
-        ])
-        
-        return f"""
-你是一个专业的数据驱动系统配置专家。请根据以下自然语言描述和可用的业务模型，生成数据感知配置。
-
-可用业务模型：
-{models_info}
-
-请分析自然语言描述中的数据监控需求，并生成JSON格式的数据感知配置。每个配置必须包含以下字段：
-
-- name: 配置名称
-- type: 感知类型 ("data_change" 或 "threshold") 
-- model_id: 关联的业务模型ID
-- config: 配置参数（必须严格按照以下格式）
-- description: 配置描述
-
-**对于数据变化感知 (type: "data_change")，config必须包含：**
-- trigger_conditions: 触发条件数组，可选值: ["create", "update", "delete"]
-- monitored_fields: 监控字段数组，使用业务模型中的field_id
-- check_interval: 检查间隔（秒），数字类型，默认5
-
-**对于阈值触发感知 (type: "threshold")，config必须包含：**
-- monitored_field: 监控字段，使用业务模型中的field_id
-- threshold_type: 阈值类型，"static"（固定阈值）或"dynamic"（动态阈值）
-- 如果threshold_type是"static"，则包含:
-  - threshold_value: 固定阈值，数字类型
-- 如果threshold_type是"dynamic"，则包含:
-  - threshold_field: 阈值字段，使用业务模型中的field_id  
-- operator: 操作符，可选值: "gt"（大于）, "lt"（小于）, "eq"（等于）, "ne"（不等于）, "gte"（大于等于）, "lte"（小于等于）
-- check_interval: 检查间隔（秒），数字类型，默认5
-
-【示例1】
-输入: "监控订单表的所有变更"
-输出: {{
-  "name": "订单变更监控",
-  "type": "data_change", 
-  "model_id": "orders",
-  "config": {{
-    "trigger_conditions": ["create", "update", "delete"],
-    "monitored_fields": [],
-    "check_interval": 5
-  }},
-  "description": "监控订单表的所有数据变更"
-}}
-
-【示例2】
-输入: "当温度超过100度时告警"
-输出: {{
-  "name": "高温告警",
-  "type": "threshold",
-  "model_id": "sensors", 
-  "config": {{
-    "monitored_field": "temperature",
-    "operator": "gt",
-    "threshold_value": 100,
-    "check_interval": 5,
-    "threshold_type": "static"
-  }},
-  "description": "当温度超过100度时触发告警"
-}}
-
-【示例3】
-输入: "当库存低于50时通知"
-输出: {{
-  "name": "低库存通知",
-  "type": "threshold",
-  "model_id": "inventory",
-  "config": {{
-    "monitored_field": "stock_level",
-    "operator": "lt", 
-    "threshold_value": 50,
-    "check_interval": 10,
-    "threshold_type": "static"
-  }},
-  "description": "当库存低于50时发送通知"
-}}
-
-现在请处理以下输入：
-输入: "{natural_language}"
-输出: 
-"""
-
-    def _build_drive_logic_parsing_prompt_with_examples(self, natural_language: str, tasks: List[Dict], events: List[Dict]) -> str:
+    def _build_drive_logic_parsing_prompt_with_examples(self, natural_language: str, actions: List[Dict], events: List[Dict]) -> str:
         """构建驱动逻辑解析提示词（带少样本示例和详细约束）"""
-        tasks_info = "\n".join([
-            f"- 任务ID: {task['id']}, 名称: {task['name']}, 所需能力: {', '.join(task.get('capability_names', []))}"
-            for task in tasks
+        actions_info = "\n".join([
+            f"- 行动ID: {action['id']}, 名称: {action['name']}, 目标模型: {action.get('target_model_id', 'N/A')}"
+            for action in actions
         ])
         
         events_info = "\n".join([
@@ -569,10 +308,10 @@ class LLMTranslator:
         ])
         
         return f"""
-你是一个专业的数据驱动系统配置专家。请根据以下自然语言描述、可用任务和事件，生成驱动逻辑配置。
+你是一个专业的数据驱动系统配置专家。请根据以下自然语言描述、可用行动和事件，生成驱动逻辑配置。
 
-可用任务：
-{tasks_info}
+可用行动：
+{actions_info}
 
 可用事件：
 {events_info}
@@ -584,7 +323,7 @@ class LLMTranslator:
 - config: 逻辑配置参数（必须严格按照以下格式）
 - description: 逻辑描述
 - event_ids: 关联的数据感知配置ID列表
-- task_ids: 关联的任务ID列表
+- action_ids: 关联的行动ID列表
 
 **对于一阶函数 (type: "first_order")，config必须包含：**
 - pre_condition: Python条件表达式（字符串类型，可选）
@@ -622,7 +361,7 @@ class LLMTranslator:
   }},
   "description": "当订单金额超过10000时触发经理审批流程",
   "event_ids": [1],
-  "task_ids": [2]
+  "action_ids": [2]
 }}
 
 【示例2】
@@ -635,7 +374,7 @@ class LLMTranslator:
   }},
   "description": "当温度超出正常范围时发送邮件告警",
   "event_ids": [3],
-  "task_ids": [4]
+  "action_ids": [4]
 }}
 
 【示例3】
@@ -648,7 +387,7 @@ class LLMTranslator:
   }},
   "description": "基于多因素计算风险评分并决定处理流程",
   "event_ids": [5],
-  "task_ids": [6, 7]
+  "action_ids": [6, 7]
 }}
 
 现在请处理以下输入：
@@ -656,144 +395,33 @@ class LLMTranslator:
 输出: 
 """
 
-    def _build_sensing_config_explanation_prompt(self, config: Dict) -> str:
-        """构建数据感知配置解释提示词"""
-        config_json = json.dumps(config, ensure_ascii=False, indent=2)
-        return f"""
-你是一个专业的数据驱动系统配置专家。请将以下数据感知配置转换为简洁明了的中文自然语言描述。
-
-配置信息：
-{config_json}
-
-请用一句简洁的中文描述这个配置的作用，避免使用技术术语，使用业务友好的语言。
-只返回描述文本，不要包含任何其他内容。
-"""
-
-    def _build_drive_logic_explanation_prompt(self, logic: Dict) -> str:
-        """构建驱动逻辑解释提示词"""
-        logic_json = json.dumps(logic, ensure_ascii=False, indent=2)
-        return f"""
-你是一个专业的数据驱动系统配置专家。请将以下驱动逻辑配置转换为简洁明了的中文自然语言描述。
-
-配置信息：
-{logic_json}
-
-请用一句简洁的中文描述这个逻辑的作用，避免使用技术术语，使用业务友好的语言。
-只返回描述文本，不要包含任何其他内容。
-"""
-
-    def validate_sensing_config(self, config: Dict) -> Tuple[bool, str]:
-        """验证数据感知配置的完整性"""
-        required_fields = ['name', 'type', 'model_id', 'config']
-        for field in required_fields:
-            if field not in config:
-                return False, f"缺少必需字段: {field}"
-        
-        config_type = config['type']
-        if config_type == 'data_change':
-            data_change_required = ['trigger_conditions', 'check_interval']
-            for field in data_change_required:
-                if field not in config['config']:
-                    return False, f"data_change类型缺少必需字段: {field}"
-        elif config_type == 'threshold':
-            threshold_required = ['monitored_field', 'operator', 'check_interval', 'threshold_type']
-            for field in threshold_required:
-                if field not in config['config']:
-                    return False, f"threshold类型缺少必需字段: {field}"
-            
-            # 验证阈值类型
-            if config['config']['threshold_type'] == 'static' and 'threshold_value' not in config['config']:
-                return False, "static阈值类型需要threshold_value字段"
-            elif config['config']['threshold_type'] == 'dynamic' and 'threshold_field' not in config['config']:
-                return False, "dynamic阈值类型需要threshold_field字段"
-        
-        return True, "验证通过"
-
     def validate_drive_logic(self, logic: Dict) -> Tuple[bool, str]:
-        """验证驱动逻辑配置的完整性"""
-        required_fields = ['name', 'type', 'config', 'event_ids', 'task_ids']
+        """验证驱动逻辑配置的有效性"""
+        required_fields = ['name', 'type', 'config', 'description', 'event_ids', 'action_ids']
         for field in required_fields:
             if field not in logic:
                 return False, f"缺少必需字段: {field}"
         
-        logic_type = logic['type']
-        if logic_type == 'first_order':
-            # first_order类型可以没有pre_condition，但如果有必须是字符串
+        if logic['type'] not in ['first_order', 'script']:
+            return False, "type必须是'first_order'或'script'"
+        
+        if not isinstance(logic['event_ids'], list):
+            return False, "event_ids必须是列表"
+        
+        if not isinstance(logic['action_ids'], list):
+            return False, "action_ids必须是列表"
+        
+        if logic['type'] == 'first_order':
+            # first_order类型可以没有pre_condition
             if 'pre_condition' in logic['config'] and not isinstance(logic['config']['pre_condition'], str):
-                return False, "first_order类型的pre_condition必须是字符串"
-        elif logic_type == 'script':
+                return False, "pre_condition必须是字符串"
+        elif logic['type'] == 'script':
             if 'script_content' not in logic['config']:
-                return False, "script类型缺少script_content字段"
+                return False, "script类型必须包含script_content"
             if not isinstance(logic['config']['script_content'], str):
                 return False, "script_content必须是字符串"
         
-        # 验证event_ids和task_ids是数组
-        if not isinstance(logic['event_ids'], list) or not isinstance(logic['task_ids'], list):
-            return False, "event_ids和task_ids必须是数组"
-        
-        return True, "验证通过"
-
-    def parse_natural_language_to_sensing_config(self, natural_language: str, business_models: List[Dict]) -> Dict:
-        """将自然语言解析为数据感知配置（带少样本示例和详细约束验证）"""
-        prompt = self._build_sensing_config_parsing_prompt_with_examples(natural_language, business_models)
-        response = self.llm_client.chat.completions.create(
-            model=self.llm_client.model_name,
-            messages=[
-                {"role": "system", "content": "你是一个专业的数据驱动系统配置专家，能够准确解析自然语言并生成结构化配置"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            extra_body={"enable_thinking": False}
-        )
-        
-        try:
-            result_text = response.choices[0].message.content.strip()
-            # 提取JSON对象
-            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if json_match:
-                config = json.loads(json_match.group())
-                # 验证配置
-                is_valid, message = self.validate_sensing_config(config)
-                if not is_valid:
-                    logger.warning(f"配置验证失败: {message}")
-                    return {}
-                return config
-            else:
-                return {}
-        except Exception as e:
-            logger.error(f"解析数据感知配置失败: {e}")
-            return {}
-
-    def parse_natural_language_to_drive_logic(self, natural_language: str, tasks: List[Dict], events: List[Dict]) -> Dict:
-        """将自然语言解析为驱动逻辑配置（带少样本示例和验证）"""
-        prompt = self._build_drive_logic_parsing_prompt_with_examples(natural_language, tasks, events)
-        response = self.llm_client.chat.completions.create(
-            model=self.llm_client.model_name,
-            messages=[
-                {"role": "system", "content": "你是一个专业的数据驱动系统配置专家，能够准确解析自然语言并生成结构化配置"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            extra_body={"enable_thinking": False}
-        )
-        
-        try:
-            result_text = response.choices[0].message.content.strip()
-            # 提取JSON对象
-            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if json_match:
-                logic = json.loads(json_match.group())
-                # 验证配置
-                is_valid, message = self.validate_drive_logic(logic)
-                if not is_valid:
-                    logger.warning(f"配置验证失败: {message}")
-                    return {}
-                return logic
-            else:
-                return {}
-        except Exception as e:
-            logger.error(f"解析驱动逻辑配置失败: {e}")
-            return {}
+        return True, "配置有效"
 
     def convert_sensing_config_to_natural_language(self, config: Dict) -> str:
         """将数据感知配置转换为自然语言描述"""
@@ -823,6 +451,32 @@ class LLMTranslator:
         )
         return response.choices[0].message.content.strip()
 
+    def _build_sensing_config_explanation_prompt(self, config: Dict) -> str:
+        """构建数据感知配置解释提示词"""
+        return f"""
+你是一个专业的数据驱动系统配置专家。请将以下数据感知配置转换为业务友好的自然语言描述。
 
-# 全局翻译器实例
+配置:
+{json.dumps(config, ensure_ascii=False, indent=2)}
+
+请用简洁明了的中文描述这个配置的作用，例如："监控订单表中订单金额的变化，当金额大于10000时触发告警"。
+
+只输出描述文本，不要包含其他内容。
+"""
+
+    def _build_drive_logic_explanation_prompt(self, logic: Dict) -> str:
+        """构建驱动逻辑配置解释提示词"""
+        return f"""
+你是一个专业的数据驱动系统配置专家。请将以下驱动逻辑配置转换为业务友好的自然语言描述。
+
+配置:
+{json.dumps(logic, ensure_ascii=False, indent=2)}
+
+请用简洁明了的中文描述这个逻辑的作用，例如："当订单金额大于10000时，自动触发经理审批流程"。
+
+只输出描述文本，不要包含其他内容。
+"""
+
+
+# 全局LLM翻译器实例
 llm_translator = LLMTranslator()
