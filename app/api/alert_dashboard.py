@@ -99,8 +99,8 @@ def get_alert_exec_count():
         current_month = current_date.strftime("%Y-%m")
         last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
 
-        current_count = 0
-        last_month_count = 0
+        current_count = kpi_service.get_alert_exec_count(current_month)
+        last_month_count = kpi_service.get_alert_exec_count(last_month)
 
         return KpiMetricVO(
             val=current_count,
@@ -168,7 +168,7 @@ def process_alert(request: dict):
         alert_id = request.get("alert_id")
         if not alert_id:
             raise HTTPException(status_code=400, detail="缺少 alert_id 参数")
-        success = alert_service.mark_alert_as_processed(alert_id)
+        success = alert_service.mark_alert_as_processed(alert_id, 2)
         if not success:
             raise HTTPException(status_code=404, detail=f"告警不存在或处理失败: {alert_id}")
         return {"message": "处理成功", "alert_id": alert_id}
@@ -176,7 +176,20 @@ def process_alert(request: dict):
         logger.error(f"处理告警失败: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"处理告警失败: {str(e)}")
 
-
+@router.post("/alerts/process/auto")
+def process_alert_auto(request: dict):
+    """自动处理告警，将指定告警更新为已处理状态"""
+    try:
+        alert_id = request.get("alert_id")
+        if not alert_id:
+            raise HTTPException(status_code=400, detail="缺少 alert_id 参数")
+        success = alert_service.mark_alert_as_processed(alert_id, 1)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"告警不存在或处理失败: {alert_id}")
+        return {"message": "处理成功", "alert_id": alert_id}
+    except Exception as e:
+        logger.error(f"处理告警失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"处理告警失败: {str(e)}")
 
 @router.get("/chart")
 def get_chart_data():

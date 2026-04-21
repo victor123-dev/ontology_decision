@@ -139,20 +139,11 @@ class KpiService:
         month_start, month_end = _get_month_date_range(month)
 
         # 查询预警消息
-        query_builder = client.models.AlertMessage
-        alerts = query_builder.execute()
+        alerts = client.models.AlertMessage.find(
+            create_time__gte=month_start,
+            create_time__lt=month_end,
+            status__eq="已处理",
+            handle_type__eq=1
+        )
 
-        # 通过关联的预警规则的生效时间和建议行动来过滤
-        filtered_alerts = []
-        for alert in alerts:
-            alert_rule = alert.getAlertRule()
-            if alert_rule and alert_rule.effective_time:
-                effective_time = alert_rule.effective_time
-                # 检查预警规则生效时间是否在指定月份
-                if month_start <= effective_time < month_end:
-                    # 检查是否有建议行动（表示已执行）
-                    suggested_action = alert.getSuggestedAction()
-                    if suggested_action:
-                        filtered_alerts.append(alert)
-
-        return len(filtered_alerts)
+        return len(alerts)
