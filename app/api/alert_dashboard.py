@@ -12,7 +12,6 @@ from app.services.dashbaord.report_service import ReportService
 from app.utils.logger import get_logger
 from app.vo.alertdashboard.char_vo import CharVO
 from app.vo.alertdashboard.kpi_vo import KpiMetricVO, MonthlySalesMetricsVO
-from app.vo.alertdashboard.logistics_dynamic_vo import LogisticsDynamicVO
 
 router = APIRouter(prefix="/alert-dashboard", tags=["alert-dashboard"])
 logger = get_logger(__name__)

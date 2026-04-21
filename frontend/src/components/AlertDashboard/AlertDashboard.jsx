@@ -41,6 +41,7 @@ const GRID_MARGIN = [12, 12];
 // ─── 内联 Widget 容器（支持拖拽手柄 + 全屏） ───────────────────────────────
 function Widget({ title, subtitle, children, headerRight, fullscreenContent, fullscreenNoPadding }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenProps = { isFullscreen };
 
   // 全屏 overlay 通过 Portal 渲染到 document.body，确保覆盖整个页面
   const fullscreenOverlay = isFullscreen ? createPortal(
@@ -72,7 +73,7 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
         </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: fullscreenNoPadding ? 0 : 24, display: 'flex', flexDirection: 'column' }}>
-        {fullscreenContent ?? children}
+        {fullscreenContent ? fullscreenContent(fullscreenProps) : children}
       </div>
     </div>,
     document.body
@@ -399,7 +400,7 @@ export default function AlertDashboard() {
                   title="供应链地图"
                   subtitle="实时节点状态"
                   fullscreenNoPadding
-                  fullscreenContent={ <div
+                  fullscreenContent={ ({ isFullscreen }) => <div
                       style={{ flex: 1,
                         minHeight: 0,
                         backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663439243238/eAaE9FZQc3rqCtqMQX6MhY/china-map-bg-VBnkueTcA3KJzfiArGZZLF.webp)`,
@@ -407,7 +408,7 @@ export default function AlertDashboard() {
                         backgroundPosition: 'center',
                         position: 'relative' }}
                     >
-                      <SupplyChainMap mapData={mapData} loading={mapLoading} />
+                      <SupplyChainMap mapData={mapData} loading={mapLoading} isFullscreen={isFullscreen} />
                     </div> }
                 >
                   {/* 地图容器：背景图 + SVG节点，无任何蒙层 */}
