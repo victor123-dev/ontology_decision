@@ -28,7 +28,7 @@ function AppContent() {
   // 根据当前路径设置选中的菜单项
   const getCurrentSelectedKey = () => {
     const path = location.pathname
-    if (path === '/') return 'data-source'
+    if (path === '/') return 'alert-dashboard'
     return path.substring(1) // 移除开头的 '/'
   }
 
@@ -43,6 +43,18 @@ function AppContent() {
           mode="inline"
           selectedKeys={[selectedKey]}
           items={[
+            {
+              key: 'group-0',
+              label: '业务看板',
+              type: 'group',
+              children: [
+                {
+                  key: 'alert-dashboard',
+                  icon: <span>⚠️</span>,
+                  label: <Link to="/alert-dashboard">预警看板</Link>,
+                }
+              ]
+            },
             {
               key: 'group-1',
               label: '基础数据配置',
@@ -113,18 +125,6 @@ function AppContent() {
                   key: 'drive-visualization',
                   icon: <span>📈</span>,
                   label: <Link to="/drive-visualization">驱动可视化</Link>,
-                }
-              ]
-            },
-            {
-              key: 'group-5',
-              label: '业务案例',
-              type: 'group',
-              children: [
-                {
-                  key: 'alert-dashboard',
-                  icon: <span>⚠️</span>,
-                  label: <Link to="/alert-dashboard">预警看板</Link>,
                 }
               ]
             }
