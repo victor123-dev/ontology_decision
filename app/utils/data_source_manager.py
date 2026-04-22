@@ -277,8 +277,22 @@ class DataSourceManager:
             # 2. 检查现有字段的类型是否需要变更
             columns_to_modify = set()
             if model_fields and current_columns:
-                # 构建当前字段类型映射
-                current_type_map = {col['name']: col.get('type', 'TEXT').upper() for col in current_columns}
+                # 构建当前字段类型映射（将SQLAlchemy类型对象转换为字符串）
+                current_type_map = {}
+                for col in current_columns:
+                    col_type = col.get('type', 'TEXT')
+                    if hasattr(col_type, '__str__'):
+                        # SQLAlchemy类型对象，转换为字符串并提取基本类型
+                        type_str = str(col_type).upper()
+                        # 提取基本类型（移除括号和参数）
+                        if '(' in type_str:
+                            base_type = type_str.split('(')[0]
+                        else:
+                            base_type = type_str
+                        current_type_map[col['name']] = base_type
+                    else:
+                        # 已经是字符串类型
+                        current_type_map[col['name']] = str(col_type).upper()
                 
                 # 构建期望字段类型映射
                 expected_type_map = {}
@@ -288,13 +302,13 @@ class DataSourceManager:
                     expected_type_map[field_name] = expected_sqlite_type
                 
                 # 比较类型差异（简单字符串比较，忽略大小写）
-                    for field_name in expected_columns & current_column_names:
-                        current_type = current_type_map.get(field_name, 'TEXT')
-                        expected_type = expected_type_map.get(field_name, 'TEXT')
-                        
-                        if current_type.upper() != expected_type.upper():
-                            columns_to_modify.add(field_name)
-                            logger.info(f"检测到字段类型变更: {field_name} ({current_type} -> {expected_type})")
+                for field_name in expected_columns & current_column_names:
+                    current_type = current_type_map.get(field_name, 'TEXT')
+                    expected_type = expected_type_map.get(field_name, 'TEXT')
+                    
+                    if current_type != expected_type:
+                        columns_to_modify.add(field_name)
+                        logger.info(f"检测到字段类型变更: {field_name} ({current_type} -> {expected_type})")
             
             # 3. 如果有字段类型变更或主键变更，需要重建表
             needs_recreate = False
