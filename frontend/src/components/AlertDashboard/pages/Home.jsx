@@ -16,7 +16,7 @@ import SalesForecastChart from "@/components/SalesForecastChart";
 import ForecastTable from "@/components/ForecastTable";
 import { logisticsData,
   alertMessages, getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "@/lib/data";
-import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useAlertExecCount } from "../hooks/useApiData";
+import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useUrgentRequistionCount } from "../hooks/useApiData";
 import { useWindowSize } from "@/hooks/useWindowSize";
 
 // rowHeight=8px，cols=24
@@ -163,17 +163,17 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
   const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading, refetch: refetchPurchaseOnTimeRate } = usePurchaseOnTimeRate();
   const { data: monthlySales, loading: monthlySalesLoading, refetch: refetchMonthlySales } = useMonthlySales();
   const { data: alertCount, loading: alertCountLoading, refetch: refetchAlertCount } = useAlertCount();
-  const { data: alertExecCount, loading: alertExecCountLoading, refetch: refetchAlertExecCount } = useAlertExecCount();
+  const { data: urgentRequistionCount, loading: urgentRequistionCountLoading, refetch: refetchUrgentRequistionCount } = useUrgentRequistionCount();
 
   // 刷新所有数据
   const handleRefreshAll = useCallback(() => {
     refetchPurchaseOnTimeRate();
     refetchMonthlySales();
     refetchAlertCount();
-    refetchAlertExecCount();
+    refetchUrgentRequistionCount();
     setLastRefresh(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     setRefreshKey(k => k + 1);
-  }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchAlertExecCount]);
+  }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchUrgentRequistionCount]);
 
   const handleStatusChange = (id, status) => { setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
     if (selectedAlert?.id === id) { setSelectedAlert(prev => prev ? { ...prev, status } : prev); } };
@@ -263,7 +263,7 @@ export default function Home() { const [activeTab, setActiveTab] = useState('das
                 <KpiCard title="当月销售金额" value={monthlySales?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={monthlySales?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} loading={monthlySalesLoading} />
                 <KpiCard title="当月销售数量" value={monthlySales?.monthlySalesQty?.val ?? 0} unit="件" format="integer" trend={monthlySales?.monthlySalesQty?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesQty?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesQty?.trendVal?.toFixed(1)}%`} icon={<Package size={16} />} color="#06b6d4" delay={200} loading={monthlySalesLoading} />
                 <KpiCard title="活跃预警消息" value={alertCount?.val ?? 0} unit="条" format="integer" trend={alertCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${alertCount?.trendVal ?? 0}条`} icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={alertCountLoading} />
-                <KpiCard title="自动执行次数" value={alertExecCount?.val ?? 0} unit="次" format="integer" trend={alertExecCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${alertExecCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} loading={alertExecCountLoading} />
+                <KpiCard title="紧急采购" value={urgentRequistionCount?.val ?? 0} unit="次" format="integer" trend={urgentRequistionCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${urgentRequistionCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} loading={urgentRequistionCountLoading} />
               </KpiWidget>
             </div>
 

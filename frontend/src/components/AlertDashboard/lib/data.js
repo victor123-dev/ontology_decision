@@ -17,7 +17,7 @@ export const alertDashboardApi = {
   getPurchaseOnTimeRate: () => api.get('/kpi/purchase-on-time-rate'),
   getMonthlySales: () => api.get('/kpi/monthly-sales'),
   getAlertCount: () => api.get('/kpi/alert-count'),
-  getAlertExecCount: () => api.get('/kpi/alert-exec-count'),
+  getUrgentRequistionCount: () => api.get('/kpi/urgent-requistion-count'),
 
   // KPI 数据 - 整体API（保留以兼容）
   getKpiData: () => api.get('/kpi'),

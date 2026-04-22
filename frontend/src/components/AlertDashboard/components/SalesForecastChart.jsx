@@ -18,7 +18,9 @@ const CustomTooltip = ({ active, payload, label }) => {
       <p style={{ color: '#94a3b8', marginBottom: '6px', fontWeight: 500 }}>{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ marginBottom: '2px', color: p.color }}>
-          {p.name}: <span style={{ fontFamily: 'monospace' }}>{p.value?.toLocaleString()}</span>
+          {p.name}: <span style={{ fontFamily: 'monospace' }}>
+            {p.value !== null && p.value !== undefined ? p.value.toLocaleString() : '-'}
+          </span>
         </p>
       ))}
     </div>
@@ -40,7 +42,7 @@ const DrillTooltip = ({ active, payload, label }) => {
   );
 };
 
-// 生成最近12个月的月份列表
+// 生成最近12个月的月份列表（备用）
 const getLast12Months = () => {
   const months = [];
   const today = new Date();
@@ -53,7 +55,7 @@ const getLast12Months = () => {
   return months;
 };
 
-export default function SalesForecastChart({ height = 220, chartData = [], loading = false, drillMonth: externalDrillMonth, onDrillMonthChange }) {
+export default function SalesForecastChart({ height = 220, chartData = [], chartMonths = [], loading = false, drillMonth: externalDrillMonth, onDrillMonthChange }) {
   const [activeSeries, setActiveSeries] = useState(new Set(['salesForecast', 'salesOrder']));
   const [internalDrillMonth, setInternalDrillMonth] = useState(null);
 
@@ -69,11 +71,12 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
 
   // 将按品号+月份的数据转换为按月合并的数据（用于折线图），补全12个月
   const monthlyData = useMemo(() => {
-    const last12Months = getLast12Months();
-    // 初始化12个月的数据，值都为0
+    // 优先使用后端返回的月份列表，否则使用本地计算的
+    const monthList = chartMonths.length > 0 ? chartMonths : getLast12Months();
+    // 初始化12个月的数据，值都为null（无数据时）
     const monthMap = {};
-    last12Months.forEach(month => {
-      monthMap[month] = { month, salesForecast: 0, salesOrder: 0 };
+    monthList.forEach(month => {
+      monthMap[month] = { month, salesForecast: null, salesOrder: null };
     });
 
     // 用chartData填充
@@ -81,14 +84,25 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
       chartData.forEach(item => {
         const month = item.month;
         if (monthMap[month]) {
-          monthMap[month].salesForecast += item.salesForecast || 0;
-          monthMap[month].salesOrder += item.salesOrder || 0;
+          // 累加数据，null值时直接赋值（保持null表示无数据）
+          if (item.salesForecast !== null && item.salesForecast !== undefined) {
+            const currentForecast = monthMap[month].salesForecast;
+            monthMap[month].salesForecast = currentForecast === null 
+              ? item.salesForecast 
+              : currentForecast + item.salesForecast;
+          }
+          if (item.salesOrder !== null && item.salesOrder !== undefined) {
+            const currentOrder = monthMap[month].salesOrder;
+            monthMap[month].salesOrder = currentOrder === null 
+              ? item.salesOrder 
+              : currentOrder + item.salesOrder;
+          }
         }
       });
     }
 
     return Object.values(monthMap);
-  }, [chartData]);
+  }, [chartData, chartMonths]);
 
   const toggleSeries = (key) => {
     setActiveSeries(prev => {
@@ -228,6 +242,7 @@ export default function SalesForecastChart({ height = 220, chartData = [], loadi
                   strokeWidth={2}
                   dot={{ r: 3, fill: s.color, strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
+                  connectNulls={false}
                 />
               ))}
             </LineChart>
