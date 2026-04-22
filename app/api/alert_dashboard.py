@@ -203,53 +203,8 @@ def get_chart_data():
         start_date = today - relativedelta(months=7)
         start_month = start_date.strftime("%Y-%m")
 
-        # 获取销售预测、销售订单数据（各自已按品号+月份合并）
-        forecast_list = report_service.get_sale_forecast(start_month, end_month)
-        order_list = report_service.get_sale_orders(start_month, end_month)
-
-        logger.info(f"销售预测: {len(forecast_list)}, 销售订单: {len(order_list)}")
-
-        # 按品号+年月将两种数据合并成CharVO
-        merged_data = {}
-        def add_to_merged(item_list, vo_field_name):
-            """将数据添加到合并字典"""
-            for item in item_list:
-                key = (item.item_code, item.month)
-                if key not in merged_data:
-                    merged_data[key] = {
-                        "item_code": item.item_code,
-                        "month": item.month,
-                        "product": "",
-                        "salesForecast": None,
-                        "salesOrder": None
-                    }
-                # 累加对应字段值（None值时直接赋值，否则累加）
-                current_val = merged_data[key][vo_field_name]
-                new_val = getattr(item, vo_field_name) or 0
-                if current_val is None:
-                    merged_data[key][vo_field_name] = new_val
-                else:
-                    merged_data[key][vo_field_name] = current_val + new_val
-                # 更新产品名称（非空时）
-                if item.product:
-                    merged_data[key]["product"] = item.product
-
-        # 合并两种数据
-        add_to_merged(forecast_list, "salesForecast")
-        add_to_merged(order_list, "salesOrder")
-
-        # 转换为CharVO对象列表并排序
-        result = [
-            CharVO(
-                item_code=data["item_code"],
-                month=data["month"],
-                product=data["product"],
-                salesForecast=data["salesForecast"],
-                salesOrder=data["salesOrder"]
-            )
-            for data in merged_data.values()
-        ]
-        result.sort(key=lambda x: (x.month, x.item_code))
+        # 获取销售预测、销售订单数据（get_sale_forecast 已返回 CharVO 对象列表）
+        result = report_service.get_sale_forecast(start_month, end_month)
         
         # 生成月份列表（前端前7个月到后4个月）
         months = []

@@ -46,9 +46,10 @@ class ReportService:
             return []
 
         # 按月份和item_code分组合并数据
+        # 使用None作为初始值，区分"没有数据"和"数据为0"
         grouped_data = defaultdict(lambda: {
-            'forecast': 0,
-            'order': 0,
+            'forecast': None,
+            'order': None,
             'product': ''
         })
 
@@ -58,9 +59,19 @@ class ReportService:
             month = demand_date_str[:7] if demand_date_str else '1970-01'
             item_code = forecast.item_code or 'UNKNOWN'
 
-            # 累加数量（SalesForecast的quantity赋值给CharVO.forecast）
-            grouped_data[(month, item_code)]['forecast'] += forecast.quantity or 0
-            
+            # 累加数量（SalesForecast的quantity赋值给CharVO.order）
+            # 只有有值时才累加，保持None表示无数据
+            if forecast.quantity is not None:
+                if grouped_data[(month, item_code)]['order'] is None:
+                    grouped_data[(month, item_code)]['order'] = 0
+                grouped_data[(month, item_code)]['order'] += forecast.quantity
+
+            # 累加预测数量（SalesForecast的forecast_quantity赋值给CharVO.salesForecast）
+            if forecast.forecast_quantity is not None:
+                if grouped_data[(month, item_code)]['forecast'] is None:
+                    grouped_data[(month, item_code)]['forecast'] = 0
+                grouped_data[(month, item_code)]['forecast'] += forecast.forecast_quantity
+
             # 保存产品名称（使用item_name）
             if forecast.item_name:
                 grouped_data[(month, item_code)]['product'] = forecast.item_name
@@ -72,8 +83,8 @@ class ReportService:
                 item_code=item_code,
                 month=month,
                 product=data['product'] or f"{item_code}产品",
-                salesForecast=int(data['forecast']),
-                salesOrder=int(data['order'])
+                salesForecast=int(data['forecast']) if data['forecast'] is not None else None,
+                salesOrder=int(data['order']) if data['order'] is not None else None
             )
             result.append(char_vo)
 
