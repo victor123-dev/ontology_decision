@@ -14,7 +14,27 @@ const GRAPH_CONFIG = {
   ACTION_NODE_FILL: '#FFF7ED',
   ACTION_NODE_STROKE: '#EA580C',
   LABEL_FONT_SIZE: 12,
+  HIGHLIGHTED_NODE_FILL: '#F0F9FF',
+  HIGHLIGHTED_NODE_STROKE: '#003097ff',
 };
+
+// 需要高亮的模型ID列表
+const HIGHLIGHTED_MODEL_IDS = new Set([
+  'supplier',
+  'inventory', 
+  'purchase_order',
+  'order_detail',
+  'requisition',
+  'procurement_plan',
+  'mrp_demand',
+  'production_plan',
+  'work_order',
+  'material_detail',
+  'sales_order',
+  'customer',
+  'bom_child',
+  'bom_parent'
+]);
 
 export const useD3ForceGraph = (data, onSelect, selectedId) => {
   const svgRef = useRef(null);
@@ -144,8 +164,24 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
 
     nodeEnter.append("circle")
       .attr("r", GRAPH_CONFIG.NODE_RADIUS)
-      .attr("fill", d => d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_FILL : GRAPH_CONFIG.NODE_DEFAULT_FILL)
-      .attr("stroke", d => d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_STROKE : GRAPH_CONFIG.NODE_STROKE)
+      .attr("fill", d => {
+        if (d.type === 'action') {
+          return GRAPH_CONFIG.ACTION_NODE_FILL;
+        }
+        if (HIGHLIGHTED_MODEL_IDS.has(d.id)) {
+          return GRAPH_CONFIG.HIGHLIGHTED_NODE_FILL;
+        }
+        return GRAPH_CONFIG.NODE_DEFAULT_FILL;
+      })
+      .attr("stroke", d => {
+        if (d.type === 'action') {
+          return GRAPH_CONFIG.ACTION_NODE_STROKE;
+        }
+        if (HIGHLIGHTED_MODEL_IDS.has(d.id)) {
+          return GRAPH_CONFIG.HIGHLIGHTED_NODE_STROKE;
+        }
+        return GRAPH_CONFIG.NODE_STROKE;
+      })
       .attr("stroke-width", 2);
 
     nodeEnter.append("text")
@@ -222,13 +258,25 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
         if (d.id === selectedId) {
           return GRAPH_CONFIG.NODE_SELECTED_FILL;
         }
-        return d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_FILL : GRAPH_CONFIG.NODE_DEFAULT_FILL;
+        if (d.type === 'action') {
+          return GRAPH_CONFIG.ACTION_NODE_FILL;
+        }
+        if (HIGHLIGHTED_MODEL_IDS.has(d.id)) {
+          return GRAPH_CONFIG.HIGHLIGHTED_NODE_FILL;
+        }
+        return GRAPH_CONFIG.NODE_DEFAULT_FILL;
       })
       .attr("stroke", d => {
         if (d.id === selectedId) {
           return GRAPH_CONFIG.SELECTED_STROKE;
         }
-        return d.type === 'action' ? GRAPH_CONFIG.ACTION_NODE_STROKE : GRAPH_CONFIG.NODE_STROKE;
+        if (d.type === 'action') {
+          return GRAPH_CONFIG.ACTION_NODE_STROKE;
+        }
+        if (HIGHLIGHTED_MODEL_IDS.has(d.id)) {
+          return GRAPH_CONFIG.HIGHLIGHTED_NODE_STROKE;
+        }
+        return GRAPH_CONFIG.NODE_STROKE;
       })
       .attr("stroke-width", d => d.id === selectedId ? 4 : 2);
 
