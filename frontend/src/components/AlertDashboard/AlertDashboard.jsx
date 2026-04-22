@@ -15,7 +15,7 @@ import SupplyChainMap from "./components/SupplyChainMap";
 import AlertDrawer from "./components/AlertDrawer";
 import SalesForecastChart from "./components/SalesForecastChart";
 import ForecastTable from "./components/ForecastTable";
-import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useAlertExecCount, useLogisticsData, useAlertMessages, useChartData, useMapData, useForecastData } from "./hooks/useApiData";
+import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useUrgentRequistionCount, useLogisticsData, useAlertMessages, useChartData, useMapData, useForecastData } from "./hooks/useApiData";
 import { getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "./lib/data";
 import { useWindowSize } from "./hooks/useWindowSize";
 
@@ -184,10 +184,11 @@ export default function AlertDashboard() {
   const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading, refetch: refetchPurchaseOnTimeRate } = usePurchaseOnTimeRate();
   const { data: monthlySales, loading: monthlySalesLoading, refetch: refetchMonthlySales } = useMonthlySales();
   const { data: alertCount, loading: alertCountLoading, refetch: refetchAlertCount } = useAlertCount();
-  const { data: alertExecCount, loading: alertExecCountLoading, refetch: refetchAlertExecCount } = useAlertExecCount();
+  const { data: urgentRequistionCount, loading: urgentRequistionCountLoading, refetch: refetchUrgentRequistionCount } = useUrgentRequistionCount();
   const { data: logisticsData, loading: logisticsLoading, refetch: refetchLogistics } = useLogisticsData();
   const { data: alertsData, loading: alertsLoading, refetch: refetchAlerts } = useAlertMessages();
   const { data: chartData, loading: chartLoading, refetch: refetchChart } = useChartData();
+  const chartMonths = chartData?.months || [];
   const { data: mapData, loading: mapLoading, refetch: refetchMap } = useMapData();
   const { data: forecastData, loading: forecastLoading, refetch: refetchForecast } = useForecastData();
   const [alerts, setAlerts] = useState([]);
@@ -222,7 +223,7 @@ export default function AlertDashboard() {
         refetchPurchaseOnTimeRate(),
         refetchMonthlySales(),
         refetchAlertCount(),
-        refetchAlertExecCount(),
+        refetchUrgentRequistionCount(),
         refetchLogistics(),
         refetchAlerts(),
         refetchChart(),
@@ -233,7 +234,7 @@ export default function AlertDashboard() {
       setIsRefreshing(false);
       setLastRefresh(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }
-  }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchAlertExecCount, refetchLogistics, refetchAlerts, refetchChart, refetchMap, refetchForecast]);
+  }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchUrgentRequistionCount, refetchLogistics, refetchAlerts, refetchChart, refetchMap, refetchForecast]);
 
   const handleStatusChange = (id, status) => {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
@@ -378,7 +379,7 @@ export default function AlertDashboard() {
                 <KpiCard title="当月销售金额" value={monthlySales?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={monthlySales?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} loading={monthlySalesLoading} />
                 <KpiCard title="当月销售数量" value={monthlySales?.monthlySalesQty?.val ?? 0} unit="件" format="integer" trend={monthlySales?.monthlySalesQty?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesQty?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesQty?.trendVal?.toFixed(1)}%`} icon={<Package size={16} />} color="#06b6d4" delay={200} loading={monthlySalesLoading} />
                 <KpiCard title="活跃预警消息" value={alertCount?.val ?? 0} unit="条" format="integer" trend={alertCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${alertCount?.trendVal ?? 0}条`} icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={alertCountLoading} />
-                <KpiCard title="自动执行次数" value={alertExecCount?.val ?? 0} unit="次" format="integer" trend={alertExecCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${alertExecCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} loading={alertExecCountLoading} />
+                <KpiCard title="紧急采购" value={urgentRequistionCount?.val ?? 0} unit="次" format="integer" trend={urgentRequistionCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${urgentRequistionCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} loading={urgentRequistionCountLoading} />
               </KpiWidget>
             </div>
 
@@ -399,9 +400,9 @@ export default function AlertDashboard() {
                 <Widget
                   title="销售预测 vs 实际订单"
                   subtitle="近12个月 · 点击月份可下钻查看产品明细"
-                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} chartData={chartData} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />}
+                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} chartData={chartData?.data || []} chartMonths={chartMonths} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />}
                 >
-                  <SalesForecastChart height={getItemPx('chart') - 72} chartData={chartData} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />
+                  <SalesForecastChart height={getItemPx('chart') - 72} chartData={chartData?.data || []} chartMonths={chartMonths} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />
                 </Widget>
               </div>
 

@@ -97,7 +97,7 @@ export function useAlertCount() {
   return { data, loading, error, refetch: loadData };
 }
 
-export function useAlertExecCount() {
+export function useUrgentRequistionCount() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -107,11 +107,11 @@ export function useAlertExecCount() {
     try {
       setLoading(true);
       setError(null);
-      const response = await alertDashboardApi.getAlertExecCount();
+      const response = await alertDashboardApi.getUrgentRequistionCount();
       setData(response.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching alert exec count:', err);
+      console.error('Error fetching urgent requistion count:', err);
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ export function useKpiData() {
 }
 
 export function useChartData() {
-  const [data, setData] = useState([]);
+  const [data, setData] = useState({ months: [], data: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const hasLoaded = useRef(false);

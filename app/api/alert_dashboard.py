@@ -10,7 +10,7 @@ from app.services.dashbaord.logistics_service import LogistisService
 from app.services.dashbaord.map_service import MapService
 from app.services.dashbaord.report_service import ReportService
 from app.utils.logger import get_logger
-from app.vo.alertdashboard.char_vo import CharVO
+from app.vo.alertdashboard.char_vo import CharVO, ChartResponseVO
 from app.vo.alertdashboard.kpi_vo import KpiMetricVO, MonthlySalesMetricsVO
 
 router = APIRouter(prefix="/alert-dashboard", tags=["alert-dashboard"])
@@ -91,24 +91,24 @@ def get_alert_count():
         raise HTTPException(status_code=500, detail=f"获取预警数量失败: {str(e)}")
 
 
-@router.get("/kpi/alert-exec-count")
-def get_alert_exec_count():
-    """获取预警执行数量KPI"""
+@router.get("/kpi/urgent-requistion-count")
+def get_urgent_requistion_count():
+    """获取紧急采购单数量KPI"""
     try:
         current_date = datetime.today()
         current_month = current_date.strftime("%Y-%m")
         last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
 
-        current_count = kpi_service.get_alert_exec_count(current_month)
-        last_month_count = kpi_service.get_alert_exec_count(last_month)
+        current_count = kpi_service.get_urgent_requistion_count(current_month)
+        last_month_count = kpi_service.get_urgent_requistion_count(last_month)
 
         return KpiMetricVO(
             val=current_count,
             trendVal=current_count - last_month_count
         )
     except Exception as e:
-        logger.error(f"获取预警执行数量失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取预警执行数量失败: {str(e)}")
+        logger.error(f"获取紧急采购单数量失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取紧急采购单数量失败: {str(e)}")
 
 
 @router.get("/logistics")
@@ -193,14 +193,14 @@ def process_alert_auto(request: dict):
 
 @router.get("/chart")
 def get_chart_data():
-    """获取销售预测 vs 实际订单（最近12个月）"""
+    """获取销售预测 vs 实际订单（当前月前7个月到后4个月）"""
     try:
-        # 计算当前时间最近12个月
+        # 计算当前时间前7个月到后4个月（共12个月）
         today = datetime.today()
-        # 结束月为当前月
-        end_month = today.strftime("%Y-%m")
-        # 开始月为11个月前
-        start_date = today - relativedelta(months=11)
+        # 结束月为当前月后4个月
+        end_month = (today + relativedelta(months=4)).strftime("%Y-%m")
+        # 开始月为当前月前7个月
+        start_date = today - relativedelta(months=7)
         start_month = start_date.strftime("%Y-%m")
 
         # 获取销售预测、销售订单数据（各自已按品号+月份合并）
@@ -220,11 +220,16 @@ def get_chart_data():
                         "item_code": item.item_code,
                         "month": item.month,
                         "product": "",
-                        "salesForecast": 0,
-                        "salesOrder": 0
+                        "salesForecast": None,
+                        "salesOrder": None
                     }
-                # 累加对应字段值
-                merged_data[key][vo_field_name] += getattr(item, vo_field_name)
+                # 累加对应字段值（None值时直接赋值，否则累加）
+                current_val = merged_data[key][vo_field_name]
+                new_val = getattr(item, vo_field_name) or 0
+                if current_val is None:
+                    merged_data[key][vo_field_name] = new_val
+                else:
+                    merged_data[key][vo_field_name] = current_val + new_val
                 # 更新产品名称（非空时）
                 if item.product:
                     merged_data[key]["product"] = item.product
@@ -246,7 +251,14 @@ def get_chart_data():
         ]
         result.sort(key=lambda x: (x.month, x.item_code))
         
-        return result
+        # 生成月份列表（前端前7个月到后4个月）
+        months = []
+        current = start_date
+        while current <= today + relativedelta(months=4):
+            months.append(current.strftime("%Y-%m"))
+            current = current + relativedelta(months=1)
+        
+        return ChartResponseVO(months=months, data=result)
     except Exception as e:
         logger.error(f"获取图表数据失败: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取图表数据失败: {str(e)}") 

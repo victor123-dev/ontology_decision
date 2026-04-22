@@ -123,7 +123,7 @@ class KpiService:
         return len(alerts)
 
 
-    def get_alert_exec_count(self, month: str) -> int:
+    def get_urgent_requistion_count(self, month: str) -> int:
         """
         获取预警执行数量
 
@@ -139,11 +139,10 @@ class KpiService:
         month_start, month_end = _get_month_date_range(month)
 
         # 查询预警消息
-        alerts = client.models.AlertMessage.find(
-            create_time__gte=month_start,
-            create_time__lt=month_end,
-            status__eq="已处理",
-            handle_type__eq=1
+        alerts = client.models.Requisition.find(
+            document_date__gte=month_start,
+            document_date__lt=month_end,
+            status__eq="紧急"
         )
 
         return len(alerts)
