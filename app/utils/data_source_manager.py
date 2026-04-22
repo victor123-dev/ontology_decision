@@ -9,6 +9,32 @@ from app.utils.shared_utils import get_db_session
 logger = get_logger(__name__)
 
 
+def map_data_type_to_sqlite(data_type: str) -> str:
+    """
+    将通用数据类型映射到SQLite字段类型
+    
+    Args:
+        data_type: 通用数据类型字符串
+        
+    Returns:
+        SQLite字段类型字符串
+    """
+    type_mapping = {
+        'string': 'TEXT',
+        'integer': 'INTEGER', 
+        'float': 'REAL',
+        'boolean': 'INTEGER',
+        'object': 'JSON',
+        'array': 'JSON',
+        'date': 'TEXT',
+        'datetime': 'TEXT'
+    }
+    
+    # 转换为小写进行匹配，提供默认值
+    data_type_lower = data_type.lower() if data_type else 'string'
+    return type_mapping.get(data_type_lower, 'TEXT')
+
+
 class DataSourceManager:
     def __init__(self):
         self.connection_pool = {}
@@ -227,21 +253,71 @@ class DataSourceManager:
                     logger.error(f"创建表 {table_name} 失败")
                     return False
             
-            # 检查是否需要添加新字段
+            # 检查字段变更（新增字段、字段类型变更）
+            changes_detected = False
+            
+            # 1. 检查需要添加的新字段
             columns_to_add = expected_columns - current_column_names
             if columns_to_add:
                 for column_name in columns_to_add:
-                    if self._add_column(client, table_name, column_name):
-                        logger.info(f"成功添加字段 {column_name} 到表 {table_name}")
+                    # 获取新字段的数据类型
+                    new_field_type = 'string'
+                    if model_fields:
+                        for field in model_fields:
+                            if field['field_id'] == column_name:
+                                new_field_type = field.get('data_type', 'string')
+                                break
+                    
+                    if self._add_column(client, table_name, column_name, new_field_type):
+                        logger.info(f"成功添加字段 {column_name} ({new_field_type}) 到表 {table_name}")
+                        changes_detected = True
                     else:
                         logger.error(f"添加字段 {column_name} 到表 {table_name} 失败")
             
+            # 2. 检查现有字段的类型是否需要变更
+            columns_to_modify = set()
+            if model_fields and current_columns:
+                # 构建当前字段类型映射
+                current_type_map = {col['name']: col.get('type', 'TEXT').upper() for col in current_columns}
+                
+                # 构建期望字段类型映射
+                expected_type_map = {}
+                for field in model_fields:
+                    field_name = field['field_id']
+                    expected_sqlite_type = map_data_type_to_sqlite(field.get('data_type', 'string')).upper()
+                    expected_type_map[field_name] = expected_sqlite_type
+                
+                # 比较类型差异（简单字符串比较，忽略大小写）
+                    for field_name in expected_columns & current_column_names:
+                        current_type = current_type_map.get(field_name, 'TEXT')
+                        expected_type = expected_type_map.get(field_name, 'TEXT')
+                        
+                        if current_type.upper() != expected_type.upper():
+                            columns_to_modify.add(field_name)
+                            logger.info(f"检测到字段类型变更: {field_name} ({current_type} -> {expected_type})")
+            
+            # 3. 如果有字段类型变更或主键变更，需要重建表
+            needs_recreate = False
+            recreate_reason = ""
+            
+            if columns_to_modify:
+                needs_recreate = True
+                recreate_reason = f"字段类型变更: {', '.join(columns_to_modify)}"
+            
             # 检查主键是否一致（SQLite需要重建表来修改主键）
             if primary_key and primary_key not in current_pks:
-                if self._recreate_table_with_correct_pk(client, table_name, model_fields, primary_key, current_columns):
-                    logger.info(f"成功重建表 {table_name} 以修正主键")
+                needs_recreate = True
+                if recreate_reason:
+                    recreate_reason += f", 主键变更: {primary_key}"
                 else:
-                    logger.warning(f"重建表 {table_name} 修正主键失败，继续使用现有结构")
+                    recreate_reason = f"主键变更: {primary_key}"
+            
+            if needs_recreate:
+                logger.info(f"需要重建表 {table_name} ({recreate_reason})")
+                if self._recreate_table_with_correct_pk(client, table_name, model_fields, primary_key, current_columns):
+                    logger.info(f"成功重建表 {table_name} 以同步结构")
+                else:
+                    logger.warning(f"重建表 {table_name} 失败，继续使用现有结构")
             
             return True
             
@@ -264,8 +340,10 @@ class DataSourceManager:
             if model_fields:
                 for field in model_fields:
                     field_name = field['field_id']
+                    field_data_type = field.get('data_type', 'string')
+                    sqlite_type = map_data_type_to_sqlite(field_data_type)
                     field_names.append(field_name)
-                    columns_def.append(f"{field_name} TEXT")
+                    columns_def.append(f"{field_name} {sqlite_type}")
             
             # 确保主键字段存在
             if primary_key and primary_key not in field_names:
@@ -296,14 +374,15 @@ class DataSourceManager:
             logger.error(f"创建表失败 {table_name}: {str(e)}")
             return False
     
-    def _add_column(self, client: DBClient, table_name: str, column_name: str) -> bool:
+    def _add_column(self, client: DBClient, table_name: str, column_name: str, data_type: str = 'string') -> bool:
         """添加字段到现有表"""
         try:
             if not self._is_sqlite(client):
                 logger.warning("目前仅支持SQLite的字段添加")
                 return False
             
-            alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT"
+            sqlite_type = map_data_type_to_sqlite(data_type)
+            alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {sqlite_type}"
             
             conn = sqlite3.connect(client.connection_string.replace('sqlite:///', ''))
             cursor = conn.cursor()
@@ -326,21 +405,29 @@ class DataSourceManager:
             # 1. 创建临时表名
             temp_table_name = f"{table_name}_temp_{int(time.time())}"
             
-            # 2. 获取所有字段（合并现有字段和模型字段）
-            all_field_names = set()
+            # 2. 构建字段映射（字段名 -> 数据类型）
+            field_type_map = {}
+            
+            # 从当前列信息获取现有字段类型
             if current_columns:
                 for col in current_columns:
-                    all_field_names.add(col['name'])
+                    field_type_map[col['name']] = col.get('type', 'TEXT')
+            
+            # 从模型字段更新/添加字段类型
             if model_fields:
                 for field in model_fields:
-                    all_field_names.add(field['field_id'])
-            if primary_key:
-                all_field_names.add(primary_key)
+                    field_name = field['field_id']
+                    field_data_type = field.get('data_type', 'string')
+                    field_type_map[field_name] = map_data_type_to_sqlite(field_data_type)
             
-            # 3. 创建新表（带正确的主键）
+            # 确保主键字段存在
+            if primary_key and primary_key not in field_type_map:
+                field_type_map[primary_key] = 'TEXT'
+            
+            # 3. 创建新表（带正确的主键和字段类型）
             columns_def = []
-            for field_name in all_field_names:
-                columns_def.append(f"{field_name} TEXT")
+            for field_name, field_type in field_type_map.items():
+                columns_def.append(f"{field_name} {field_type}")
             
             if not columns_def:
                 return False
