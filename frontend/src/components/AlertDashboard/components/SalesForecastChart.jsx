@@ -1,8 +1,8 @@
 // 供应链控制塔 - 销售预测 vs 实际订单图表
 // 支持：① 数据筛选（产品/时间范围）② 下钻（点击月份查看明细）
 import { useState, useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { ChevronLeft } from "lucide-react";
 
 const SERIES = [
@@ -218,14 +218,22 @@ export default function SalesForecastChart({ height = 220, chartData = [], chart
             </ResponsiveContainer>
           )
         ) : (
-          // 总览折线图（按月合并数据）
+          // 总览面积图（按月合并数据）
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
+            <AreaChart
               data={monthlyData}
               margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
               onClick={(data) => { if (data?.activeLabel) setDrillMonth(data.activeLabel); }}
               style={{ cursor: 'pointer' }}
             >
+              <defs>
+                {SERIES.map(s => (
+                  <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={s.color} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }}
                 tickFormatter={v => v ? v.replace('-', '年') + '月' : ''} />
@@ -233,19 +241,20 @@ export default function SalesForecastChart({ height = 220, chartData = [], chart
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
               {SERIES.filter(s => activeSeries.has(s.key)).map(s => (
-                <Line
+                <Area
                   key={s.key}
                   type="monotone"
                   dataKey={s.key}
                   name={s.label}
                   stroke={s.color}
+                  fill={`url(#grad-${s.key})`}
                   strokeWidth={2}
                   dot={{ r: 3, fill: s.color, strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
                   connectNulls={false}
                 />
               ))}
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         )}
       </div>
