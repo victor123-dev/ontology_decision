@@ -211,7 +211,7 @@ class ExcelImportExportService:
         
         # 表头
         headers = [
-            "ID", "名称", "描述", "动作类型", "操作", "目标模型ID", 
+            "ID", "API名称", "名称", "描述", "动作类型", "操作", "目标模型ID", 
             "目标链接ID", "函数代码", "参数", "提交条件", "创建时间", "更新时间"
         ]
         for col, header in enumerate(headers, 1):
@@ -223,17 +223,18 @@ class ExcelImportExportService:
         actions = self.action_dao.get_actions()
         for row, action in enumerate(actions, 2):
             ws.cell(row=row, column=1, value=action.get("id"))
-            ws.cell(row=row, column=2, value=action.get("name"))
-            ws.cell(row=row, column=3, value=action.get("description"))
-            ws.cell(row=row, column=4, value=action.get("action_type"))
-            ws.cell(row=row, column=5, value=action.get("operation"))
-            ws.cell(row=row, column=6, value=action.get("target_model_id"))
-            ws.cell(row=row, column=7, value=action.get("target_link_id"))
-            ws.cell(row=row, column=8, value=action.get("function_code"))
-            ws.cell(row=row, column=9, value=str(action.get("parameters", [])))
-            ws.cell(row=row, column=10, value=str(action.get("submission_criteria", [])))
-            ws.cell(row=row, column=11, value=action.get("created_at"))
-            ws.cell(row=row, column=12, value=action.get("updated_at"))
+            ws.cell(row=row, column=2, value=action.get("api_name"))
+            ws.cell(row=row, column=3, value=action.get("name"))
+            ws.cell(row=row, column=4, value=action.get("description"))
+            ws.cell(row=row, column=5, value=action.get("action_type"))
+            ws.cell(row=row, column=6, value=action.get("operation"))
+            ws.cell(row=row, column=7, value=action.get("target_model_id"))
+            ws.cell(row=row, column=8, value=action.get("target_link_id"))
+            ws.cell(row=row, column=9, value=action.get("function_code"))
+            ws.cell(row=row, column=10, value=str(action.get("parameters", [])))
+            ws.cell(row=row, column=11, value=str(action.get("submission_criteria", [])))
+            ws.cell(row=row, column=12, value=action.get("created_at"))
+            ws.cell(row=row, column=13, value=action.get("updated_at"))
         
         # 自动调整列宽
         for col in range(1, len(headers) + 1):
@@ -611,6 +612,23 @@ class ExcelImportExportService:
             if not headers or not any(headers):
                 return
             
+            # 中文表头到英文字段名的映射
+            header_to_field_map = {
+                "ID": "id",
+                "API名称": "api_name",
+                "名称": "name",
+                "描述": "description",
+                "动作类型": "action_type",
+                "操作": "operation",
+                "目标模型ID": "target_model_id",
+                "目标链接ID": "target_link_id",
+                "函数代码": "function_code",
+                "参数": "parameters",
+                "提交条件": "submission_criteria",
+                "创建时间": "created_at",
+                "更新时间": "updated_at"
+            }
+            
             # 查找必要的列索引
             id_col = self._find_column_index(headers, "ID")
             name_col = self._find_column_index(headers, "名称")
@@ -629,25 +647,28 @@ class ExcelImportExportService:
                     for i, header in enumerate(headers):
                         if header and i < len(row):
                             value = row[i]
+                            # 获取对应的英文字段名
+                            field_name = header_to_field_map.get(header, header)
+                            
                             if header == "参数" and isinstance(value, str):
                                 # 尝试解析参数字符串
                                 try:
                                     import ast
-                                    action_data["parameters"] = ast.literal_eval(value)
+                                    action_data[field_name] = ast.literal_eval(value)
                                 except:
-                                    action_data["parameters"] = []
+                                    action_data[field_name] = []
                             elif header == "提交条件" and isinstance(value, str):
                                 # 尝试解析提交条件字符串
                                 try:
                                     import ast
-                                    action_data["submission_criteria"] = ast.literal_eval(value)
+                                    action_data[field_name] = ast.literal_eval(value)
                                 except:
-                                    action_data["submission_criteria"] = []
+                                    action_data[field_name] = []
                             elif header in ["创建时间", "更新时间"]:
                                 # 跳过时间字段，让DAO自动处理
                                 continue
                             else:
-                                action_data[header] = value
+                                action_data[field_name] = value
                     
                     # 确保必要字段存在
                     action_data["id"] = row[id_col]
