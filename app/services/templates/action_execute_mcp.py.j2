@@ -51,7 +51,7 @@ def execute_{{ action.id }}(
         return {
             "success": result["success"],
             "message": result["success"] and "{{ action.name }} executed successfully" or result["error"],
-            "result": result["result"]
+            "result": result.get("result")
         }
     except Exception as e:
         raise HTTPException(

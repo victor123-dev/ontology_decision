@@ -153,7 +153,7 @@ function AppContent() {
             <Route path="/drive-log" element={<DriveLog />} />
             <Route path="/drive-visualization" element={<DriveVisualization />} />
             <Route path="/alert-dashboard" element={<AlertDashboard />} />
-            <Route path="/" element={<DataSource />} />
+            <Route path="/" element={<AlertDashboard />} />
           </Routes>
         </Content>
       </Layout>

@@ -100,18 +100,6 @@ def execute_emergency_procurement(parameters):
         if not po_detail:
             return {"success": False, "error": "Failed to create purchase order detail"}
         
-        # 5. 记录预警消息 (alert_message) - 直接使用参数
-        alert_message_data = {
-            "message_id": f"ALERT-EMG-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "message_title": parameters.get("message_title", "紧急采购启动"),
-            "message_content": parameters.get("message_content", f"已为工单 {parameters['work_order_number']} 启动紧急采购流程，物料: {parameters['item_code']}"),
-            "rule_code": "EMERGENCY_PROCUREMENT",
-            "recipient": parameters.get("purchaser", "SYSTEM"),
-            "risk_level": parameters["urgency_level"]
-        }
-        
-        alert_message = client.models.AlertMessage.create(**alert_message_data)
-        
         return {
             "success": True,
             "message": "紧急采购流程已启动",
@@ -345,18 +333,6 @@ def execute_material_substitution(parameters):
         if not material_detail:
             return {"success": False, "error": "Failed to create material detail"}
         
-        # 5. 记录替代方案日志 (alert_message) - 直接使用参数
-        alert_message_data = {
-            "message_id": f"ALERT-SUB-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "message_title": "物料替代实施",
-            "message_content": f"工单 {parameters['work_order_number']} 已启用替代物料 {parameters['substitute_item_code']} 替代 {parameters['original_item_code']}",
-            "rule_code": "MATERIAL_SUBSTITUTION",
-            "recipient": parameters.get("responsible_person", "SYSTEM"),
-            "risk_level": "Medium"
-        }
-        
-        alert_message = client.models.AlertMessage.create(**alert_message_data)
-        
         return {
             "success": True,
             "message": "物料替代方案已实施",
@@ -496,18 +472,6 @@ def execute_auto_approve_purchase(parameters):
             else:
                 return {"success": False, "error": f"Failed to update purchase order status: {purchase_order.purchase_order_number}"}
         
-        # 3. 记录审核消息 (alert_message) - 直接使用参数
-        alert_message_data = {
-            "message_id": f"ALERT-APV-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "message_title": parameters.get("message_title", "采购订单自动审核"),
-            "message_content": parameters.get("message_content", f"请购单 {parameters['requisition_number']} 关联的采购订单已自动审核通过"),
-            "rule_code": "AUTO_APPROVE_PURCHASE",
-            "recipient": parameters.get("approver", "SYSTEM"),
-            "risk_level": "Low"
-        }
-        
-        alert_message = client.models.AlertMessage.create(**alert_message_data)
-        
         return {
             "success": True,
             "message": "采购订单已自动审核",
@@ -625,18 +589,6 @@ def execute_production_schedule_adjustment(parameters):
         }
         
         production_plan = client.models.ProductionPlan.create(**plan_data)
-        
-        # 3. 记录计划调整预警 (alert_message) - 直接使用参数
-        alert_message_data = {
-            "message_id": f"ALERT-SCH-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "message_title": "生产计划调整",
-            "message_content": f"工单 {parameters['work_order_number']} 计划已调整，新完工日期: {parameters['planned_completion_date']}",
-            "rule_code": "SCHEDULE_ADJUSTMENT",
-            "recipient": parameters.get("responsible_person", "SYSTEM"),
-            "risk_level": "High"
-        }
-        
-        alert_message = client.models.AlertMessage.create(**alert_message_data)
         
         return {
             "success": True,
@@ -772,23 +724,6 @@ def execute_customer_communication(parameters):
         }
         
         alert_message = client.models.AlertMessage.create(**alert_message_data)
-        
-        # 2. 更新销售订单状态 (sales_order) - 直接使用参数
-        sales_order = client.models.SalesOrder.get(parameters["order_number"])
-        if sales_order:
-            order_update = {
-                "status": "风险预警"
-            }
-            sales_order.update(**order_update)
-        
-        # 3. 创建建议行动记录 (suggested_action) - 直接使用参数
-        suggested_action_data = {
-            "action_id": f"ACTION-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "related_alert_message_id": alert_message_data["message_id"],
-            "action_description": parameters["action_description"]
-        }
-        
-        suggested_action = client.models.SuggestedAction.create(**suggested_action_data)
         
         return {
             "success": True,
