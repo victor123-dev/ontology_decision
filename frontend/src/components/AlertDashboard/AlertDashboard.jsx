@@ -367,13 +367,13 @@ export default function AlertDashboard() {
       </header>
 
       {/* 主内容区 */}
-      <main style={{ flex: 1, overflow: 'auto', width: '100%', display: 'flex', flexDirection: 'column' }}>
+      <main style={{ flex: 1, overflow: 'auto', width: '100%', display: 'flex', flexDirection: 'column', paddingTop: '14px' }}>
 
         {/* ==================== 控制看板 ==================== */}
         {activeTab === 'dashboard' && (
           <div ref={containerRef} style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column' }}>
             {/* ── KPI 卡片行：独立于GridLayout，宽度与GridLayout一致 ── */}
-            <div style={{ padding: '16px 0 12px 0' }}>
+            <div style={{ padding: '0px 0 12px 0' }}>
               <KpiWidget>
                 <KpiCard title="采购到货及时率" value={purchaseOnTimeRate?.val ?? 0} format="percent" trend={purchaseOnTimeRate?.trendVal > 0 ? 'up' : 'down'} trendValue={`${purchaseOnTimeRate?.trendVal > 0 ? '+' : ''}${purchaseOnTimeRate?.trendVal?.toFixed(1)}%`} icon={<Truck size={16} />} color="#3b82f6" delay={0} loading={purchaseOnTimeRateLoading} />
                 <KpiCard title="当月销售金额" value={monthlySales?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={monthlySales?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} loading={monthlySalesLoading} />
@@ -585,9 +585,9 @@ export default function AlertDashboard() {
 
         {/* ==================== 预警中心 ==================== */}
         {activeTab === 'alerts' && (
-          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0px', width: '100%', overflow: 'hidden' }}>
             {/* 统计卡片 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', width: '100%', marginBottom: '8px', flexShrink: 0 }}>
               {[
                 { label: '全部预警', count: alerts.length, color: '#3b82f6', icon: Bell },
                 { label: '未处理', count: alerts.filter(a => a.status === '未处理').length, color: '#ef4444', icon: AlertTriangle },
@@ -595,20 +595,20 @@ export default function AlertDashboard() {
                 { label: '已处理', count: alerts.filter(a => a.status === '已处理').length, color: '#22c55e', icon: CheckCircle },
               ].map(({ label, count, color, icon: Icon }) => (
                 <div key={label} style={{
-                  background: '#0f1d35', borderRadius: '8px',
+                  background: '#0b1426', borderRadius: '6px',
                   border: '1px solid rgba(59,130,246,0.12)',
-                  padding: '16px', display: 'flex', alignItems: 'center', gap: '16px'
+                  padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px'
                 }}>
                   <div style={{
-                    width: '40px', height: '40px', borderRadius: '8px',
+                    width: '36px', height: '36px', borderRadius: '6px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, background: `${color}20`
+                    flexShrink: 0, background: `${color}12`
                   }}>
-                    <Icon size={18} style={{ color }} />
+                    <Icon size={16} style={{ color }} />
                   </div>
-                  <div>
-                    <p style={{ fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace', color }}>{count}</p>
-                    <p style={{ fontSize: '12px', color: '#94a3b8' }}>{label}</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <p style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'monospace', color, lineHeight: '1', margin: 0 }}>{count}</p>
+                    <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{label}</p>
                   </div>
                 </div>
               ))}
@@ -616,175 +616,196 @@ export default function AlertDashboard() {
 
             {/* 筛选栏 */}
             <div style={{
-              background: '#0f1d35', borderRadius: '8px',
+              background: '#0b1426', borderRadius: '6px',
               border: '1px solid rgba(59,130,246,0.12)',
-              padding: '12px', display: 'flex', alignItems: 'center',
-              gap: '12px', flexWrap: 'wrap', width: '100%'
+              padding: '8px 12px', display: 'flex', alignItems: 'center',
+              gap: '8px', flexShrink: 0, marginBottom: '8px'
             }}>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: '8px', flex: 1,
-                minWidth: '192px', borderRadius: '8px', padding: '8px 12px',
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)'
+                display: 'flex', alignItems: 'center', gap: '6px', flex: 1,
+                minWidth: '200px', borderRadius: '6px', padding: '6px 12px',
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)'
               }}>
-                <Search size={13} style={{ color: '#64748b', flexShrink: 0 }} />
+                <Search size={12} style={{ color: '#475569', flexShrink: 0 }} />
                 <input
                   type="text"
                   placeholder="搜索预警标题、供应商、客户..."
                   value={searchText}
                   onChange={e => setSearchText(e.target.value)}
-                  style={{ flex: 1, background: 'transparent', fontSize: '14px',
-                    color: '#e2e8f0', outline: 'none', border: 'none' }}
+                  style={{ flex: 1, background: 'transparent', fontSize: '12px',
+                    color: '#94a3b8', outline: 'none', border: 'none' }}
                 />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Filter size={12} style={{ color: '#64748b', marginRight: '4px' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <Filter size={10} style={{ color: '#475569', marginRight: '4px' }} />
                 {(['all', '未处理', '处理中', '已处理']).map((f, idx) => (
                   <button key={f} onClick={() => setAlertFilter(f)}
-                    style={{ fontSize: '12px', padding: '6px 12px',
+                    style={{ fontSize: '11px', padding: '4px 10px',
                       transition: 'all 0.2s', cursor: 'pointer',
-                      borderRadius: idx === 0 ? '6px 0 0 6px' : idx === 3 ? '0 6px 6px 0' : '0',
+                      borderRadius: idx === 0 ? '4px 0 0 4px' : idx === 3 ? '0 4px 4px 0' : '0',
                       ...(alertFilter === f
                         ? { background: 'rgba(59,130,246,0.2)', color: '#60a5fa',
                             border: '1px solid rgba(59,130,246,0.4)' }
-                        : { color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(255,255,255,0.05)' }) }}
+                        : { color: '#64748b', border: '1px solid rgba(255,255,255,0.06)',
+                            background: 'rgba(255,255,255,0.02)' }) }}
                     onMouseOver={e => {
                       if (alertFilter !== f) {
-                        e.currentTarget.style.color = '#e2e8f0';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                        e.currentTarget.style.color = '#cbd5e1';
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
                       }
                     }}
                     onMouseOut={e => {
                       if (alertFilter !== f) {
-                        e.currentTarget.style.color = '#94a3b8';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                        e.currentTarget.style.color = '#64748b';
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
                       }
                     }}>
                     {f === 'all' ? '全部状态' : f}
                   </button>
                 ))}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                 {(['all', '最高风险', '高风险', '中风险', '低风险']).map((f, idx) => (
                   <button key={f} onClick={() => setRiskFilter(f)}
-                    style={{ fontSize: '12px', padding: '6px 12px',
+                    style={{ fontSize: '11px', padding: '4px 10px',
                       transition: 'all 0.2s', cursor: 'pointer',
-                      borderRadius: idx === 0 ? '6px 0 0 6px' : idx === 4 ? '0 6px 6px 0' : '0',
+                      borderRadius: idx === 0 ? '4px 0 0 4px' : idx === 4 ? '0 4px 4px 0' : '0',
                       ...(riskFilter === f
                         ? { background: f === 'all' ? 'rgba(59,130,246,0.2)' : `${getRiskTextColor(f)}20`,
                             color: f === 'all' ? '#60a5fa' : getRiskTextColor(f),
                             border: `1px solid ${f === 'all' ? 'rgba(59,130,246,0.4)' : getRiskTextColor(f) + '50'}` }
-                        : { color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(255,255,255,0.05)' }) }}
+                        : { color: '#64748b', border: '1px solid rgba(255,255,255,0.06)',
+                            background: 'rgba(255,255,255,0.02)' }) }}
                     onMouseOver={e => {
                       if (riskFilter !== f) {
-                        e.currentTarget.style.color = '#e2e8f0';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                        e.currentTarget.style.color = '#cbd5e1';
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
                       }
                     }}
                     onMouseOut={e => {
                       if (riskFilter !== f) {
-                        e.currentTarget.style.color = '#94a3b8';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                        e.currentTarget.style.color = '#64748b';
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
                       }
                     }}>
                     {f === 'all' ? '全部风险' : f}
                   </button>
                 ))}
               </div>
-              <span style={{ fontSize: '12px', color: '#64748b', marginLeft: 'auto' }}>共 {filteredAlerts.length} 条</span>
+              <span style={{ fontSize: '11px', color: '#475569', marginLeft: 'auto', whiteSpace: 'nowrap' }}>共 {filteredAlerts.length} 条</span>
             </div>
 
             {/* 预警列表 */}
             <div style={{
-              background: '#0f1d35', borderRadius: '8px',
-              border: '1px solid rgba(59,130,246,0.12)',
-              overflow: 'hidden', width: '100%'
+              flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+              background: '#0b1426', borderRadius: '6px',
+              border: '1px solid rgba(59,130,246,0.12)'
             }}>
-              <table style={{ width: '100%' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(59,130,246,0.15)',
-                    background: 'rgba(59,130,246,0.05)' }}>
-                    {['风险等级', '预警标题', '规则编码', '供应商', '关联客户', '创建时间', '状态', '操作'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '12px 16px',
-                        fontSize: '12px', fontWeight: 500, color: '#94a3b8',
-                        whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAlerts.map((alert, idx) => (
-                    <tr key={alert.id}
-                      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)',
-                        background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
-                        transition: 'background 0.2s', cursor: 'pointer' }}
-                      onMouseOver={e => e.currentTarget.style.background = 'rgba(59,130,246,0.08)'}
-                      onMouseOut={e => e.currentTarget.style.background = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)'}
-                      onClick={() => setSelectedAlert(alert)}>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '9999px',
-                          fontWeight: 500, whiteSpace: 'nowrap',
-                          background: `${getRiskTextColor(alert.riskLevel)}20`,
-                          color: getRiskTextColor(alert.riskLevel),
-                          border: `1px solid ${getRiskTextColor(alert.riskLevel)}40` }}>
-                          {alert.riskLevel}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <p style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 500,
-                          maxWidth: '280px' }}>{alert.title}</p>
-                        <p style={{ fontSize: '10px', color: '#64748b', marginTop: '2px',
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          maxWidth: '280px' }}>
-                          {alert.content.slice(0, 60)}...
-                        </p>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#94a3b8' }}>
-                          {alert.ruleCode}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                          {alert.supplier}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                          {alert.customer}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontSize: '12px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-                          {alert.createdAt}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '9999px',
-                          whiteSpace: 'nowrap',
-                          background: `${getStatusColor(alert.status)}20`,
-                          color: getStatusColor(alert.status),
-                          border: `1px solid ${getStatusColor(alert.status)}40` }}>
-                          {alert.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <button style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px',
-                          transition: 'all 0.2s', cursor: 'pointer',
-                          background: 'rgba(59,130,246,0.15)', color: '#60a5fa',
-                          border: '1px solid rgba(59,130,246,0.3)' }}
-                          onClick={e => { e.stopPropagation(); setSelectedAlert(alert); }}>
-                          查看详情
-                        </button>
-                      </td>
+              <div style={{ overflow: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(59,130,246,0.12)',
+                      background: 'rgba(59,130,246,0.04)', position: 'sticky', top: 0, zIndex: 1 }}>
+                      {['风险等级', '预警标题', '规则编码', '供应商', '关联客户', '创建时间', '状态', '操作'].map((h, idx) => (
+                        <th key={h} style={{
+                          textAlign: 'left', padding: '10px 12px',
+                          fontSize: '11px', fontWeight: 500, color: '#64748b',
+                          whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          minWidth: h === '预警标题' ? '300px' : 'auto'
+                        }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                  {filteredAlerts.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: '48px', textAlign: 'center',
-                      color: '#64748b', fontSize: '14px' }}>暂无符合条件的预警消息</td></tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredAlerts.map((alert, idx) => (
+                      <tr key={alert.id}
+                        style={{
+                          borderBottom: '1px solid rgba(255,255,255,0.03)',
+                          transition: 'background 0.2s', cursor: 'pointer',
+                          background: 'transparent'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.background = 'rgba(59,130,246,0.04)'}
+                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={() => setSelectedAlert(alert)}>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <span style={{
+                            fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
+                            fontWeight: 500, whiteSpace: 'nowrap', display: 'inline-block',
+                            background: `${getRiskTextColor(alert.riskLevel)}15`,
+                            color: getRiskTextColor(alert.riskLevel),
+                            border: `1px solid ${getRiskTextColor(alert.riskLevel)}40`
+                          }}>
+                            {alert.riskLevel}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <p style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: 500,
+                            margin: '0 0 4px 0', lineHeight: '1.4' }}>{alert.title}</p>
+                          <p style={{ fontSize: '10px', color: '#475569', margin: 0,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            maxWidth: '400px' }}>
+                            {alert.content}
+                          </p>
+                        </td>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#64748b' }}>
+                            {alert.ruleCode}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                            {alert.supplier}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                            {alert.customer}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                            {alert.createdAt}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <span style={{
+                            fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
+                            whiteSpace: 'nowrap', display: 'inline-block',
+                            background: `${getStatusColor(alert.status)}15`,
+                            color: getStatusColor(alert.status),
+                            border: `1px solid ${getStatusColor(alert.status)}40`
+                          }}>
+                            {alert.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                          <button style={{
+                            fontSize: '11px', padding: '4px 12px', borderRadius: '4px',
+                            transition: 'all 0.2s', cursor: 'pointer',
+                            background: 'rgba(59,130,246,0.1)', color: '#60a5fa',
+                            border: '1px solid rgba(59,130,246,0.3)', whiteSpace: 'nowrap'
+                          }}
+                          onClick={e => { e.stopPropagation(); setSelectedAlert(alert); }}
+                          onMouseOver={e => {
+                            e.currentTarget.style.background = 'rgba(59,130,246,0.2)';
+                            e.currentTarget.style.color = '#93c5fd';
+                          }}
+                          onMouseOut={e => {
+                            e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
+                            e.currentTarget.style.color = '#60a5fa';
+                          }}>
+                            查看详情
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredAlerts.length === 0 && (
+                      <tr><td colSpan={8} style={{ padding: '48px', textAlign: 'center',
+                        color: '#475569', fontSize: '12px' }}>暂无符合条件的预警消息</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
