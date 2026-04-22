@@ -319,7 +319,7 @@ def query_objects(
             
             # 构建 LIMIT 和 OFFSET 子句
             limit_clause = ""
-            actual_limit = request.limit if request.limit is not None else 10
+            actual_limit = request.limit if request.limit is not None else 20
             actual_offset = request.offset if request.offset is not None else 0
             
             if actual_limit > 0:
