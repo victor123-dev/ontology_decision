@@ -53,6 +53,8 @@ sdk/
 
 # 忽略数据库文件
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 # 但不忽略 sqllite_bak 目录下所有日期子目录中的数据库文件
 !sqllite_bak/*/*.db
