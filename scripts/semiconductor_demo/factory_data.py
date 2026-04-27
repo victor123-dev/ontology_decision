@@ -613,41 +613,79 @@ INITIAL_INVENTORY = generate_initial_inventory()
 # 仿真参数
 # ============================================================================
 
+# ============================================================================
+# 仿真配置参数（统一管理所有可调参数）
+# ============================================================================
+
 SIMULATION_CONFIG = {
-    "duration_days": 120,
-    "start_date": "2026-04-01 08:00:00",  # 仿真开始时间（ISO格式）
-    "day_start_hour": 8,
-    "day_end_hour": 20,
-    "order_arrival_lambda": 3.0,  # 每天平均3个客户订单（泊松分布）
-    "order_quantity_min": 5,
-    "order_quantity_max": 80,
-    "lead_time_commitment_days": 7,
-    "wip_lot_size": 25,  # Lot批量大小（25个芯片/批）
-    # Lot批量加工配置（贴合OSAT真实生产模式）
-    "batch_process_steps": ["BI", "BAKE", "CURE", "DRY"],  # 批量并行工序代码
+    # ========== 基础时间配置 ==========
+    "duration_days": 120,  # 仿真总天数（默认120天，约4个月）
+    "start_date": "2026-04-01 08:00:00",  # 仿真开始时间（ISO 8601格式）
+    "day_start_hour": 8,  # 日班开始时间（08:00）
+    "day_end_hour": 20,  # 日班结束时间（20:00），夜班自动接续到次日08:00
+    
+    # ========== 订单生成配置 ==========
+    "order_arrival_lambda": 3.0,  # 订单到达率（泊松分布λ，每天平均3张订单）
+    "order_quantity_min": 5,  # 订单数量下限（5个芯片）
+    "order_quantity_max": 80,  # 订单数量上限（80个芯片）
+    "order_priority_weights": [0.2, 0.3, 0.5],  # 订单优先级分布 [P1紧急:20%, P3普通:30%, P5宽松:50%]
+    "order_cancel_daily_prob": 0.20,  # 订单每日取消概率（20%）
+    "split_delivery_prob": 0.30,  # 拆分发货概率（30%订单会分批交付）
+    "priority_escalation_daily_prob": 0.08,  # 订单每日优先级提升概率（8%）
+    "lead_time_commitment_days": 7,  # CTP交期承诺最低天数（订单日期+7天）
+    
+    # ========== Lot批量加工配置 ==========
+    "wip_lot_size": 25,  # Lot批量大小（25个芯片/批，OSAT行业标准）
+    "batch_process_steps": ["BI", "BAKE", "CURE", "DRY"],  # 批量并行工序代码（这些工序可并行处理整个Lot）
     "batch_capacity": {  # 各批量工序的并行容量（芯片数）
-        "WC-TEST-BI": 1000,  # 老化炉一次1000芯片
-        "WC-BAKE": 200,      # 烘烤炉一次200芯片
-        "WC-DA": 100,        # 固化工位一次100芯片
+        "WC-TEST-BI": 1000,  # 老化炉容量（一次可老化1000芯片）
+        "WC-BAKE": 200,      # 烘烤炉容量（一次可烘烤200芯片）
+        "WC-DA": 100,        # 固化工位容量（一次可固化100芯片）
     },
-    "setup_skip_same_group": True,  # 同封装类型连续生产免换线
-    "flow_merge_enabled": True,  # 工序流合并开关（减少辅助工序排队）
-    "flow_merge_groups": [  # 可合并的工序段
-        ["RECV", "GRIND", "DICE"],  # 前段合并
-        ["CLEAN", "TRANS", "WAIT"],  # 辅助工序合并
+    
+    # ========== 工序时间配置 ==========
+    "queue_time_hours": 0.5,  # 工序间排队时间（0.5小时，Lot场景下已优化）
+    "initial_offset_hours": 4.0,  # 首道工序计划开始偏移（距现在4小时开始）
+    "setup_skip_same_group": True,  # 同SetupGroup连续生产免换线（减少换线时间）
+    
+    # ========== 工序流优化配置 ==========
+    "flow_merge_enabled": True,  # 工序流合并开关（合并辅助工序，减少排队）
+    "flow_merge_groups": [  # 可合并的工序段（同组工序合并执行）
+        ["RECV", "GRIND", "DICE"],  # 前段工序合并（接收→磨片→切割）
+        ["CLEAN", "TRANS", "WAIT"],  # 辅助工序合并（清洗→转运→等待）
     ],
-    "maintenance_frequency_hours": 168,
-    "maintenance_duration_hours": 4,
-    "safety_stock_check_interval_hours": 4,
-    "setup_cost_weight": 2.0,
-    "critical_ratio_threshold": 1.1,
-    "ctp_capacity_buffer": 0.15,
-    "breakdown_mtbf_hours": 240,  # MTBF 240h（10天），符合半导体设备实际
-    "breakdown_mttr_hours": 4,
-    "breakdown_probability": 0.70,
-    "order_cancel_daily_prob": 0.20,
-    "split_delivery_prob": 0.30,
-    "priority_escalation_daily_prob": 0.08,
+    
+    # ========== 效率与良率配置 ==========
+    "night_shift_efficiency": 0.92,  # 夜班效率因子（20:00-08:00效率降至92%）
+    "default_yield_rate": 0.98,  # 默认工序标准良率（98%）
+    "yield_random_range": [0.99, 1.01],  # 良率随机扰动范围（±1%）
+    "default_efficiency_factor": 1.0,  # 默认机台效率因子（100%）
+    "min_efficiency_factor": 0.5,  # 机台效率下限（50%，防止除零）
+    
+    # ========== 质检配置 ==========
+    "ipqc_reject_rate": 0.15,  # IPQC首件检验不合格率（15%）
+    "ipqc_inspection_hours": 0.5,  # IPQC首件检验耗时（0.5小时）
+    "fqc_reject_rate": 0.05,  # FQC成品检验不合格率（5%）   
+    "fqc_scrap_rate_range": [0.05, 0.20],  # FQC质检报废率范围（5%-20%）
+    "iqc_reject_rate": 0.03,  # IQC来料检验不合格率（3%）
+    "iqc_scrap_rate_range": [0.03, 0.15],  # IQC来料报废率范围（3%-15%）
+    "under_performance_rate_range": [0.05, 0.15],  # 性能不达标率范围（5%-15%）
+    
+    # ========== 设备维护与故障配置 ==========
+    "maintenance_frequency_hours": 168,  # 计划维护周期（168小时=7天）
+    "maintenance_duration_hours": 4,  # 计划维护耗时（4小时）
+    "breakdown_mtbf_hours": 240,  # 平均无故障时间MTBF（240小时=10天）
+    "breakdown_mttr_hours": 4,  # 平均修复时间MTTR（4小时）
+    "breakdown_probability": 0.70,  # 机台启用随机故障的概率（70%）
+    
+    # ========== 排程算法配置 ==========
+    "safety_stock_check_interval_hours": 4,  # 安全库存检查间隔（4小时）
+    "setup_cost_weight": 2.0,  # 换线成本权重（排程算法中换线时间的权重系数）
+    "critical_ratio_threshold": 1.1,  # 关键比阈值（<1.1表示工期紧张）
+    "ctp_capacity_buffer": 0.15,  # CTP产能缓冲（15%，预留产能应对突发订单）
+    "max_queue_hours_per_op": 1.0,  # 每道工序最大预估排队时间（1小时，用于CTP计算）
+    "work_hours_per_day": 12.0,  # 每日工作小时数（白班12小时）
+    "scheduler_check_interval_hours": 4.0,  # 排程器检查间隔（4小时，配合实时排程）
 }
 
 # ============================================================================

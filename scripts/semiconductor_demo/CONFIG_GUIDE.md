@@ -1,0 +1,178 @@
+# 仿真配置参数说明
+
+本文档详细说明 `SIMULATION_CONFIG` 中所有参数的含义、取值范围和调整建议。
+
+---
+
+## 一、基础时间配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `duration_days` | int | 120 | 仿真总天数（约4个月） | 短期仿真60天，长期仿真180天 |
+| `start_date` | str | "2026-04-01 08:00:00" | 仿真开始时间（ISO 8601格式） | 根据实际业务日期调整 |
+| `day_start_hour` | int | 8 | 日班开始时间（08:00） | 一般不建议修改 |
+| `day_end_hour` | int | 20 | 日班结束时间（20:00），夜班自动接续到次日08:00 | 如改为18点，则夜班18:00-06:00 |
+
+---
+
+## 二、订单生成配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `order_arrival_lambda` | float | 3.0 | 订单到达率（泊松分布λ，每天平均3张订单） | 高负荷5.0，低负荷1.5 |
+| `order_quantity_min` | int | 5 | 订单数量下限（5个芯片） | 小批量生产可改为2 |
+| `order_quantity_max` | int | 80 | 订单数量上限（80个芯片） | 大批量生产可改为200 |
+| `order_priority_weights` | list | [0.2, 0.3, 0.5] | 订单优先级分布 [P1紧急:20%, P3普通:30%, P5宽松:50%] | 紧急订单多改为[0.4, 0.4, 0.2] |
+| `order_cancel_daily_prob` | float | 0.20 | 订单每日取消概率（20%） | 稳定业务可降为0.05 |
+| `split_delivery_prob` | float | 0.30 | 拆分发货概率（30%订单会分批交付） | 不允许拆分改为0.0 |
+| `priority_escalation_daily_prob` | float | 0.08 | 订单每日优先级提升概率（8%） | 严格交期可改为0.15 |
+| `lead_time_commitment_days` | int | 7 | CTP交期承诺最低天数（订单日期+7天） | 短交期改为3，长交期改为14 |
+
+---
+
+## 三、Lot批量加工配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `wip_lot_size` | int | 25 | Lot批量大小（25个芯片/批，OSAT行业标准） | 小批量改为10，大批量改为50 |
+| `batch_process_steps` | list | ["BI", "BAKE", "CURE", "DRY"] | 批量并行工序代码（这些工序可并行处理整个Lot） | 根据实际工艺调整 |
+| `batch_capacity` | dict | 见下 | 各批量工序的并行容量（芯片数） | 根据设备规格调整 |
+| └ WC-TEST-BI | int | 1000 | 老化炉容量（一次可老化1000芯片） | 实际设备容量 |
+| └ WC-BAKE | int | 200 | 烘烤炉容量（一次可烘烤200芯片） | 实际设备容量 |
+| └ WC-DA | int | 100 | 固化工位容量（一次可固化100芯片） | 实际设备容量 |
+
+---
+
+## 四、工序时间配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `queue_time_hours` | float | 0.5 | 工序间排队时间（0.5小时，Lot场景下已优化） | 拥堵工厂改为1.0，精益工厂改为0.3 |
+| `initial_offset_hours` | float | 4.0 | 首道工序计划开始偏移（距现在4小时开始） | 快速响应改为2.0 |
+| `setup_skip_same_group` | bool | True | 同SetupGroup连续生产免换线（减少换线时间） | 严格要求换线改为False |
+
+---
+
+## 五、工序流优化配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `flow_merge_enabled` | bool | True | 工序流合并开关（合并辅助工序，减少排队） | 调试时可关闭 |
+| `flow_merge_groups` | list | 见下 | 可合并的工序段（同组工序合并执行） | 根据实际工艺调整 |
+| └ 前段合并 | list | ["RECV", "GRIND", "DICE"] | 接收→磨片→切割合并 | 根据工艺路线调整 |
+| └ 辅助合并 | list | ["CLEAN", "TRANS", "WAIT"] | 清洗→转运→等待合并 | 根据工艺路线调整 |
+
+---
+
+## 六、效率与良率配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `night_shift_efficiency` | float | 0.92 | 夜班效率因子（20:00-08:00效率降至92%） | 夜班疲劳改为0.85，自动化高改为0.98 |
+| `default_yield_rate` | float | 0.98 | 默认工序标准良率（98%） | 成熟工艺0.99，新工艺0.95 |
+| `yield_random_range` | list | [0.99, 1.01] | 良率随机扰动范围（±1%） | 稳定工艺改为[0.995, 1.005] |
+| `default_efficiency_factor` | float | 1.0 | 默认机台效率因子（100%） | 老旧设备改为0.9 |
+| `min_efficiency_factor` | float | 0.5 | 机台效率下限（50%，防止除零） | 不建议修改 |
+
+---
+
+## 七、质检配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `ipqc_reject_rate` | float | 0.15 | IPQC首件检验不合格率（15%） | 成熟工艺改为0.08，新工艺改为0.25 |
+| `ipqc_inspection_hours` | float | 0.5 | IPQC首件检验耗时（0.5小时） | 复杂检验改为1.0 |
+| **FQC成品检验** | | | | |
+| `fqc_reject_rate` | float | 0.05 | FQC成品检验不合格率（5%） | 高质量要求改为0.02 |
+| `fqc_scrap_rate_range` | list | [0.05, 0.20] | FQC质检报废率范围（5%-20%） | 严格控制改为[0.02, 0.10] |
+| **IQC来料检验** | | | | |
+| `iqc_reject_rate` | float | 0.03 | IQC来料检验不合格率（3%） | 供应商质量差改为0.08，质量好改为0.01 |
+| `iqc_scrap_rate_range` | list | [0.03, 0.15] | IQC来料报废率范围（3%-15%） | 严格供应商改为[0.01, 0.10] |
+| `under_performance_rate_range` | list | [0.05, 0.15] | 性能不达标率范围（5%-15%） | 根据来料质量调整 |
+
+---
+
+## 八、设备维护与故障配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `maintenance_frequency_hours` | int | 168 | 计划维护周期（168小时=7天） | 高频维护改为120（5天） |
+| `maintenance_duration_hours` | int | 4 | 计划维护耗时（4小时） | 复杂维护改为8 |
+| `breakdown_mtbf_hours` | int | 240 | 平均无故障时间MTBF（240小时=10天） | 老旧设备改为120，新设备改为480 |
+| `breakdown_mttr_hours` | int | 4 | 平均修复时间MTTR（4小时） | 维修慢改为8，快改为2 |
+| `breakdown_probability` | float | 0.70 | 机台启用随机故障的概率（70%） | 全启用改为1.0，部分启用改为0.5 |
+
+---
+
+## 九、排程算法配置
+
+| 参数 | 类型 | 默认值 | 说明 | 调整建议 |
+|------|------|--------|------|----------|
+| `safety_stock_check_interval_hours` | int | 4 | 安全库存检查间隔（4小时） | 快速响应改为2 |
+| `setup_cost_weight` | float | 2.0 | 换线成本权重（排程算法中换线时间的权重系数） | 换线重要改为3.0，不重要改为1.0 |
+| `critical_ratio_threshold` | float | 1.1 | 关键比阈值（<1.1表示工期紧张） | 严格交期改为1.0，宽松改为1.3 |
+| `ctp_capacity_buffer` | float | 0.15 | CTP产能缓冲（15%，预留产能应对突发订单） | 产能充裕改为0.25，紧张改为0.05 |
+| `max_queue_hours_per_op` | float | 1.0 | 每道工序最大预估排队时间（1小时，用于CTP计算） | 拥堵工厂改为2.0 |
+| `work_hours_per_day` | float | 12.0 | 每日工作小时数（白班12小时） | 两班倒改为24.0 |
+| `scheduler_check_interval_hours` | float | 4.0 | 排程器检查间隔（4小时，配合实时排程） | 快速响应改为2.0 |
+
+---
+
+## 十、参数调整场景示例
+
+### 场景1：高负荷工厂（订单多、交期紧）
+```python
+SIMULATION_CONFIG = {
+    "order_arrival_lambda": 5.0,          # 每天5张订单
+    "order_priority_weights": [0.4, 0.4, 0.2],  # 紧急订单多
+    "lead_time_commitment_days": 3,       # 短交期
+    "queue_time_hours": 1.0,              # 拥堵严重
+    "breakdown_probability": 1.0,         # 所有机台都故障
+}
+```
+
+### 场景2：精益工厂（效率高、质量好）
+```python
+SIMULATION_CONFIG = {
+    "order_arrival_lambda": 2.0,          # 订单适中
+    "queue_time_hours": 0.3,              # 精益生产
+    "default_yield_rate": 0.99,           # 高良率
+    "ipqc_reject_rate": 0.08,             # 首件检验通过率高
+    "night_shift_efficiency": 0.98,       # 夜班效率高（自动化）
+}
+```
+
+### 场景3：新工厂调试（良率低、故障多）
+```python
+SIMULATION_CONFIG = {
+    "default_yield_rate": 0.95,           # 新工艺良率低
+    "ipqc_reject_rate": 0.25,             # 首件检验不合格率高
+    "breakdown_mtbf_hours": 120,          # 故障频繁
+    "breakdown_mttr_hours": 8,            # 维修慢
+    "order_arrival_lambda": 1.5,          # 订单少（试运行）
+}
+```
+
+---
+
+## 十一、参数依赖关系
+
+某些参数之间存在关联，调整时需注意：
+
+1. **订单到达率 ↔ 排队时间**
+   - `order_arrival_lambda` 越高 → `queue_time_hours` 应相应增加
+   
+2. **Lot大小 ↔ 批量工序容量**
+   - `wip_lot_size` 增大 → `batch_capacity` 也需相应调整
+   
+3. **工序合并 ↔ 排队时间**
+   - `flow_merge_enabled=True` → `queue_time_hours` 可减少
+   
+4. **MTBF ↔ 维护周期**
+   - `breakdown_mtbf_hours` 应 < `maintenance_frequency_hours`（故障应在维护前发生）
+
+---
+
+**文档版本**：v1.0  
+**最后更新**：2026-04-27  
+**配置文件位置**：`scripts/semiconductor_demo/factory_data.py`

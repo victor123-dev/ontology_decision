@@ -172,7 +172,7 @@ class FactorySimulation:
     def get_shift_efficiency(self, sim_hours: float = None) -> float:
         """P2-10: 获取当前班次效率系数"""
         if self.is_night_shift(sim_hours):
-            return 0.92  # 夜班效率92%
+            return self.config.get("night_shift_efficiency", 0.92)  # 夜班效率（默认92%）
         return 1.0
 
     def wait_until_next_work_start(self):
@@ -221,7 +221,8 @@ class FactorySimulation:
         next_avail = state.get("next_available_time", self.env.now)
         already_occupied = max(0.0, next_avail - self.env.now)
         # 工作时间 × 班次利用率 - 已占用时间
-        work_hours_in_horizon = horizon_hours * (12.0 / 24.0)  # 白班12小时
+        work_hours_per_day = self.config.get("work_hours_per_day", 12.0)
+        work_hours_in_horizon = horizon_hours * (work_hours_per_day / 24.0)
         buffer = self.config.get("ctp_capacity_buffer", 0.15)
         return max(0.0, work_hours_in_horizon * (1.0 - buffer) - already_occupied)
 
@@ -250,12 +251,13 @@ class FactorySimulation:
                     self.machine_capabilities.get((m["machine_id"], product_id), {}).get("efficiency_factor", 1.0)
                     for m in machines_in_wc
                 )
-                process_time = std_time * num_lots / max(best_efficiency, 0.5)
+                min_eff = self.config.get("min_efficiency_factor", 0.5)
+                process_time = std_time * num_lots / max(best_efficiency, min_eff)
             else:
                 process_time = std_time * num_lots
 
             total_process_hours += process_time + wait + transport
-            max_queue_hours += 1.0  # 每道工序预留1小时排队
+            max_queue_hours += self.config.get("max_queue_hours_per_op", 1.0)  # 每道工序预留排队时间
 
         total_hours = total_process_hours + max_queue_hours
         return self.sim_time_to_datetime(self.env.now) + timedelta(hours=total_hours + 4)
@@ -404,7 +406,8 @@ class FactorySimulation:
             for _ in range(n_orders):
                 product = random.choice(list(self.products.values()))
                 qty = random.randint(self.config["order_quantity_min"], self.config["order_quantity_max"])
-                priority = random.choices([1, 3, 5], weights=[0.2, 0.3, 0.5])[0]
+                priority_weights = self.config.get("order_priority_weights", [0.2, 0.3, 0.5])
+                priority = random.choices([1, 3, 5], weights=priority_weights)[0]
 
                 order_id = self.next_id("CO")
                 order_date = self.sim_time_to_datetime(self.env.now)
@@ -492,7 +495,7 @@ class FactorySimulation:
         # P0-2: 计算每道工序的预估投入数量（考虑良率逐步损耗）
         input_qty = qty
         now_dt = self.sim_time_to_datetime(self.env.now)
-        cumulative_offset = 4.0  # 距现在4小时开始
+        cumulative_offset = self.config.get("initial_offset_hours", 4.0)  # 距现在4小时开始
 
         for i, step in enumerate(steps):
             wo_op_id = f"{wo_id}-OP{step['sequence_no']:02d}"
@@ -522,10 +525,10 @@ class FactorySimulation:
             self.db.insert("work_order_operation", op_data)
 
             # P0-2: 下一道工序的投入 = 本道工序产出（×良率）
-            yield_rate = step.get("yield_rate_standard", 0.98)
+            yield_rate = step.get("yield_rate_standard", self.config.get("default_yield_rate", 0.98))
             input_qty *= yield_rate  # 传递给下一道工序
             # 累积偏移：加工时间 + 等待/转运 + 排队时间（批量加工后排对时间应减少）
-            queue_time = 0.5  # 减少到0.5小时（原来是1小时）
+            queue_time = self.config.get("queue_time_hours", 0.5)  # 工序间排队时间
             cumulative_offset += planned_duration + wait + transport + queue_time
 
     def expand_work_order_materials(self, wo_id: str, product_id: str, qty: float, base_date: datetime):
@@ -1015,7 +1018,8 @@ class FactorySimulation:
 
         # IQC失败概率 = 1 - reliability（有概率拒收部分批次）
         if random.random() > reliability:
-            reject_rate = random.uniform(0.05, 0.15)  # 5%-15%欠降
+            under_perf_range = self.config.get("under_performance_rate_range", [0.05, 0.15])
+            reject_rate = random.uniform(under_perf_range[0], under_perf_range[1])  # 性能不达标率
             reject_qty = round(qty * reject_rate, 2)
             accepted_qty = qty - reject_qty
             iqc_result = "让步接收" if reject_rate < 0.10 else "拒收部分"
@@ -2084,13 +2088,18 @@ class FactorySimulation:
     # ========================================================================
 
     def _ipqc_first_article(self, machine_id: str, wo_op_id: str, wo_id: str, product_id: str):
-        """换线后首件检验：15%概率不合格，最多重检一次"""
+        """换线后首件检验：不合格率由配置控制，最多重检一次"""
         import random
         ipqc_id = f"IPQC-{wo_op_id}-{self.counters['qc']:04d}"
         self.counters['qc'] += 1
-        yield self.env.timeout(0.5)  # 首件检验耗时0.5小时
+        
+        # 从配置读取检验耗时和不合格率
+        inspection_hours = self.config.get("ipqc_inspection_hours", 0.5)
+        reject_rate = self.config.get("ipqc_reject_rate", 0.15)
+        
+        yield self.env.timeout(inspection_hours)  # 首件检验耗时
 
-        passed = random.random() >= 0.08  # 8%不合格率，92%合格率
+        passed = random.random() >= reject_rate  # 按配置的不合格率判断
         result = "合格" if passed else "不合格"
 
         self.db.insert("quality_inspection", {
@@ -2137,9 +2146,12 @@ class FactorySimulation:
     def _run_iqc(self, qty: float, material_id: str):
         """IQC检验，返回 (result, scrap_qty, actual_qty)"""
         import random
-        fail_rate = 0.03  # 来料3%不合格率
+        # 从配置读取IQC不合格率和报废率范围（独立配置）
+        fail_rate = self.config.get("iqc_reject_rate", 0.03)  # 来料不合格率（3%）
+        scrap_range = self.config.get("iqc_scrap_rate_range", [0.03, 0.15])  # 来料报废率范围
+        
         if random.random() < fail_rate:
-            scrap_qty = round(qty * random.uniform(0.05, 0.20), 2)
+            scrap_qty = round(qty * random.uniform(scrap_range[0], scrap_range[1]), 2)
             actual_qty = qty - scrap_qty
             return "不合格-部分", scrap_qty, actual_qty
         return "合格", 0.0, qty
@@ -2149,7 +2161,9 @@ class FactorySimulation:
         import random
         fqc_id = f"FQC-{order_id}-{self.counters['qc']:04d}"
         self.counters['qc'] += 1
-        fail_rate = 0.01  # 1%不合格率，符合OSAT厂实际
+        
+        # 从配置读取FQC不合格率
+        fail_rate = self.config.get("fqc_reject_rate", 0.05)
         passed = random.random() >= fail_rate
 
         self.db.insert("quality_inspection", {
