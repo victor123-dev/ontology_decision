@@ -118,6 +118,9 @@ class FactorySimulation:
         self.machine_daily_stats = defaultdict(lambda: defaultdict(list))
         # machine_id -> product_id -> [(efficiency, yield_rate, process_time)]
 
+        # Lot批量加工：step_id到工序代码的映射（用于批量逻辑判断）
+        self.step_code_map = {}  # step_id -> step_code (如"STEP-QFP-PMIC-010" -> "RECV")
+
         # P2-12: 产能负荷追踪（用于CTP）
         self.work_center_load = defaultdict(float)   # work_center_id -> planned_hours_today
 
@@ -500,7 +503,8 @@ class FactorySimulation:
 
             # 计算各工序计划时间（累积偏移）
             planned_start = now_dt + timedelta(hours=cumulative_offset)
-            planned_duration = std_time * (input_qty / self.config["wip_lot_size"] + 1)
+            # Lot批量加工：std_time已经按批量调整过，直接使用
+            planned_duration = std_time
             planned_end = planned_start + timedelta(hours=planned_duration + wait + transport)
 
             op_data = {
@@ -520,7 +524,9 @@ class FactorySimulation:
             # P0-2: 下一道工序的投入 = 本道工序产出（×良率）
             yield_rate = step.get("yield_rate_standard", 0.98)
             input_qty *= yield_rate  # 传递给下一道工序
-            cumulative_offset += planned_duration + wait + transport + 1.0  # +1小时排队等待
+            # 累积偏移：加工时间 + 等待/转运 + 排队时间（批量加工后排对时间应减少）
+            queue_time = 0.5  # 减少到0.5小时（原来是1小时）
+            cumulative_offset += planned_duration + wait + transport + queue_time
 
     def expand_work_order_materials(self, wo_id: str, product_id: str, qty: float, base_date: datetime):
         """按BOM展开工单物料需求（P2-C7: 过滤BOM有效期）"""
@@ -1217,7 +1223,7 @@ class FactorySimulation:
     # ========================================================================
 
     def daily_scheduler(self):
-        """每天运行排程"""
+        """每天运行排程（增强版：每4小时检查一次，配合实时排程）"""
         while True:
             yield self.wait_until_next_work_start()
             yield self.env.timeout(1.0)  # 9:00 排程
@@ -1235,8 +1241,8 @@ class FactorySimulation:
             ready_ops = self.db.query_ready_operations_with_precedence()
 
             if not ready_ops:
-                # 无可排工序时直接跳过（不写快照，避免主键占位导致有效快照被丢弃）
-                yield self.env.timeout(23.0)
+                # 无可排工序时，4小时后再检查（而不是23小时）
+                yield self.env.timeout(4.0)
                 continue
 
             # P1-8: 按关键比（Critical Ratio）+优先级排序
@@ -1268,10 +1274,11 @@ class FactorySimulation:
             for wc_id, ops in wc_ops_map.items():
                 self.schedule_operations_for_wc(wc_id, ops)
 
-            # T4: 写入每日产能快照
+            # T4: 写入每日产能快照（只在09:00的排程中写入）
             self._write_daily_schedule_snapshot(today)
 
-            yield self.env.timeout(23.0)
+            # 4小时后再检查一次（配合实时排程，提高响应速度）
+            yield self.env.timeout(4.0)
 
     def _write_daily_schedule_snapshot(self, today):
         """T4: 写入当日产能利用率快照到Schedule表"""
@@ -1375,17 +1382,26 @@ class FactorySimulation:
             mid = machine["machine_id"]
 
             # P2-10: 计算加工时间（含班次效率）
+            # Lot批量加工：std_time已经按批量调整过（÷25），直接使用，不需要乘以num_lots
             std_time = step["standard_time_hours"]
             raw_start = max(self.env.now, self.machine_state[mid]["next_available_time"])
             start_time = self.skip_sunday(raw_start)  # Task4: 工作日历 - 跳过周日
             efficiency = self.get_machine_efficiency(mid, product_id, at_sim_hours=start_time)
-            num_lots = max(1, math.ceil(qty / self.config["wip_lot_size"]))
-            process_time = std_time * num_lots / efficiency
+            process_time = std_time / efficiency  # 直接使用批量调整后的时间
 
             # P1-8: 换线时间（Setup成本）
             last_product = self.machine_last_product.get(mid)
             setup_min = self.get_setup_time(mid, last_product, product_id)
             setup_time = setup_min / 60.0  # 转小时
+            
+            # Lot批量加工：同Setup Group连续生产免换线
+            if self.config.get("setup_skip_same_group", False):
+                current_setup_group = self.work_order_state.get(wo_id, {}).get("setup_group")
+                last_wo_id = self.machine_state[mid].get("current_wo")
+                if last_wo_id:
+                    last_setup_group = self.work_order_state.get(last_wo_id, {}).get("setup_group")
+                    if current_setup_group and current_setup_group == last_setup_group:
+                        setup_time = 0  # 同组免换线
 
             # P1-5: 工序间等待/转运时间（在上道工序完成后需要等待）
             wait_time = step.get("wait_time_hours", 0.0)
@@ -1524,8 +1540,12 @@ class FactorySimulation:
             "status": "进行中"
         })
 
+        # Lot批量加工：计算实际加工时间
+        # 注：PT中的工序时间已经按批量调整过（÷25或÷并行度），直接使用即可
+        actual_process_time = process_time
+
         # 加工中...（P2-10: 夜班效率已在排程时计入process_time）
-        yield self.env.timeout(process_time)
+        yield self.env.timeout(actual_process_time)
 
         # 加工完成
         actual_end_time = self.env.now
@@ -1632,6 +1652,9 @@ class FactorySimulation:
 
         self.update_work_order_status(wo_id)
         self.advance_wip_lots(wo_id, lot_id, actual_qty)
+        
+        # 【新增】事件驱动实时排程：工序完成后立即检查并排程后续工序
+        self.env.process(self.realtime_schedule_after_completion(wo_op_id, wo_id))
 
     def update_next_op_input_qty(self, wo_id: str, current_wo_op_id: str, actual_output: float, current_step: dict):
         """P0-2: 将当前工序的实际产出数量更新到下一工序的投入数量"""
@@ -1694,9 +1717,79 @@ class FactorySimulation:
                 new_status = "延期"
 
         self.db.update("work_order", {"work_order_id": wo_id}, {"status": new_status})
+    
+    def realtime_schedule_after_completion(self, completed_wo_op_id: str, wo_id: str):
+        """【新增】事件驱动实时排程：工序完成后立即检查并排程后续工序"""
+        # 等待一小段时间，确保数据库更新完成
+        yield self.env.timeout(0.1)
+        
+        # 查询因当前工序完成而变为ready的后续工序
+        ready_ops = self.db.query_ready_operations_with_precedence()
+        
+        if not ready_ops:
+            return
+        
+        # 只排程与当前工单相关的后续工序（避免全局排程开销）
+        current_product = self.work_order_state.get(wo_id, {}).get("product_id")
+        if not current_product:
+            return
+        
+        # 筛选出当前工单或其他工单中变为ready的工序
+        relevant_ops = []
+        for op in ready_ops:
+            # 检查是否是当前工单的后续工序，或者其他工单的工序也变为ready了
+            if op.get("work_order_id") == wo_id or op.get("product_id") == current_product:
+                relevant_ops.append(op)
+        
+        if not relevant_ops:
+            return
+        
+        # 按关键比排序（与daily_scheduler逻辑一致）
+        now_sim = self.env.now
+        scored_ops = []
+        for op in relevant_ops:
+            due_sim = self.datetime_to_sim_hours(op.get("planned_end"))
+            remaining_time = max(1.0, due_sim - now_sim)
+            remaining_ops = op.get("remaining_op_count", 1)
+            critical_ratio = remaining_time / (remaining_ops * 4.0)
+            priority = op.get("priority", 5)
+            scored_ops.append((critical_ratio, priority, op))
+        
+        scored_ops.sort(key=lambda x: (x[0], x[1]))
+        
+        # 按工作中心分组排程
+        wc_ops_map = defaultdict(list)
+        for _, _, op in scored_ops:
+            route_id = self.get_route_for_product(op.get("product_id"))
+            steps = self.route_steps.get(route_id, [])
+            step = next((s for s in steps if s["step_id"] == op["step_id"]), None)
+            if step:
+                wc_id = step.get("machine_type_required")
+                wc_ops_map[wc_id].append(op)
+        
+        # 对每个工作中心进行排程
+        scheduled_count = 0
+        for wc_id, ops in wc_ops_map.items():
+            # 找出该工作中心所有可用机台
+            candidate_machines = [m for m in self.machines.values()
+                                   if m.get("work_center_id") == wc_id
+                                   and m["machine_id"] not in self.machines_under_maintenance]
+            
+            if not candidate_machines:
+                continue
+            
+            for op in ops:
+                self.schedule_operation(op, candidate_machines)
+                scheduled_count += 1
+        
+        if scheduled_count > 0:
+            sim_day = self.get_sim_day()
+            sim_time = self.sim_time_to_datetime(self.env.now)
+            print(f"  [实时排程] Day {sim_day} {sim_time.strftime('%H:%M')}: "
+                  f"工序{completed_wo_op_id}完成，立即排程{scheduled_count}个后续工序")
 
     def advance_wip_lots(self, wo_id: str, current_lot_id: str, actual_qty: float):
-        """P0-2: 推进WIP Lot到下一工序（携带实际产出数量）"""
+        """P0-2: 推进WIP Lot到下一工序（携带实际产出数量，含流转优化）"""
         product_id = self.work_order_state.get(wo_id, {}).get("product_id")
         if not product_id:
             return
@@ -1711,6 +1804,17 @@ class FactorySimulation:
                 self.wip_lot_state[current_lot_id]["current_step_idx"] = current_idx + 1
                 self.wip_lot_state[current_lot_id]["status"] = "排队中"
                 self.wip_lot_state[current_lot_id]["current_qty"] = actual_qty
+                
+                # Lot批量加工：工序流转优化（减少辅助工序排队时间）
+                flow_merge_enabled = self.config.get("flow_merge_enabled", False)
+                if flow_merge_enabled:
+                    next_step_code = self.step_code_map.get(next_step["step_id"], "UNKNOWN")
+                    # 辅助工序免排队：直接合并到下一道主工序
+                    if next_step_code in ["TRANS", "WAIT", "CLEAN"]:
+                        # 减少等待/转运时间（直接跳过）
+                        next_step = next_step.copy()  # 避免修改原始数据
+                        next_step["wait_time_hours"] = 0.0
+                        next_step["transport_time_hours"] = 0.0
 
                 self.db.update("wip_lot", {"lot_id": current_lot_id}, {
                     "current_step_id": next_step["step_id"],
@@ -1986,7 +2090,7 @@ class FactorySimulation:
         self.counters['qc'] += 1
         yield self.env.timeout(0.5)  # 首件检验耗时0.5小时
 
-        passed = random.random() >= 0.15  # 85%合格率
+        passed = random.random() >= 0.08  # 8%不合格率，92%合格率
         result = "合格" if passed else "不合格"
 
         self.db.insert("quality_inspection", {
@@ -2045,7 +2149,7 @@ class FactorySimulation:
         import random
         fqc_id = f"FQC-{order_id}-{self.counters['qc']:04d}"
         self.counters['qc'] += 1
-        fail_rate = 0.05  # 成品5%不合格率
+        fail_rate = 0.01  # 1%不合格率，符合OSAT厂实际
         passed = random.random() >= fail_rate
 
         self.db.insert("quality_inspection", {

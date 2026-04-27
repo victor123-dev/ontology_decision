@@ -1,309 +1,538 @@
 """
-半导体演示工厂静态配置数据
-定义产品、BOM、工艺路线、机台、供应商等基础主数据
+通富微电风格封装测试工厂静态配置数据 v2.0
+100个产品 / 80-120道工序 / 2-3层BOM / 25个工作中心
+OSAT封装测试代工：BGA/QFN/SOP/QFP/WLCSP/Fan-out/SiP/LGA/CSP/SOT
 """
 
-from datetime import datetime, timedelta, time
-from typing import List, Dict, Any
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Tuple
 
 # ============================================================================
-# 产品定义
-# ============================================================================
-
-PRODUCTS = [
-    {
-        "product_id": "PROD-A",
-        "product_name": "智能传感器模块A",
-        "product_type": "成品",
-        "standard_cycle_time": 2.5,
-        "routing_steps": 4,
-        "setup_group": "SENSOR-A",
-        "unit_of_measure": "PCS"
-    },
-    {
-        "product_id": "PROD-B",
-        "product_name": "功率控制芯片B",
-        "product_type": "成品",
-        "standard_cycle_time": 3.0,
-        "routing_steps": 4,
-        "setup_group": "POWER-B",
-        "unit_of_measure": "PCS"
-    },
-    {
-        "product_id": "PROD-C",
-        "product_name": "高端射频芯片C",
-        "product_type": "成品",
-        "standard_cycle_time": 4.5,
-        "routing_steps": 5,
-        "setup_group": "RF-C",
-        "unit_of_measure": "PCS"
-    }
-]
-
-# ============================================================================
-# 物料定义
-# ============================================================================
-
-MATERIALS = [
-    {
-        "material_id": "MAT-X",
-        "material_name": "高精度晶圆基板X",
-        "material_type": "原材料",
-        "unit_of_measure": "片",
-        "safety_stock_level": 30.0,
-        "reorder_point": 50.0,
-        "lot_size": 100.0,
-        "eoq": 80.0,          # P2-13: 经济订购量
-        "annual_demand": 1200.0,   # 年需求量（用于EOQ计算）
-        "holding_cost_rate": 0.25, # 持有成本率
-    },
-    {
-        "material_id": "MAT-Y",
-        "material_name": "传感器封装材料Y",
-        "material_type": "原材料",
-        "unit_of_measure": "KG",
-        "safety_stock_level": 20.0,
-        "reorder_point": 40.0,
-        "lot_size": 80.0,
-        "eoq": 60.0,
-        "annual_demand": 800.0,
-        "holding_cost_rate": 0.20,
-    },
-    {
-        "material_id": "MAT-Z",
-        "material_name": "功率模块散热片Z",
-        "material_type": "原材料",
-        "unit_of_measure": "PCS",
-        "safety_stock_level": 25.0,
-        "reorder_point": 45.0,
-        "lot_size": 90.0,
-        "eoq": 70.0,
-        "annual_demand": 900.0,
-        "holding_cost_rate": 0.22,
-    },
-    {
-        "material_id": "MAT-COMMON",
-        "material_name": "通用清洗溶剂",
-        "material_type": "辅料",
-        "unit_of_measure": "L",
-        "safety_stock_level": 100.0,
-        "reorder_point": 200.0,
-        "lot_size": 500.0,
-        "eoq": 400.0,
-        "annual_demand": 5000.0,
-        "holding_cost_rate": 0.15,
-    },
-    {
-        "material_id": "MAT-W",
-        "material_name": "RF射频胶W",
-        "material_type": "原材料",
-        "unit_of_measure": "ML",
-        "safety_stock_level": 15.0,
-        "reorder_point": 30.0,
-        "lot_size": 50.0,
-        "eoq": 45.0,
-        "annual_demand": 600.0,
-        "holding_cost_rate": 0.30,
-    },
-    {
-        "material_id": "MAT-V",
-        "material_name": "导电银浆V",
-        "material_type": "原材料",
-        "unit_of_measure": "G",
-        "safety_stock_level": 20.0,
-        "reorder_point": 35.0,
-        "lot_size": 60.0,
-        "eoq": 50.0,
-        "annual_demand": 700.0,
-        "holding_cost_rate": 0.28,
-    }
-]
+# 通用工序类型定义 (短代码 -> 工作中心, 标准时间小时, 良率)
+# 修正：改为Lot批量加工时间（lot_size=25），贴合OSAT真实生产模式
+PT = {
+    # 前段（批量加工，时间÷25）
+    "RECV":  ("WC-RECV",     0.5,  1.00),  # 保持不变（收货是批次操作）
+    "GRIND": ("WC-GRIND",    0.08, 0.99),  # 2.0/25=0.08
+    "DICE":  ("WC-DICE",     0.06, 0.98),  # 1.5/25=0.06
+    "DA":    ("WC-DA",       0.04, 0.99),  # 1.0/25=0.04
+    "CURE":  ("WC-DA",       0.08, 1.00),  # 2.0/25=0.08
+    # 中段（键合是逐个的，但机台多线并行）
+    "WB":    ("WC-WB",       0.4,  0.97),  # 2.0/5线=0.4（5线并行）
+    "FC":    ("WC-FC",       0.3,  0.98),  # 1.5/5=0.3
+    "RDL":   ("WC-RDL",      0.4,  0.98),  # 2.0/5=0.4
+    # 塑封（批量）
+    "MOLD":  ("WC-MOLD",     0.12, 0.98),  # 3.0/25=0.12
+    "PMC":   ("WC-PMC",      0.16, 1.00),  # 4.0/25=0.16
+    "MARK":  ("WC-MARK",     0.01, 1.00),  # 0.3/25=0.012
+    # 植球（批量）
+    "BALL":  ("WC-BALL",     0.06, 0.99),  # 1.5/25=0.06
+    "REFL":  ("WC-BALL",     0.04, 1.00),  # 1.0/25=0.04
+    "SING":  ("WC-SING",     0.04, 0.99),  # 1.0/25=0.04
+    # 检测（逐件但高速）
+    "AOI":   ("WC-AOI",      0.02, 1.00),  # 0.5/25=0.02
+    "VISUAL":("WC-VISUAL",   0.02, 0.99),  # 0.5/25=0.02
+    "XRAY":  ("WC-XRAY",     0.02, 1.00),  # 0.5/25=0.02
+    "SAM":   ("WC-SAM",      0.04, 1.00),  # 1.0/25=0.04
+    # 测试（并行测试）
+    "CP":    ("WC-TEST-CP",  0.4,  0.95),  # 2.0/5并行=0.4
+    "DC":    ("WC-TEST-FT",  0.3,  0.96),  # 1.5/5=0.3
+    "AC":    ("WC-TEST-FT",  0.3,  0.96),  # 1.5/5=0.3
+    "FUNC":  ("WC-TEST-FT",  0.4,  0.95),  # 2.0/5=0.4
+    "BI":    ("WC-TEST-BI",  0.96, 0.98),  # 24.0/25并行=0.96（关键修正！）
+    "BIT":   ("WC-TEST-FT",  0.4,  0.97),  # 2.0/5=0.4
+    "FINAL": ("WC-TEST-FT",  0.1,  0.97),  # 2.5/25=0.1
+    "SYS":   ("WC-TEST-SYS", 0.8,  0.95),  # 4.0/5=0.8
+    # 辅助（批量）
+    "CLEAN": ("WC-CLEAN",    0.01, 1.00),  # 0.3/25=0.012
+    "DRY":   ("WC-CLEAN",    0.02, 1.00),  # 0.5/25=0.02
+    "BAKE":  ("WC-BAKE",     0.16, 1.00),  # 4.0/25=0.16
+    "WAIT":  ("WC-WAIT",     0.04, 1.00),  # 1.0/25=0.04
+    "TRANS": ("WC-TRANS",    0.01, 1.00),  # 0.2/25=0.008
+    # 出货（批量）
+    "OQC":   ("WC-PACK",     0.02, 0.99),  # 0.5/25=0.02
+    "PACK":  ("WC-PACK",     0.02, 1.00),  # 0.5/25=0.02
+    "LABEL": ("WC-PACK",     0.01, 1.00),  # 0.2/25=0.008
+    "STORE": ("WC-PACK",     0.01, 1.00),  # 0.2/25=0.008
+}
 
 # ============================================================================
-# BOM定义（含工序关联）
+# 封装类型配置
 # ============================================================================
 
-BOMS = [
-    # PROD-A 的BOM
-    {"bom_id": "BOM-A-001", "product_id": "PROD-A", "material_id": "MAT-X", "step_id": "STEP-A-20", "quantity_per_unit": 1.0, "is_critical": True, "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-A-002", "product_id": "PROD-A", "material_id": "MAT-Y", "step_id": "STEP-A-30", "quantity_per_unit": 0.5, "is_critical": True, "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-A-003", "product_id": "PROD-A", "material_id": "MAT-COMMON", "step_id": "STEP-A-10", "quantity_per_unit": 0.1, "is_critical": False, "consumption_pattern": "按比例消耗"},
-    
-    # PROD-B 的BOM（共享MAT-X）
-    {"bom_id": "BOM-B-001", "product_id": "PROD-B", "material_id": "MAT-X", "step_id": "STEP-B-20", "quantity_per_unit": 1.0, "is_critical": True, "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-B-002", "product_id": "PROD-B", "material_id": "MAT-Z", "step_id": "STEP-B-30", "quantity_per_unit": 2.0, "is_critical": True, "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-B-003", "product_id": "PROD-B", "material_id": "MAT-COMMON", "step_id": "STEP-B-10", "quantity_per_unit": 0.15, "is_critical": False, "consumption_pattern": "按比例消耗"},
+PKG_CFG = {
+    "BGA":    {"name": "球栅阵列封装",      "bond": 5, "ball": True,  "rdl": False, "test": 5, "steps": 92},
+    "QFN":    {"name": "方形扁平无引脚",     "bond": 3, "ball": False, "rdl": False, "test": 4, "steps": 78},
+    "SOP":    {"name": "小外形封装",         "bond": 2, "ball": False, "rdl": False, "test": 3, "steps": 65},
+    "QFP":    {"name": "方形扁平封装",       "bond": 4, "ball": False, "rdl": False, "test": 4, "steps": 72},
+    "WLCSP":  {"name": "晶圆级CSP",          "bond": 0, "ball": True,  "rdl": True,  "test": 4, "steps": 85},
+    "FANOUT": {"name": "扇出型封装",         "bond": 0, "ball": True,  "rdl": True,  "test": 5, "steps": 95},
+    "SIP":    {"name": "系统级封装",         "bond": 6, "ball": True,  "rdl": False, "test": 6, "steps": 105},
+    "LGA":    {"name": "平面网格阵列",       "bond": 4, "ball": False, "rdl": False, "test": 4, "steps": 80},
+    "CSP":    {"name": "芯片尺寸封装",       "bond": 3, "ball": True,  "rdl": False, "test": 3, "steps": 75},
+    "SOT":    {"name": "小外形晶体管",       "bond": 1, "ball": False, "rdl": False, "test": 2, "steps": 58},
+}
 
-    # PROD-C 的BOM（高端射频芯片，5道工序，进口料）
-    {"bom_id": "BOM-C-001", "product_id": "PROD-C", "material_id": "MAT-X",      "step_id": "STEP-C-10", "quantity_per_unit": 1.2, "is_critical": True,  "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-C-002", "product_id": "PROD-C", "material_id": "MAT-W",      "step_id": "STEP-C-20", "quantity_per_unit": 2.0, "is_critical": True,  "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-C-003", "product_id": "PROD-C", "material_id": "MAT-Z",      "step_id": "STEP-C-30", "quantity_per_unit": 1.5, "is_critical": True,  "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-C-004", "product_id": "PROD-C", "material_id": "MAT-V",      "step_id": "STEP-C-40", "quantity_per_unit": 3.0, "is_critical": True,  "consumption_pattern": "工序开始时消耗"},
-    {"bom_id": "BOM-C-005", "product_id": "PROD-C", "material_id": "MAT-COMMON",  "step_id": "STEP-C-10", "quantity_per_unit": 0.2, "is_critical": False, "consumption_pattern": "按比例消耗"},
-]
-
-# ============================================================================
-# 工艺路线与工序
-# ============================================================================
-
-PROCESS_ROUTES = [
-    {"route_id": "RT-PROD-A-v1", "product_id": "PROD-A", "route_name": "传感器模块标准工艺", "version": "v1.0", "is_active": True},
-    {"route_id": "RT-PROD-B-v1", "product_id": "PROD-B", "route_name": "功率芯片标准工艺", "version": "v1.0", "is_active": True},
-    {"route_id": "RT-PROD-C-v1", "product_id": "PROD-C", "route_name": "高端射频芯片工艺", "version": "v1.0", "is_active": True},
-]
-
-ROUTE_STEPS = [
-    # PROD-A 工艺路线：清洗(10)→光刻(20)→封装(30)→测试(40)
-    {"step_id": "STEP-A-10", "route_id": "RT-PROD-A-v1", "sequence_no": 10, "step_name": "晶圆清洗", "operation_type": "加工", "standard_time_hours": 0.5, "machine_type_required": "WC-CLEAN-01", "setup_time_minutes": 15, "material_ready_offset_hours": 1.0, "yield_rate_standard": 0.99,
-     "wait_time_hours": 0.5, "transport_time_hours": 0.25, "min_batch_qty": 25, "max_batch_qty": 100},
-    {"step_id": "STEP-A-20", "route_id": "RT-PROD-A-v1", "sequence_no": 20, "step_name": "光刻图形化", "operation_type": "加工", "standard_time_hours": 1.5, "machine_type_required": "WC-LITHO-01", "setup_time_minutes": 30, "material_ready_offset_hours": 2.0, "yield_rate_standard": 0.97, "is_critical": True,
-     "wait_time_hours": 1.0, "transport_time_hours": 0.5, "min_batch_qty": 25, "max_batch_qty": 50},
-    {"step_id": "STEP-A-30", "route_id": "RT-PROD-A-v1", "sequence_no": 30, "step_name": "传感器封装", "operation_type": "加工", "standard_time_hours": 0.8, "machine_type_required": "WC-ASSY-01", "setup_time_minutes": 20, "material_ready_offset_hours": 1.5, "yield_rate_standard": 0.98,
-     "wait_time_hours": 0.0, "transport_time_hours": 0.25, "min_batch_qty": 25, "max_batch_qty": 100},
-    {"step_id": "STEP-A-40", "route_id": "RT-PROD-A-v1", "sequence_no": 40, "step_name": "功能测试", "operation_type": "检验", "standard_time_hours": 0.3, "machine_type_required": "WC-TEST-01", "setup_time_minutes": 10, "material_ready_offset_hours": 0.5, "yield_rate_standard": 0.99,
-     "wait_time_hours": 0.0, "transport_time_hours": 0.0, "min_batch_qty": 25, "max_batch_qty": 200},
-    
-    # PROD-B 工艺路线：清洗(10)→蜍刻(20)→贴片(30)→测试(40)
-    {"step_id": "STEP-B-10", "route_id": "RT-PROD-B-v1", "sequence_no": 10, "step_name": "晶圆清洗", "operation_type": "加工", "standard_time_hours": 0.5, "machine_type_required": "WC-CLEAN-01", "setup_time_minutes": 15, "material_ready_offset_hours": 1.0, "yield_rate_standard": 0.99,
-     "wait_time_hours": 0.5, "transport_time_hours": 0.25, "min_batch_qty": 25, "max_batch_qty": 100},
-    {"step_id": "STEP-B-20", "route_id": "RT-PROD-B-v1", "sequence_no": 20, "step_name": "等离子蚀刻", "operation_type": "加工", "standard_time_hours": 2.0, "machine_type_required": "WC-ETCH-01", "setup_time_minutes": 45, "material_ready_offset_hours": 2.0, "yield_rate_standard": 0.96, "is_critical": True,
-     "wait_time_hours": 1.5, "transport_time_hours": 0.5, "min_batch_qty": 25, "max_batch_qty": 50},
-    {"step_id": "STEP-B-30", "route_id": "RT-PROD-B-v1", "sequence_no": 30, "step_name": "功率模块贴片", "operation_type": "加工", "standard_time_hours": 1.0, "machine_type_required": "WC-ASSY-01", "setup_time_minutes": 25, "material_ready_offset_hours": 1.5, "yield_rate_standard": 0.97,
-     "wait_time_hours": 0.0, "transport_time_hours": 0.25, "min_batch_qty": 25, "max_batch_qty": 100},
-    {"step_id": "STEP-B-40", "route_id": "RT-PROD-B-v1", "sequence_no": 40, "step_name": "电性能测试", "operation_type": "检验", "standard_time_hours": 0.4, "machine_type_required": "WC-TEST-01", "setup_time_minutes": 10, "material_ready_offset_hours": 0.5, "yield_rate_standard": 0.98,
-     "wait_time_hours": 0.0, "transport_time_hours": 0.0, "min_batch_qty": 25, "max_batch_qty": 200},
-
-    # PROD-C 工艺路线：清洗(10)→RF溺陈(20)→蜍刻(30)→封徣(40)→RF测试(50)
-    {"step_id": "STEP-C-10", "route_id": "RT-PROD-C-v1", "sequence_no": 10, "step_name": "晶圆清洗", "operation_type": "加工", "standard_time_hours": 0.6, "machine_type_required": "WC-CLEAN-01", "setup_time_minutes": 20, "material_ready_offset_hours": 1.0, "yield_rate_standard": 0.99,
-     "wait_time_hours": 0.5, "transport_time_hours": 0.25, "min_batch_qty": 25, "max_batch_qty": 75},
-    {"step_id": "STEP-C-20", "route_id": "RT-PROD-C-v1", "sequence_no": 20, "step_name": "RF淀积平坦化", "operation_type": "加工", "standard_time_hours": 2.0, "machine_type_required": "WC-LITHO-01", "setup_time_minutes": 60, "material_ready_offset_hours": 3.0, "yield_rate_standard": 0.95, "is_critical": True,
-     "wait_time_hours": 1.5, "transport_time_hours": 0.5, "min_batch_qty": 25, "max_batch_qty": 50},
-    {"step_id": "STEP-C-30", "route_id": "RT-PROD-C-v1", "sequence_no": 30, "step_name": "高精度蚀刻", "operation_type": "加工", "standard_time_hours": 2.5, "machine_type_required": "WC-ETCH-01", "setup_time_minutes": 60, "material_ready_offset_hours": 2.0, "yield_rate_standard": 0.94, "is_critical": True,
-     "wait_time_hours": 2.0, "transport_time_hours": 0.5, "min_batch_qty": 25, "max_batch_qty": 50},
-    {"step_id": "STEP-C-40", "route_id": "RT-PROD-C-v1", "sequence_no": 40, "step_name": "射频封装涂布", "operation_type": "加工", "standard_time_hours": 1.2, "machine_type_required": "WC-ASSY-01", "setup_time_minutes": 40, "material_ready_offset_hours": 1.5, "yield_rate_standard": 0.96,
-     "wait_time_hours": 0.5, "transport_time_hours": 0.25, "min_batch_qty": 25, "max_batch_qty": 75},
-    {"step_id": "STEP-C-50", "route_id": "RT-PROD-C-v1", "sequence_no": 50, "step_name": "高频RF测试", "operation_type": "检验", "standard_time_hours": 0.8, "machine_type_required": "WC-TEST-01", "setup_time_minutes": 20, "material_ready_offset_hours": 0.5, "yield_rate_standard": 0.97,
-     "wait_time_hours": 0.0, "transport_time_hours": 0.0, "min_batch_qty": 25, "max_batch_qty": 100},
-]
+CHIP_TYPES = ["CPU", "GPU", "MEM", "RF", "ASIC", "MCU", "SENSOR", "PMIC", "FPGA", "NET"]
+CHIP_NAMES = {"CPU": "处理器", "GPU": "图形芯片", "MEM": "存储芯片", "RF": "射频芯片",
+              "ASIC": "专用集成电路", "MCU": "微控制器", "SENSOR": "传感器",
+              "PMIC": "电源管理", "FPGA": "可编程逻辑", "NET": "网络芯片"}
 
 # ============================================================================
-# 工作中心与机台
+# 工序流构建函数
+# ============================================================================
+
+def _front_end() -> List[str]:
+    """前段：晶圆处理 (13道)"""
+    return ["RECV", "RECV", "RECV", "BAKE", "WAIT", "GRIND", "AOI", "CLEAN", "DRY", "AOI", "DICE", "DICE", "DICE"]
+
+def _die_attach() -> List[str]:
+    """贴片 (5道)"""
+    return ["DA", "CURE", "AOI", "CLEAN", "TRANS"]
+
+def _wire_bond(positions: int) -> List[str]:
+    """引线键合：每位置4道"""
+    out = []
+    for _ in range(positions):
+        out += ["WB", "AOI", "CLEAN", "TRANS"]
+    return out
+
+def _rdl_flow() -> List[str]:
+    """RDL/UBM流程 (WLCSP/Fan-out) 8道"""
+    return ["RDL", "AOI", "CLEAN", "TRANS", "RDL", "AOI", "CLEAN", "TRANS"]
+
+def _molding() -> List[str]:
+    """塑封段 (10道)"""
+    return ["AOI", "CLEAN", "TRANS", "BAKE", "WAIT", "MOLD", "PMC", "WAIT", "CLEAN", "TRANS"]
+
+def _marking() -> List[str]:
+    """打标 (3道)"""
+    return ["MARK", "CLEAN", "TRANS"]
+
+def _ball_attach() -> List[str]:
+    """植球 (4道)"""
+    return ["BALL", "REFL", "CLEAN", "TRANS"]
+
+def _inspection_singulation(has_sam: bool) -> List[str]:
+    """检测与分选 (9-10道)"""
+    out = ["XRAY", "TRANS"]
+    out += ["SAM", "TRANS"] if has_sam else ["TRANS", "TRANS"]
+    out += ["SING", "CLEAN", "TRANS", "VISUAL", "TRANS"]
+    return out
+
+def _test_flow(test_stations: int) -> List[str]:
+    """测试段 (2*test_stations 道)"""
+    test_types = ["CP", "DC", "AC", "FUNC", "FINAL", "FINAL", "FINAL", "SYS", "BI"]
+    out = []
+    for i in range(min(test_stations, len(test_types))):
+        out += [test_types[i], "TRANS"]
+    return out
+
+def _burn_in(has_bi: bool) -> List[str]:
+    """老化测试 (3道或0道)"""
+    return ["BI", "BIT", "TRANS"] if has_bi else []
+
+def _final_extra(extra: int) -> List[str]:
+    """补充最终测试"""
+    out = []
+    for _ in range(extra):
+        out += ["FINAL", "TRANS"]
+    return out
+
+def _sys_test(has_sys: bool) -> List[str]:
+    """系统测试 (2道或0道)"""
+    return ["SYS", "TRANS"] if has_sys else []
+
+def _shipping(has_xray: bool) -> List[str]:
+    """出货前 (8-9道)"""
+    out = ["VISUAL", "TRANS"]
+    out += ["XRAY", "TRANS"] if has_xray else ["TRANS", "TRANS"]
+    out += ["OQC", "PACK", "LABEL", "STORE", "TRANS"]
+    return out
+
+def build_flow(cfg: dict) -> List[str]:
+    """根据封装配置构建完整工序流（含大量辅助工序以达到80-120道）"""
+    flow = []
+    # 前段 + 辅助
+    flow += _front_end() + ["TRANS", "WAIT"]
+    flow += _die_attach() + ["TRANS", "WAIT"]
+    # 中段：键合/RDL + 辅助
+    if cfg["rdl"]:
+        flow += _rdl_flow() + ["BAKE", "WAIT", "CLEAN", "TRANS"]
+    elif cfg["bond"] > 0:
+        flow += _wire_bond(cfg["bond"]) + ["BAKE", "WAIT", "CLEAN", "TRANS"]
+    # 塑封段 + 辅助
+    flow += _molding() + ["CLEAN", "TRANS", "WAIT", "CLEAN", "TRANS"]
+    # 打标 + 辅助
+    flow += _marking() + ["TRANS", "WAIT"]
+    # 植球 + 辅助
+    if cfg["ball"]:
+        flow += _ball_attach() + ["CLEAN", "TRANS", "BAKE", "WAIT"]
+    # 检测分选 + 辅助
+    flow += _inspection_singulation(cfg["steps"] > 80) + ["TRANS", "WAIT", "CLEAN", "TRANS"]
+    # 测试段 + 辅助
+    flow += _test_flow(cfg["test"]) + ["TRANS", "WAIT", "CLEAN", "TRANS"]
+    # 老化 + 辅助
+    flow += _burn_in(cfg["steps"] > 70) + ["TRANS", "WAIT"]
+    # 补充测试 + 辅助
+    flow += _final_extra(max(0, cfg["test"] - 5))
+    flow += _sys_test(cfg["test"] >= 5 and cfg["steps"] > 85)
+    flow += ["TRANS", "WAIT", "CLEAN", "TRANS"]
+    # 出货前处理 + 出货
+    flow += ["CLEAN", "TRANS", "BAKE", "WAIT", "CLEAN", "TRANS"]
+    flow += _shipping(cfg["steps"] > 70)
+    return flow
+
+# ============================================================================
+# 产品生成
+# ============================================================================
+
+def generate_products() -> List[Dict]:
+    products = []
+    for pkg, cfg in PKG_CFG.items():
+        for chip in CHIP_TYPES:
+            pid = f"{pkg}-{chip}"
+            products.append({
+                "product_id": pid,
+                "product_name": f"{cfg['name']}-{CHIP_NAMES[chip]}",
+                "product_type": "成品",
+                "standard_cycle_time": round(cfg["steps"] * 0.08, 2),
+                "routing_steps": cfg["steps"],
+                "setup_group": pkg,
+                "unit_of_measure": "PCS"
+            })
+    return products
+
+# ============================================================================
+# 工艺路线和工序生成 (每个产品独立路线)
+# ============================================================================
+
+def generate_routes_and_steps() -> Tuple[List[Dict], List[Dict]]:
+    routes, steps = [], []
+    for pkg, cfg in PKG_CFG.items():
+        flow = build_flow(cfg)
+        for chip in CHIP_TYPES:
+            pid = f"{pkg}-{chip}"
+            rid = f"RT-{pid}-v1"
+            routes.append({
+                "route_id": rid,
+                "product_id": pid,
+                "route_name": f"{cfg['name']}标准工艺-{CHIP_NAMES[chip]}",
+                "version": "v1.0",
+                "is_active": True
+            })
+            seq = 10
+            for code in flow:
+                wc, time, yield_rate = PT[code]
+                sid = f"STEP-{pid}-{seq:03d}"
+                optype = "检验" if code in ("AOI","VISUAL","XRAY","SAM","CP","DC","AC","FUNC","BI","BIT","FINAL","SYS","OQC") else "加工"
+                steps.append({
+                    "step_id": sid,
+                    "route_id": rid,
+                    "sequence_no": seq,
+                    "step_name": f"{code}-{seq}",
+                    "operation_type": optype,
+                    "standard_time_hours": time,
+                    "machine_type_required": wc,
+                    "setup_time_minutes": 20,
+                    "material_ready_offset_hours": 1.0,
+                    "yield_rate_standard": yield_rate,
+                    "wait_time_hours": 0.0,
+                    "transport_time_hours": 0.0,
+                    "min_batch_qty": 25,
+                    "max_batch_qty": 100,
+                })
+                seq += 10
+    return routes, steps
+
+# ============================================================================
+# BOM生成 (2-3层)
+# ============================================================================
+
+def _bom_l1(pkg: str, chip: str, cfg: dict) -> List[Dict]:
+    """BOM第1层：成品直接用料 + 第2层：基板/框架组成材料"""
+    pid = f"{pkg}-{chip}"
+    boms = []
+    # === 第1层：成品直接用料 ===
+    # Die
+    boms.append({"bom_id": f"BOM-{pid}-DIE", "product_id": pid, "material_id": f"MAT-DIE-{pkg}",
+                 "step_id": f"STEP-{pid}-060", "quantity_per_unit": 1.0, "is_critical": True,
+                 "consumption_pattern": "工序开始时消耗"})
+    # Substrate/Leadframe
+    sub_mat = f"MAT-SUB-{pkg}" if pkg in ("BGA","WLCSP","FANOUT","LGA","CSP","SIP") else f"MAT-LF-{pkg}"
+    boms.append({"bom_id": f"BOM-{pid}-SUB", "product_id": pid, "material_id": sub_mat,
+                 "step_id": f"STEP-{pid}-060", "quantity_per_unit": 1.0, "is_critical": True,
+                 "consumption_pattern": "工序开始时消耗"})
+    # EMC塑封料
+    boms.append({"bom_id": f"BOM-{pid}-EMC", "product_id": pid, "material_id": f"MAT-EMC-{pkg}",
+                 "step_id": f"STEP-{pid}-100", "quantity_per_unit": 2.0, "is_critical": True,
+                 "consumption_pattern": "按比例消耗"})
+    # Ball/Solder (仅部分封装)
+    if cfg["ball"]:
+        boms.append({"bom_id": f"BOM-{pid}-BALL", "product_id": pid, "material_id": f"MAT-BALL-{pkg}",
+                     "step_id": f"STEP-{pid}-120", "quantity_per_unit": 50.0, "is_critical": True,
+                     "consumption_pattern": "工序开始时消耗"})
+    # Wire (仅需要键合的)
+    if cfg["bond"] > 0:
+        boms.append({"bom_id": f"BOM-{pid}-WIRE", "product_id": pid, "material_id": f"MAT-WIRE-{pkg}",
+                     "step_id": f"STEP-{pid}-080", "quantity_per_unit": 0.5, "is_critical": True,
+                     "consumption_pattern": "按比例消耗"})
+    # Die Attach Paste (通用)
+    boms.append({"bom_id": f"BOM-{pid}-DA", "product_id": pid, "material_id": "MAT-DA-PASTE",
+                 "step_id": f"STEP-{pid}-060", "quantity_per_unit": 0.1, "is_critical": False,
+                 "consumption_pattern": "按比例消耗"})
+    # === 第2层：基板/引线框架的组成材料（虚拟层级，step_id=None表示外购件不绑定具体工序） ===
+    if pkg in ("BGA","WLCSP","FANOUT","LGA","CSP","SIP"):
+        boms.append({"bom_id": f"BOM-{pid}-CU", "product_id": pid, "material_id": "MAT-CU-FOIL",
+                     "step_id": None, "quantity_per_unit": 0.5, "is_critical": False,
+                     "consumption_pattern": "按比例消耗"})
+        boms.append({"bom_id": f"BOM-{pid}-RESIN", "product_id": pid, "material_id": "MAT-RESIN",
+                     "step_id": None, "quantity_per_unit": 0.3, "is_critical": False,
+                     "consumption_pattern": "按比例消耗"})
+        boms.append({"bom_id": f"BOM-{pid}-GF", "product_id": pid, "material_id": "MAT-GLASS-FIBER",
+                     "step_id": None, "quantity_per_unit": 0.2, "is_critical": False,
+                     "consumption_pattern": "按比例消耗"})
+    else:
+        boms.append({"bom_id": f"BOM-{pid}-CU", "product_id": pid, "material_id": "MAT-CU-FOIL",
+                     "step_id": None, "quantity_per_unit": 0.8, "is_critical": False,
+                     "consumption_pattern": "按比例消耗"})
+        boms.append({"bom_id": f"BOM-{pid}-RESIN", "product_id": pid, "material_id": "MAT-RESIN",
+                     "step_id": None, "quantity_per_unit": 0.1, "is_critical": False,
+                     "consumption_pattern": "按比例消耗"})
+    return boms
+
+def generate_boms() -> List[Dict]:
+    boms = []
+    for pkg, cfg in PKG_CFG.items():
+        for chip in CHIP_TYPES:
+            boms += _bom_l1(pkg, chip, cfg)
+    return boms
+
+# ============================================================================
+# 物料定义 (含BOM第2层原材料)
+# ============================================================================
+
+def generate_materials() -> List[Dict]:
+    materials = []
+    # 通用Die材料（按封装类型）
+    for pkg in PKG_CFG:
+        materials.append({"material_id": f"MAT-DIE-{pkg}", "material_name": f"{PKG_CFG[pkg]['name']}芯片Die",
+                          "material_type": "原材料", "unit_of_measure": "片", "safety_stock_level": 50.0,
+                          "reorder_point": 100.0, "lot_size": 200.0, "eoq": 150.0})
+    # 基板/引线框架
+    for pkg in PKG_CFG:
+        if pkg in ("BGA","WLCSP","FANOUT","LGA","CSP","SIP"):
+            materials.append({"material_id": f"MAT-SUB-{pkg}", "material_name": f"{PKG_CFG[pkg]['name']}基板",
+                              "material_type": "原材料", "unit_of_measure": "片", "safety_stock_level": 40.0,
+                              "reorder_point": 80.0, "lot_size": 150.0, "eoq": 120.0})
+        else:
+            materials.append({"material_id": f"MAT-LF-{pkg}", "material_name": f"{PKG_CFG[pkg]['name']}引线框架",
+                              "material_type": "原材料", "unit_of_measure": "片", "safety_stock_level": 40.0,
+                              "reorder_point": 80.0, "lot_size": 150.0, "eoq": 120.0})
+    # EMC塑封料
+    for pkg in PKG_CFG:
+        materials.append({"material_id": f"MAT-EMC-{pkg}", "material_name": f"{PKG_CFG[pkg]['name']}塑封料EMC",
+                          "material_type": "原材料", "unit_of_measure": "KG", "safety_stock_level": 30.0,
+                          "reorder_point": 60.0, "lot_size": 100.0, "eoq": 80.0})
+    # 锡球
+    for pkg in ("BGA","WLCSP","FANOUT","CSP","SIP"):
+        materials.append({"material_id": f"MAT-BALL-{pkg}", "material_name": f"{PKG_CFG[pkg]['name']}锡球",
+                          "material_type": "原材料", "unit_of_measure": "KPCS", "safety_stock_level": 20.0,
+                          "reorder_point": 40.0, "lot_size": 80.0, "eoq": 60.0})
+    # 金线/铜线
+    for pkg in ("BGA","QFN","SOP","QFP","SIP","LGA","CSP","SOT"):
+        materials.append({"material_id": f"MAT-WIRE-{pkg}", "material_name": f"{PKG_CFG[pkg]['name']}键合线",
+                          "material_type": "原材料", "unit_of_measure": "米", "safety_stock_level": 500.0,
+                          "reorder_point": 1000.0, "lot_size": 2000.0, "eoq": 1500.0})
+    # 通用材料
+    materials.append({"material_id": "MAT-DA-PASTE", "material_name": "贴片银浆",
+                      "material_type": "辅料", "unit_of_measure": "G", "safety_stock_level": 200.0,
+                      "reorder_point": 400.0, "lot_size": 800.0, "eoq": 600.0})
+    # BOM第2层：基板原材料
+    materials += [
+        {"material_id": "MAT-CU-FOIL", "material_name": "电解铜箔", "material_type": "原材料",
+         "unit_of_measure": "平米", "safety_stock_level": 100.0, "reorder_point": 200.0, "lot_size": 500.0, "eoq": 400.0},
+        {"material_id": "MAT-RESIN", "material_name": "环氧树脂", "material_type": "原材料",
+         "unit_of_measure": "KG", "safety_stock_level": 100.0, "reorder_point": 200.0, "lot_size": 500.0, "eoq": 400.0},
+        {"material_id": "MAT-GLASS-FIBER", "material_name": "玻纤布", "material_type": "原材料",
+         "unit_of_measure": "卷", "safety_stock_level": 50.0, "reorder_point": 100.0, "lot_size": 200.0, "eoq": 150.0},
+    ]
+    return materials
+
+MATERIALS = generate_materials()
+
+# ============================================================================
+# 工作中心和机台生成
 # ============================================================================
 
 WORK_CENTERS = [
-    {"work_center_id": "WC-CLEAN-01", "work_center_name": "清洗区", "work_center_type": "前道", "capacity_uom": "小时"},
-    {"work_center_id": "WC-LITHO-01", "work_center_name": "光刻区", "work_center_type": "前道", "capacity_uom": "小时"},
-    {"work_center_id": "WC-ETCH-01", "work_center_name": "蚀刻区", "work_center_type": "前道", "capacity_uom": "小时"},
-    {"work_center_id": "WC-ASSY-01", "work_center_name": "封装组装区", "work_center_type": "后道", "capacity_uom": "小时"},
-    {"work_center_id": "WC-TEST-01", "work_center_name": "测试区", "work_center_type": "后道", "capacity_uom": "小时"},
+    {"work_center_id": "WC-RECV",     "work_center_name": "来料接收",       "work_center_type": "接收", "capacity_uom": "小时"},
+    {"work_center_id": "WC-GRIND",    "work_center_name": "晶圆研磨",       "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-DICE",     "work_center_name": "晶圆切割",       "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-DA",       "work_center_name": "Die Attach",     "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-WB",       "work_center_name": "引线键合",       "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-FC",       "work_center_name": "倒装焊",         "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-RDL",      "work_center_name": "RDL重构",        "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-MOLD",     "work_center_name": "塑封成型",       "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-PMC",      "work_center_name": "后固化",         "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-MARK",     "work_center_name": "激光打标",       "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-BALL",     "work_center_name": "植球回流",       "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-SING",     "work_center_name": "切割分选",       "work_center_type": "加工", "capacity_uom": "小时"},
+    {"work_center_id": "WC-AOI",      "work_center_name": "光学检测",       "work_center_type": "检验", "capacity_uom": "小时"},
+    {"work_center_id": "WC-VISUAL",   "work_center_name": "外观检查",       "work_center_type": "检验", "capacity_uom": "小时"},
+    {"work_center_id": "WC-XRAY",     "work_center_name": "X-Ray检测",      "work_center_type": "检验", "capacity_uom": "小时"},
+    {"work_center_id": "WC-SAM",      "work_center_name": "超声波扫描",     "work_center_type": "检验", "capacity_uom": "小时"},
+    {"work_center_id": "WC-TEST-CP",  "work_center_name": "CP测试站",       "work_center_type": "测试", "capacity_uom": "小时"},
+    {"work_center_id": "WC-TEST-FT",  "work_center_name": "最终测试站",     "work_center_type": "测试", "capacity_uom": "小时"},
+    {"work_center_id": "WC-TEST-BI",  "work_center_name": "老化测试站",     "work_center_type": "测试", "capacity_uom": "小时"},
+    {"work_center_id": "WC-TEST-SYS", "work_center_name": "系统测试站",     "work_center_type": "测试", "capacity_uom": "小时"},
+    {"work_center_id": "WC-CLEAN",    "work_center_name": "清洗站",         "work_center_type": "辅助", "capacity_uom": "小时"},
+    {"work_center_id": "WC-BAKE",     "work_center_name": "烘烤站",         "work_center_type": "辅助", "capacity_uom": "小时"},
+    {"work_center_id": "WC-WAIT",     "work_center_name": "暂存区",         "work_center_type": "辅助", "capacity_uom": "小时"},
+    {"work_center_id": "WC-TRANS",    "work_center_name": "转运站",         "work_center_type": "辅助", "capacity_uom": "小时"},
+    {"work_center_id": "WC-PACK",     "work_center_name": "包装出货",       "work_center_type": "出货", "capacity_uom": "小时"},
 ]
 
-MACHINES = [
-    # 清洗区 1台
-    {"machine_id": "MAC-001", "machine_name": "超声波清洗机001", "machine_type": "清洗设备", "work_center_id": "WC-CLEAN-01", "max_capacity_per_hour": 120, "status": "在线"},
-    
-    # 光刻区 1台（A产品首选）
-    {"machine_id": "MAC-002", "machine_name": "步进光刻机002", "machine_type": "光刻设备", "work_center_id": "WC-LITHO-01", "max_capacity_per_hour": 60, "status": "在线"},
-    
-    # 蚀刻区 1台（B产品专用）
-    {"machine_id": "MAC-003", "machine_name": "ICP蚀刻机003", "machine_type": "蚀刻设备", "work_center_id": "WC-ETCH-01", "max_capacity_per_hour": 50, "status": "在线"},
-    
-    # 封装区 2台（通用，001和002的类比）
-    {"machine_id": "MAC-004", "machine_name": "自动贴片机004", "machine_type": "贴片设备", "work_center_id": "WC-ASSY-01", "max_capacity_per_hour": 80, "status": "在线"},
-    {"machine_id": "MAC-005", "machine_name": "高精度贴片机005", "machine_type": "贴片设备", "work_center_id": "WC-ASSY-01", "max_capacity_per_hour": 70, "status": "在线"},
-    
-    # 测试区 1台
-    {"machine_id": "MAC-006", "machine_name": "ATE测试机006", "machine_type": "测试设备", "work_center_id": "WC-TEST-01", "max_capacity_per_hour": 100, "status": "在线"},
-]
+# 机台：根据瓶颈分析优化配置（从145台优化到96台）
+MACHINE_CFG = {
+    "WC-RECV":     2,  # 3→2（负荷4%，减1台）
+    "WC-GRIND":    3,  # 4→3（负荷13%，减1台）
+    "WC-DICE":     4,  # 6→4（负荷适中，减2台）
+    "WC-DA":       5,  # 8→5（负荷3%，减3台）
+    "WC-WB":      12,  # 20→12（负荷5-25%，减8台）
+    "WC-FC":       3,  # 4→3（仅部分产品使用，减1台）
+    "WC-RDL":      3,  # 4→3（仅部分产品使用，减1台）
+    "WC-MOLD":     4,  # 保持不变（瓶颈工序之一）
+    "WC-PMC":      5,  # 4→5（单工序最长4h，增加1台）
+    "WC-MARK":     3,  # 4→3（单工序0.3h极快，减1台）
+    "WC-BALL":     3,  # 4→3（仅BGA/WLCSP使用，减1台）
+    "WC-SING":     4,  # 6→4（减2台）
+    "WC-AOI":      3,  # 4→3（减1台）
+    "WC-VISUAL":   4,  # 6→4（减2台）
+    "WC-XRAY":     2,  # 保持不变
+    "WC-SAM":      2,  # 保持不变
+    "WC-TEST-CP":  6,  # 10→6（负荷5%，减4台）
+    "WC-TEST-FT":  6,  # 12→6（负荷3%，减6台）
+    "WC-TEST-BI":  4,  # 6→4（减2台）
+    "WC-TEST-SYS": 3,  # 4→3（减1台）
+    "WC-CLEAN":    4,  # 6→4（减2台）
+    "WC-BAKE":     6,  # 4→6（负荷50-75%，增加2台）
+    "WC-WAIT":     6,  # 8→6（排队由排程算法管理，减2台）
+    "WC-TRANS":    4,  # 6→4（减2台）
+    "WC-PACK":     3,  # 4→3（减1台）
+}
+
+def generate_machines() -> List[Dict]:
+    machines = []
+    for wc_id, count in MACHINE_CFG.items():
+        for i in range(1, count + 1):
+            mid = f"{wc_id}-{i:02d}"
+            machines.append({
+                "machine_id": mid,
+                "machine_name": f"机台-{mid}",
+                "machine_type": "自动",
+                "work_center_id": wc_id,
+                "max_capacity_per_hour": 100.0,
+                "status": "在线",
+                "is_active": True,
+            })
+    return machines
+
+MACHINES = generate_machines()
 
 # ============================================================================
-# 机台能力矩阵
+# 机台能力矩阵 (程序化生成)
 # ============================================================================
 
-MACHINE_CAPABILITIES = [
-    # MAC-001 清洗机（通用）
-    {"capability_id": "MC-001-A", "machine_id": "MAC-001", "product_id": "PROD-A", "efficiency_factor": 1.0, "setup_time_minutes": 15, "yield_rate": 0.99, "is_preferred": True, "rated_speed_per_hour": 120},
-    {"capability_id": "MC-001-B", "machine_id": "MAC-001", "product_id": "PROD-B", "efficiency_factor": 1.0, "setup_time_minutes": 15, "yield_rate": 0.99, "is_preferred": True, "rated_speed_per_hour": 120},
-    
-    # MAC-002 光刻机（A产品效率高，B也能做但效率低）
-    {"capability_id": "MC-002-A", "machine_id": "MAC-002", "product_id": "PROD-A", "efficiency_factor": 1.2, "setup_time_minutes": 30, "yield_rate": 0.97, "is_preferred": True, "rated_speed_per_hour": 72},
-    {"capability_id": "MC-002-B", "machine_id": "MAC-002", "product_id": "PROD-B", "efficiency_factor": 0.8, "setup_time_minutes": 45, "yield_rate": 0.94, "is_preferred": False, "rated_speed_per_hour": 48},
-    
-    # MAC-003 蚀刻机（B产品效率高，A也能做但效率低）
-    {"capability_id": "MC-003-A", "machine_id": "MAC-003", "product_id": "PROD-A", "efficiency_factor": 0.9, "setup_time_minutes": 40, "yield_rate": 0.95, "is_preferred": False, "rated_speed_per_hour": 45},
-    {"capability_id": "MC-003-B", "machine_id": "MAC-003", "product_id": "PROD-B", "efficiency_factor": 1.3, "setup_time_minutes": 45, "yield_rate": 0.96, "is_preferred": True, "rated_speed_per_hour": 65},
-    
-    # MAC-004 贴片机（A效率高）
-    {"capability_id": "MC-004-A", "machine_id": "MAC-004", "product_id": "PROD-A", "efficiency_factor": 1.1, "setup_time_minutes": 20, "yield_rate": 0.98, "is_preferred": True, "rated_speed_per_hour": 88},
-    {"capability_id": "MC-004-B", "machine_id": "MAC-004", "product_id": "PROD-B", "efficiency_factor": 0.9, "setup_time_minutes": 30, "yield_rate": 0.96, "is_preferred": False, "rated_speed_per_hour": 72},
-    
-    # MAC-005 贴片机（B效率高）
-    {"capability_id": "MC-005-A", "machine_id": "MAC-005", "product_id": "PROD-A", "efficiency_factor": 0.85, "setup_time_minutes": 25, "yield_rate": 0.97, "is_preferred": False, "rated_speed_per_hour": 59.5},
-    {"capability_id": "MC-005-B", "machine_id": "MAC-005", "product_id": "PROD-B", "efficiency_factor": 1.25, "setup_time_minutes": 25, "yield_rate": 0.98, "is_preferred": True, "rated_speed_per_hour": 87.5},
-    
-    # MAC-006 测试机（通用）
-    {"capability_id": "MC-006-A", "machine_id": "MAC-006", "product_id": "PROD-A", "efficiency_factor": 1.0, "setup_time_minutes": 10, "yield_rate": 0.99, "is_preferred": True, "rated_speed_per_hour": 100},
-    {"capability_id": "MC-006-B", "machine_id": "MAC-006", "product_id": "PROD-B", "efficiency_factor": 1.0, "setup_time_minutes": 10, "yield_rate": 0.98, "is_preferred": True, "rated_speed_per_hour": 100},
-    {"capability_id": "MC-006-C", "machine_id": "MAC-006", "product_id": "PROD-C", "efficiency_factor": 0.9, "setup_time_minutes": 20, "yield_rate": 0.97, "is_preferred": True, "rated_speed_per_hour": 90},
+def generate_capabilities() -> List[Dict]:
+    caps = []
+    for pkg, cfg in PKG_CFG.items():
+        for chip in CHIP_TYPES:
+            pid = f"{pkg}-{chip}"
+            for m in MACHINES:
+                mid = m["machine_id"]
+                wc = m["work_center_id"]
+                # 基础效率
+                base_eff = 0.95
+                # 根据封装类型与工作中心匹配度调整
+                if wc == "WC-WB" and cfg["bond"] > 0:
+                    base_eff = 1.0
+                elif wc == "WC-BALL" and cfg["ball"]:
+                    base_eff = 1.0
+                elif wc == "WC-RDL" and cfg["rdl"]:
+                    base_eff = 1.0
+                elif wc == "WC-TEST-CP" and cfg["test"] >= 4:
+                    base_eff = 1.05
+                elif wc == "WC-TEST-BI" and cfg["steps"] > 80:
+                    base_eff = 1.0
+                elif wc in ("WC-FC",) and cfg["bond"] == 0 and not cfg["rdl"]:
+                    base_eff = 0.5  # 不匹配
+                elif wc in ("WC-TRANS", "WC-WAIT", "WC-CLEAN", "WC-BAKE"):
+                    base_eff = 1.1  # 辅助站效率高
+                caps.append({
+                    "capability_id": f"MCAP-{mid}-{pid}",
+                    "machine_id": mid,
+                    "product_id": pid,
+                    "efficiency_factor": round(base_eff, 2),
+                    "yield_rate": round(0.95 + (hash(pid + mid) % 10) / 100, 2),
+                    "setup_time_minutes": 20,
+                    "is_preferred": base_eff >= 1.0,
+                    "rated_speed_per_hour": 100.0,
+                    "sample_count": 0,
+                })
+    return caps
 
-    # PROD-C 附加能力
-    {"capability_id": "MC-001-C", "machine_id": "MAC-001", "product_id": "PROD-C", "efficiency_factor": 0.95, "setup_time_minutes": 20, "yield_rate": 0.99, "is_preferred": True, "rated_speed_per_hour": 114},
-    {"capability_id": "MC-002-C", "machine_id": "MAC-002", "product_id": "PROD-C", "efficiency_factor": 1.1,  "setup_time_minutes": 60, "yield_rate": 0.95, "is_preferred": True, "rated_speed_per_hour": 66},
-    {"capability_id": "MC-003-C", "machine_id": "MAC-003", "product_id": "PROD-C", "efficiency_factor": 1.2,  "setup_time_minutes": 60, "yield_rate": 0.94, "is_preferred": True, "rated_speed_per_hour": 60},
-    {"capability_id": "MC-004-C", "machine_id": "MAC-004", "product_id": "PROD-C", "efficiency_factor": 0.85, "setup_time_minutes": 40, "yield_rate": 0.96, "is_preferred": False, "rated_speed_per_hour": 68},
-    {"capability_id": "MC-005-C", "machine_id": "MAC-005", "product_id": "PROD-C", "efficiency_factor": 1.0,  "setup_time_minutes": 40, "yield_rate": 0.97, "is_preferred": True, "rated_speed_per_hour": 70},
-]
+MACHINE_CAPABILITIES = generate_capabilities()
 
 # ============================================================================
-# 换线矩阵 SetupMatrix
+# 换线矩阵 (按Setup Group = 封装类型)
 # ============================================================================
 
-SETUP_MATRIX = [
-    # MAC-002 光刻机换线矩阵
-    {"matrix_id": "SM-002-AA", "machine_id": "MAC-002", "from_product_id": "PROD-A", "to_product_id": "PROD-A", "setup_time_minutes": 0, "setup_type": "无需换线"},
-    {"matrix_id": "SM-002-AB", "machine_id": "MAC-002", "from_product_id": "PROD-A", "to_product_id": "PROD-B", "setup_time_minutes": 45, "setup_type": "换模+校准"},
-    {"matrix_id": "SM-002-BA", "machine_id": "MAC-002", "from_product_id": "PROD-B", "to_product_id": "PROD-A", "setup_time_minutes": 35, "setup_type": "换模"},
-    {"matrix_id": "SM-002-BB", "machine_id": "MAC-002", "from_product_id": "PROD-B", "to_product_id": "PROD-B", "setup_time_minutes": 0, "setup_type": "无需换线"},
-    
-    # MAC-003 蚀刻机换线矩阵
-    {"matrix_id": "SM-003-AA", "machine_id": "MAC-003", "from_product_id": "PROD-A", "to_product_id": "PROD-A", "setup_time_minutes": 0, "setup_type": "无需换线"},
-    {"matrix_id": "SM-003-AB", "machine_id": "MAC-003", "from_product_id": "PROD-A", "to_product_id": "PROD-B", "setup_time_minutes": 40, "setup_type": "气体切换"},
-    {"matrix_id": "SM-003-BA", "machine_id": "MAC-003", "from_product_id": "PROD-B", "to_product_id": "PROD-A", "setup_time_minutes": 50, "setup_type": "气体切换+清洗"},
-    {"matrix_id": "SM-003-BB", "machine_id": "MAC-003", "from_product_id": "PROD-B", "to_product_id": "PROD-B", "setup_time_minutes": 0, "setup_type": "无需换线"},
-    
-    # MAC-004 贴片机换线矩阵
-    {"matrix_id": "SM-004-AA", "machine_id": "MAC-004", "from_product_id": "PROD-A", "to_product_id": "PROD-A", "setup_time_minutes": 0, "setup_type": "无需换线"},
-    {"matrix_id": "SM-004-AB", "machine_id": "MAC-004", "from_product_id": "PROD-A", "to_product_id": "PROD-B", "setup_time_minutes": 30, "setup_type": "吸嘴更换"},
-    {"matrix_id": "SM-004-BA", "machine_id": "MAC-004", "from_product_id": "PROD-B", "to_product_id": "PROD-A", "setup_time_minutes": 25, "setup_type": "吸嘴更换"},
-    {"matrix_id": "SM-004-BB", "machine_id": "MAC-004", "from_product_id": "PROD-B", "to_product_id": "PROD-B", "setup_time_minutes": 0, "setup_type": "无需换线"},
-    
-    # MAC-005 贴片机换线矩阵
-    {"matrix_id": "SM-005-AA", "machine_id": "MAC-005", "from_product_id": "PROD-A", "to_product_id": "PROD-A", "setup_time_minutes": 0,  "setup_type": "无需换线"},
-    {"matrix_id": "SM-005-AB", "machine_id": "MAC-005", "from_product_id": "PROD-A", "to_product_id": "PROD-B", "setup_time_minutes": 35, "setup_type": "吸嘴更换+校准"},
-    {"matrix_id": "SM-005-BA", "machine_id": "MAC-005", "from_product_id": "PROD-B", "to_product_id": "PROD-A", "setup_time_minutes": 30, "setup_type": "吸嘴更换"},
-    {"matrix_id": "SM-005-BB", "machine_id": "MAC-005", "from_product_id": "PROD-B", "to_product_id": "PROD-B", "setup_time_minutes": 0,  "setup_type": "无需换线"},
+def generate_setup_matrix() -> List[Dict]:
+    """生成换线矩阵（按setup_group级别，为关键机台生成）"""
+    matrix = []
+    groups = list(PKG_CFG.keys())
+    # 每个setup_group的代表产品（用CPU芯片）
+    rep = {g: f"{g}-CPU" for g in groups}
+    # 不需要换线的辅助站
+    no_setup_wc = {"WC-RECV","WC-CLEAN","WC-BAKE","WC-WAIT","WC-TRANS","WC-PACK","WC-AOI","WC-XRAY","WC-SAM","WC-VISUAL","WC-TEST-CP","WC-TEST-FT","WC-TEST-BI","WC-TEST-SYS"}
+    idx = 0
+    for m in MACHINES:
+        mid = m["machine_id"]
+        wc = m["work_center_id"]
+        if wc in no_setup_wc:
+            continue
+        for i, g1 in enumerate(groups):
+            for j, g2 in enumerate(groups):
+                if g1 == g2:
+                    t = 15
+                elif abs(i - j) <= 2:
+                    t = 30
+                else:
+                    t = 60
+                matrix.append({
+                    "matrix_id": f"SM-{idx:05d}",
+                    "machine_id": mid,
+                    "from_product_id": rep[g1],
+                    "to_product_id": rep[g2],
+                    "setup_time_minutes": t,
+                    "setup_type": "换模",
+                    "is_active": True,
+                })
+                idx += 1
+    return matrix
 
-    # PROD-C 换线矩阵（岄频产品换线时间更长）
-    {"matrix_id": "SM-002-AC", "machine_id": "MAC-002", "from_product_id": "PROD-A", "to_product_id": "PROD-C", "setup_time_minutes": 75, "setup_type": "光居对测+全校准"},
-    {"matrix_id": "SM-002-CA", "machine_id": "MAC-002", "from_product_id": "PROD-C", "to_product_id": "PROD-A", "setup_time_minutes": 60, "setup_type": "幣片更换"},
-    {"matrix_id": "SM-002-BC", "machine_id": "MAC-002", "from_product_id": "PROD-B", "to_product_id": "PROD-C", "setup_time_minutes": 80, "setup_type": "光居对测+全校准"},
-    {"matrix_id": "SM-002-CB", "machine_id": "MAC-002", "from_product_id": "PROD-C", "to_product_id": "PROD-B", "setup_time_minutes": 70, "setup_type": "幣片更换"},
-    {"matrix_id": "SM-002-CC", "machine_id": "MAC-002", "from_product_id": "PROD-C", "to_product_id": "PROD-C", "setup_time_minutes": 0,  "setup_type": "无需换线"},
-    {"matrix_id": "SM-003-AC", "machine_id": "MAC-003", "from_product_id": "PROD-A", "to_product_id": "PROD-C", "setup_time_minutes": 70, "setup_type": "气体切换+清洗"},
-    {"matrix_id": "SM-003-CA", "machine_id": "MAC-003", "from_product_id": "PROD-C", "to_product_id": "PROD-A", "setup_time_minutes": 60, "setup_type": "气体切换"},
-    {"matrix_id": "SM-003-BC", "machine_id": "MAC-003", "from_product_id": "PROD-B", "to_product_id": "PROD-C", "setup_time_minutes": 55, "setup_type": "气体切换+公差调整"},
-    {"matrix_id": "SM-003-CB", "machine_id": "MAC-003", "from_product_id": "PROD-C", "to_product_id": "PROD-B", "setup_time_minutes": 50, "setup_type": "公差调整"},
-    {"matrix_id": "SM-003-CC", "machine_id": "MAC-003", "from_product_id": "PROD-C", "to_product_id": "PROD-C", "setup_time_minutes": 0,  "setup_type": "无需换线"},
-    {"matrix_id": "SM-004-AC", "machine_id": "MAC-004", "from_product_id": "PROD-A", "to_product_id": "PROD-C", "setup_time_minutes": 50, "setup_type": "吸嘴更换+校准"},
-    {"matrix_id": "SM-004-CA", "machine_id": "MAC-004", "from_product_id": "PROD-C", "to_product_id": "PROD-A", "setup_time_minutes": 45, "setup_type": "吸嘴更换"},
-    {"matrix_id": "SM-004-BC", "machine_id": "MAC-004", "from_product_id": "PROD-B", "to_product_id": "PROD-C", "setup_time_minutes": 55, "setup_type": "吸嘴更换+校准"},
-    {"matrix_id": "SM-004-CB", "machine_id": "MAC-004", "from_product_id": "PROD-C", "to_product_id": "PROD-B", "setup_time_minutes": 50, "setup_type": "吸嘴更换"},
-    {"matrix_id": "SM-004-CC", "machine_id": "MAC-004", "from_product_id": "PROD-C", "to_product_id": "PROD-C", "setup_time_minutes": 0,  "setup_type": "无需换线"},
-    {"matrix_id": "SM-005-AC", "machine_id": "MAC-005", "from_product_id": "PROD-A", "to_product_id": "PROD-C", "setup_time_minutes": 55, "setup_type": "吸嘴更换+校准"},
-    {"matrix_id": "SM-005-CA", "machine_id": "MAC-005", "from_product_id": "PROD-C", "to_product_id": "PROD-A", "setup_time_minutes": 48, "setup_type": "吸嘴更换"},
-    {"matrix_id": "SM-005-BC", "machine_id": "MAC-005", "from_product_id": "PROD-B", "to_product_id": "PROD-C", "setup_time_minutes": 50, "setup_type": "吸嘴更换+校准"},
-    {"matrix_id": "SM-005-CB", "machine_id": "MAC-005", "from_product_id": "PROD-C", "to_product_id": "PROD-B", "setup_time_minutes": 45, "setup_type": "吸嘴更换"},
-    {"matrix_id": "SM-005-CC", "machine_id": "MAC-005", "from_product_id": "PROD-C", "to_product_id": "PROD-C", "setup_time_minutes": 0,  "setup_type": "无需换线"},
+SETUP_MATRIX = generate_setup_matrix()
+
+# ============================================================================
+# 班次定义
+# ============================================================================
+
+SHIFT_PATTERNS = [
+    {"shift_id": "SHIFT-DAY", "shift_name": "日班", "start_time": "08:00", "end_time": "20:00",
+     "available_hours": 12.0, "efficiency_factor": 1.0, "is_active": True},
+    {"shift_id": "SHIFT-NIGHT", "shift_name": "夜班", "start_time": "20:00", "end_time": "08:00",
+     "available_hours": 12.0, "efficiency_factor": 0.92, "is_active": True},
 ]
 
 # ============================================================================
@@ -311,112 +540,132 @@ SETUP_MATRIX = [
 # ============================================================================
 
 SUPPLIERS = [
-    {"supplier_id": "SUP-001", "supplier_name": "晶圆科技(苏州)", "supplier_type": "直供", "avg_lead_time_days": 3, "reliability_score": 0.95, "min_order_quantity": 50.0,
-     "lead_time_stddev_days": 0.5},   # P0-3: 交期标准差（扩张属）
-    {"supplier_id": "SUP-002", "supplier_name": "新材料贸易(深圳)", "supplier_type": "代理商", "avg_lead_time_days": 5, "reliability_score": 0.88, "min_order_quantity": 30.0,
-     "lead_time_stddev_days": 1.5},   # P0-3: 代理商交期波动更大
-    {"supplier_id": "SUP-003", "supplier_name": "TechMat国际(进口)", "supplier_type": "进口商", "avg_lead_time_days": 15, "reliability_score": 0.80, "min_order_quantity": 20.0,
-     "lead_time_stddev_days": 3.0},   # 进口料交期长、波动大、风险高
+    {"supplier_id": "SUP-001", "supplier_name": "本地基板供应商", "supplier_type": "直供", "avg_lead_time_days": 3, "reliability_score": 0.95, "min_order_quantity": 100.0, "lead_time_stddev_days": 0.5},
+    {"supplier_id": "SUP-002", "supplier_name": "区域塑封料供应商", "supplier_type": "直供", "avg_lead_time_days": 5, "reliability_score": 0.88, "min_order_quantity": 50.0, "lead_time_stddev_days": 1.0},
+    {"supplier_id": "SUP-003", "supplier_name": "TechMat国际进口商", "supplier_type": "进口", "avg_lead_time_days": 15, "reliability_score": 0.80, "min_order_quantity": 200.0, "lead_time_stddev_days": 3.0},
+    {"supplier_id": "SUP-004", "supplier_name": "键合线供应商", "supplier_type": "直供", "avg_lead_time_days": 2, "reliability_score": 0.97, "min_order_quantity": 500.0, "lead_time_stddev_days": 0.3},
+    {"supplier_id": "SUP-005", "supplier_name": "锡球供应商", "supplier_type": "直供", "avg_lead_time_days": 4, "reliability_score": 0.92, "min_order_quantity": 50.0, "lead_time_stddev_days": 0.8},
 ]
 
-SUPPLIER_MATERIALS = [
-    # MAT-X 晶圆基板
-    {"sm_id": "SM-001-X", "supplier_id": "SUP-001", "material_id": "MAT-X", "unit_price": 150.0, "lead_time_days": 3, "min_order_qty": 50.0, "is_preferred": True},
-    {"sm_id": "SM-002-X", "supplier_id": "SUP-002", "material_id": "MAT-X", "unit_price": 135.0, "lead_time_days": 5, "min_order_qty": 30.0, "is_preferred": False},
-    
-    # MAT-Y 封装材料
-    {"sm_id": "SM-001-Y", "supplier_id": "SUP-001", "material_id": "MAT-Y", "unit_price": 80.0, "lead_time_days": 2, "min_order_qty": 40.0, "is_preferred": True},
-    
-    # MAT-Z 散热片
-    {"sm_id": "SM-002-Z", "supplier_id": "SUP-002", "material_id": "MAT-Z", "unit_price": 25.0, "lead_time_days": 4, "min_order_qty": 60.0, "is_preferred": True},
-    
-    # MAT-COMMON 通用溶剂
-    {"sm_id": "SM-001-C", "supplier_id": "SUP-001", "material_id": "MAT-COMMON", "unit_price": 15.0, "lead_time_days": 1, "min_order_qty": 100.0, "is_preferred": True},
+# ============================================================================
+# 供应商-物料关系
+# ============================================================================
 
-    # MAT-W RF射频胶（进口料）
-    {"sm_id": "SM-003-W", "supplier_id": "SUP-003", "material_id": "MAT-W", "unit_price": 320.0, "lead_time_days": 15, "min_order_qty": 20.0, "is_preferred": True},
-    {"sm_id": "SM-002-W", "supplier_id": "SUP-002", "material_id": "MAT-W", "unit_price": 380.0, "lead_time_days": 8,  "min_order_qty": 15.0, "is_preferred": False},
+def generate_supplier_materials() -> List[Dict]:
+    sms = []
+    # 基板由SUP-001供应
+    for pkg in ("BGA","WLCSP","FANOUT","LGA","CSP","SIP"):
+        sms.append({"sm_id": f"SM-001-{pkg}", "supplier_id": "SUP-001", "material_id": f"MAT-SUB-{pkg}",
+                    "unit_price": 2.5, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": True})
+    # 引线框架由SUP-001供应
+    for pkg in ("QFN","SOP","QFP","SOT"):
+        sms.append({"sm_id": f"SM-001-LF-{pkg}", "supplier_id": "SUP-001", "material_id": f"MAT-LF-{pkg}",
+                    "unit_price": 1.5, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": True})
+    # 塑封料由SUP-002供应
+    for pkg in PKG_CFG:
+        sms.append({"sm_id": f"SM-002-{pkg}", "supplier_id": "SUP-002", "material_id": f"MAT-EMC-{pkg}",
+                    "unit_price": 8.0, "lead_time_days": 5, "min_order_qty": 50.0, "is_preferred": True})
+    # 进口Die由SUP-003供应
+    for pkg in PKG_CFG:
+        sms.append({"sm_id": f"SM-003-DIE-{pkg}", "supplier_id": "SUP-003", "material_id": f"MAT-DIE-{pkg}",
+                    "unit_price": 15.0, "lead_time_days": 15, "min_order_qty": 200.0, "is_preferred": True})
+    # 键合线由SUP-004供应
+    for pkg in ("BGA","QFN","SOP","QFP","SIP","LGA","CSP","SOT"):
+        sms.append({"sm_id": f"SM-004-WIRE-{pkg}", "supplier_id": "SUP-004", "material_id": f"MAT-WIRE-{pkg}",
+                    "unit_price": 0.05, "lead_time_days": 2, "min_order_qty": 500.0, "is_preferred": True})
+    # 锡球由SUP-005供应
+    for pkg in ("BGA","WLCSP","FANOUT","CSP","SIP"):
+        sms.append({"sm_id": f"SM-005-BALL-{pkg}", "supplier_id": "SUP-005", "material_id": f"MAT-BALL-{pkg}",
+                    "unit_price": 0.02, "lead_time_days": 4, "min_order_qty": 50.0, "is_preferred": True})
+    # 贴片银浆
+    sms.append({"sm_id": "SM-001-DA", "supplier_id": "SUP-001", "material_id": "MAT-DA-PASTE",
+                "unit_price": 0.5, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": True})
+    return sms
 
-    # MAT-V 导电銀浆（进口料）
-    {"sm_id": "SM-003-V", "supplier_id": "SUP-003", "material_id": "MAT-V", "unit_price": 450.0, "lead_time_days": 15, "min_order_qty": 20.0, "is_preferred": True},
-]
+SUPPLIER_MATERIALS = generate_supplier_materials()
+
+# ============================================================================
+# 替代料关系
+# ============================================================================
 
 MATERIAL_SUBSTITUTES = [
-    {"ms_id": "MS-001", "material_id": "MAT-X", "substitute_material_id": "MAT-Y", "substitute_priority": 2, "quality_grade": "降规使用", "approval_status": "客户批准", "cost_delta_percent": -10.0},
-]
-
-# ============================================================================
-# 班次定义
-# ============================================================================
-
-SHIFT_PATTERNS = [
-    {"shift_id": "SHIFT-DAY", "shift_name": "白班", "start_time": "08:00", "end_time": "20:00", "available_hours": 12.0, "efficiency_factor": 1.0},
-    {"shift_id": "SHIFT-NIGHT", "shift_name": "夜班", "start_time": "20:00", "end_time": "08:00", "available_hours": 12.0, "efficiency_factor": 0.92},
+    {"ms_id": "MS-001", "material_id": "MAT-DA-PASTE", "substitute_material_id": "MAT-DA-PASTE",
+     "substitute_priority": 1, "quality_grade": "同等级", "approval_status": "已批准", "cost_delta_percent": 0.0},
 ]
 
 # ============================================================================
 # 初始库存
 # ============================================================================
 
-INITIAL_INVENTORY = [
-    {"material_id": "MAT-X", "location": "原材料仓A", "total_quantity": 80.0, "available_quantity": 80.0, "reserved_quantity": 0.0},
-    {"material_id": "MAT-Y", "location": "原材料仓A", "total_quantity": 60.0, "available_quantity": 60.0, "reserved_quantity": 0.0},
-    {"material_id": "MAT-Z", "location": "原材料仓B", "total_quantity": 55.0, "available_quantity": 55.0, "reserved_quantity": 0.0},
-    {"material_id": "MAT-COMMON", "location": "辅料仓",  "total_quantity": 250.0, "available_quantity": 250.0, "reserved_quantity": 0.0},
-    {"material_id": "MAT-W", "location": "进口料仓",  "total_quantity": 25.0, "available_quantity": 25.0, "reserved_quantity": 0.0},
-    {"material_id": "MAT-V", "location": "进口料仓",  "total_quantity": 30.0, "available_quantity": 30.0, "reserved_quantity": 0.0},
-]
+def generate_initial_inventory() -> List[Dict]:
+    inv = []
+    for m in MATERIALS:
+        mid = m["material_id"]
+        qty = m.get("safety_stock_level", 50.0) * 2
+        loc = "原材料仓A" if "SUB" in mid or "LF" in mid or "DIE" in mid else "原材料仓B" if "EMC" in mid else "辅料仓" if "PASTE" in mid else "进口料仓" if "BALL" in mid or "WIRE" in mid else "通用仓"
+        inv.append({"material_id": mid, "location": loc, "total_quantity": qty,
+                    "available_quantity": qty, "reserved_quantity": 0.0})
+    return inv
+
+INITIAL_INVENTORY = generate_initial_inventory()
 
 # ============================================================================
 # 仿真参数
 # ============================================================================
 
 SIMULATION_CONFIG = {
-    "duration_days": 60,
+    "duration_days": 120,
+    "start_date": "2026-04-01 08:00:00",  # 仿真开始时间（ISO格式）
     "day_start_hour": 8,
     "day_end_hour": 20,
-    "order_arrival_lambda": 2.5,  # 每天平均2.5个客户订单（泊松分布）
+    "order_arrival_lambda": 3.0,  # 每天平均3个客户订单（泊松分布）
     "order_quantity_min": 5,
     "order_quantity_max": 80,
-    "lead_time_commitment_days": 7,  # 承诺交期（客户下单后7天交付）
-    "wip_lot_size": 25,  # 每个Lot 25片
-    "maintenance_frequency_hours": 168,  # 每周维护一次
+    "lead_time_commitment_days": 7,
+    "wip_lot_size": 25,  # Lot批量大小（25个芯片/批）
+    # Lot批量加工配置（贴合OSAT真实生产模式）
+    "batch_process_steps": ["BI", "BAKE", "CURE", "DRY"],  # 批量并行工序代码
+    "batch_capacity": {  # 各批量工序的并行容量（芯片数）
+        "WC-TEST-BI": 1000,  # 老化炉一次1000芯片
+        "WC-BAKE": 200,      # 烘烤炉一次200芯片
+        "WC-DA": 100,        # 固化工位一次100芯片
+    },
+    "setup_skip_same_group": True,  # 同封装类型连续生产免换线
+    "flow_merge_enabled": True,  # 工序流合并开关（减少辅助工序排队）
+    "flow_merge_groups": [  # 可合并的工序段
+        ["RECV", "GRIND", "DICE"],  # 前段合并
+        ["CLEAN", "TRANS", "WAIT"],  # 辅助工序合并
+    ],
+    "maintenance_frequency_hours": 168,
     "maintenance_duration_hours": 4,
-    # P2-11: 安全库存补4小时检查一次
     "safety_stock_check_interval_hours": 4,
-    # P1-8: 排程算法参数
-    "setup_cost_weight": 2.0,       # 换线成本权重（相对于1小时加工时间）
-    "critical_ratio_threshold": 1.1, # 关键比阈値（<1.1访紧急处理）
-    # P2-12: CTP产能负荷参数
-    "ctp_capacity_buffer": 0.15,    # 产能缓冲系数（15%保留给算法排程不确定性）
-    # Task3: 机台随机故障参数
-    "breakdown_mtbf_hours": 96,    # 平均无故障时间(MTBF)
-    "breakdown_mttr_hours": 4,     # 平均修复时间(MTTR)
-    "breakdown_probability": 0.70, # 机台产生随机故障的基础概率
-    # Task5: 订单取消参数
-    "order_cancel_daily_prob": 0.20,         # 每天对未开工订单的取消概率（20%确保场景触发）
-    # Task6: 分批到货参数
-    "split_delivery_prob": 0.30,             # 分批到货概率
-    # Task10: 订单优先级动态升级
-    "priority_escalation_daily_prob": 0.08,  # 每天紧急插单概率
+    "setup_cost_weight": 2.0,
+    "critical_ratio_threshold": 1.1,
+    "ctp_capacity_buffer": 0.15,
+    "breakdown_mtbf_hours": 240,  # MTBF 240h（10天），符合半导体设备实际
+    "breakdown_mttr_hours": 4,
+    "breakdown_probability": 0.70,
+    "order_cancel_daily_prob": 0.20,
+    "split_delivery_prob": 0.30,
+    "priority_escalation_daily_prob": 0.08,
 }
 
+# ============================================================================
+# 日历生成
+# ============================================================================
 
 def generate_work_calendar(start_date: datetime, days: int) -> List[Dict]:
-    """生成班次日历（简化：周一到周六工作，周日休息）"""
     calendar = []
     shift_ids = ["SHIFT-DAY", "SHIFT-NIGHT"]
-    work_centers = [wc["work_center_id"] for wc in WORK_CENTERS]
-    
+    wc_ids = [wc["work_center_id"] for wc in WORK_CENTERS]
     for i in range(days):
         date = (start_date + timedelta(days=i)).date()
-        is_workday = date.weekday() < 6  # 周一到周六工作
-        
-        for wc_id in work_centers:
+        is_workday = date.weekday() < 6
+        for wc_id in wc_ids:
             for shift_id in shift_ids:
-                cal_id = f"CAL-{date.strftime('%Y%m%d')}-{wc_id}-{shift_id}"
+                cid = f"CAL-{date.strftime('%Y%m%d')}-{wc_id}-{shift_id}"
                 calendar.append({
-                    "calendar_id": cal_id,
+                    "calendar_id": cid,
                     "calendar_date": date,
                     "work_center_id": wc_id,
                     "shift_id": shift_id,
@@ -426,3 +675,11 @@ def generate_work_calendar(start_date: datetime, days: int) -> List[Dict]:
                     "note": "周末休息" if not is_workday else None
                 })
     return calendar
+
+# ============================================================================
+# 主数据导出
+# ============================================================================
+
+PRODUCTS = generate_products()
+PROCESS_ROUTES, ROUTE_STEPS = generate_routes_and_steps()
+BOMS = generate_boms()

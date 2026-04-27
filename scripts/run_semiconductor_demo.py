@@ -105,7 +105,7 @@ def insert_static_data(db: SimulationDBWriter):
     print(f"  - 班次: {db.count_records('shift_pattern')} 条")
     
     # 班次日历（30天）
-    start_date = datetime(2026, 4, 1)
+    start_date = datetime.fromisoformat(SIMULATION_CONFIG['start_date'].split(' ')[0])  # 只取日期部分
     calendars = generate_work_calendar(start_date, SIMULATION_CONFIG["duration_days"])
     db.bulk_insert("work_calendar", calendars)
     print(f"  - 班次日历: {db.count_records('work_calendar')} 条")
@@ -164,6 +164,15 @@ def init_simulation_state(sim: FactorySimulation, db: SimulationDBWriter):
         sim.route_steps[r["route_id"]].append(r_dict)
         sim.route_steps_by_step_id[r["step_id"]] = r_dict
     print(f"  - 加载工序: {sum(len(v) for v in sim.route_steps.values())}")
+    
+    # Lot批量加工：构建step_id到工序代码的映射（从step_name提取，如"RECV-10" -> "RECV"）
+    for step_id, step in sim.route_steps_by_step_id.items():
+        step_name = step.get("step_name", "")
+        # step_name格式："RECV-10" 或 "WB-50"
+        if "-" in step_name:
+            step_code = step_name.split("-")[0]
+            sim.step_code_map[step_id] = step_code
+    print(f"  - 构建工序代码映射: {len(sim.step_code_map)}条")
     
     # 加载机台
     rows = db.query("SELECT * FROM machine")
@@ -224,9 +233,9 @@ def run_simulation(db: SimulationDBWriter):
     """运行DES仿真"""
     print("[3/4] 启动SimPy离散事件仿真...")
     print(f"  - 仿真周期: {SIMULATION_CONFIG['duration_days']} 天")
-    print(f"  - 开始时间: 2026-04-01 08:00")
+    print(f"  - 开始时间: {SIMULATION_CONFIG['start_date']}")
     
-    start_date = datetime(2026, 4, 1, 8, 0, 0)
+    start_date = datetime.fromisoformat(SIMULATION_CONFIG['start_date'])
     env = simpy.Environment()
     
     sim = FactorySimulation(env, db, start_date, SIMULATION_CONFIG)
@@ -590,7 +599,7 @@ def validate_data(db: SimulationDBWriter):
 
 def main():
     """主入口"""
-    db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data.db")
+    db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "semiconductor_data.db")
     print("=" * 70)
     print("  半导体制造业APS+MRP演示数据生成器")
     print("  Semiconductor Manufacturing Demo Data Generator")
