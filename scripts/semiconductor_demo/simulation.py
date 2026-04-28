@@ -28,6 +28,10 @@ import math
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
+from simulation_logger import get_simulation_logger
+
+# 获取日志记录器
+logger = get_simulation_logger()
 
 
 def poisson_sample(lam: float) -> int:
@@ -560,7 +564,7 @@ class FactorySimulation:
         required_date = max(completion_date, committed_date)
         
         # 打印CTP分解（便于调试）
-        print(f"  [CTP计算] {product_id}×{qty}: 加工{total_process_hours:.1f}h + 排队{total_queue_hours:.1f}h + 换线{total_setup_hours:.1f}h + IPQC{total_ipqc_hours:.1f}h + 周日{sunday_delay:.1f}h = {total_hours:.1f}h ({total_hours/24:.1f}天)")
+        logger.debug(f"  [CTP计算] {product_id}×{qty}: 加工{total_process_hours:.1f}h + 排队{total_queue_hours:.1f}h + 换线{total_setup_hours:.1f}h + IPQC{total_ipqc_hours:.1f}h + 周日{sunday_delay:.1f}h = {total_hours:.1f}h ({total_hours/24:.1f}天)")
         
         return required_date
     
@@ -816,7 +820,7 @@ class FactorySimulation:
         # 【投入过量方案】根据工序总良率反推需要投入的数量
         planned_qty = self.calculate_required_input_qty(product_id, order_qty)
         
-        print(f"  [工单创建] {wo_id}: 订单{order_qty}个 → 计划投入{planned_qty:.1f}个（良率补偿）")
+        logger.info(f"  [工单创建] {wo_id}: 订单{order_qty}个 → 计划投入{planned_qty:.1f}个（良率补偿）")
 
         # P2-12: 用CTP估算计划完工日期（使用投入量计算）
         planned_completion = self.estimate_completion_date(product_id, planned_qty)
@@ -1034,7 +1038,7 @@ class FactorySimulation:
             yield self.wait_until_next_work_start()
             yield self.env.timeout(0.5)  # 8:30 运行MRP
 
-            print(f"[Day {self.get_sim_day()} 08:30] 运行MRP运算...")
+            logger.info(f"[Day {self.get_sim_day()} 08:30] 运行MRP运算...")
 
             # 获取所有待分配物料
             pending_woms = self.db.query_pending_woms()
@@ -1053,8 +1057,12 @@ class FactorySimulation:
 
             # 对仍缺料的创建采购订单（含EOQ策略）
             remaining_shortage = self.db.query_shortage_woms()
-            for wom in remaining_shortage:
-                self.create_purchase_order_for_shortage(wom)
+                    
+            # 【合并采购】按供应商分组，同一供应商的物料合并为一个PO
+            supplier_groups = self.group_shortage_by_supplier(remaining_shortage)
+                    
+            for supplier_id, shortage_list in supplier_groups.items():
+                self.create_merged_purchase_order(supplier_id, shortage_list)
 
             yield self.env.timeout(23.5)  # 等待到下一天
 
@@ -1133,8 +1141,8 @@ class FactorySimulation:
             # 【完整替代料策略】如果替代料库存不足，触发采购
             available = sub_inv["available"] if sub_inv else 0
             if available <= 0:
-                # 替代料也没库存，触发采购替代料
-                print(f"  [替代料缺料] {sub_mat_id}库存不足，触发采购")
+                # 替代料也没库存，创建缺料记录（由MRP主流程统一合并采购）
+                logger.info(f"  [替代料缺料] {sub_mat_id}库存不足，创建缺料记录")
                 sub_shortage_wom = {
                     "wom_id": self.next_id("WOM"),
                     "work_order_id": wo_id,
@@ -1149,7 +1157,7 @@ class FactorySimulation:
                     "note": f"替代{material_id}，需采购"
                 }
                 self.db.insert("work_order_material", sub_shortage_wom)
-                self.create_purchase_order_for_shortage(sub_shortage_wom)
+                # 不立即创建PO，而是让MRP主流程在查询shortage_woms时统一处理
                 continue
             
             use_qty = min(shortage_qty, available)
@@ -1194,7 +1202,7 @@ class FactorySimulation:
                 to_wo=wo_id, description=f"替代料{sub_mat_id}预留给工单{wo_id}"
             )
 
-            print(f"  [替代料] {material_id}→{sub_mat_id}: 工单{wo_id}, 数量={use_qty:.1f}, 剩余缺料={shortage_qty:.1f}")
+            logger.info(f"  [替代料] {material_id}→{sub_mat_id}: 工单{wo_id}, 数量={use_qty:.1f}, 剩余缺料={shortage_qty:.1f}")
 
             if shortage_qty <= 0:
                 break
@@ -1289,7 +1297,7 @@ class FactorySimulation:
             description=f"调拨{qty:.1f}{self.materials.get(material_id, {}).get('unit_of_measure', '')}从{from_wo}到{to_wo}"
         )
 
-        print(f"  [调拨] {material_id}: {from_wo} -> {to_wo}, 数量={qty:.1f}, 原因={reason}")
+        logger.info(f"  [调拨] {material_id}: {from_wo} -> {to_wo}, 数量={qty:.1f}, 原因={reason}")
     
     def get_supplier_performance_from_db(self, supplier_id: str) -> dict:
         """
@@ -1380,7 +1388,7 @@ class FactorySimulation:
         if wo_priority <= 2:
             # 选交期最短的供应商（即使不是主供应商）
             fastest = min(suppliers, key=lambda s: s.get("lead_time_days", 999))
-            print(f"  [紧急采购] {material_id}: 选{fastest['supplier_id']}（交期{fastest['lead_time_days']}天）")
+            logger.info(f"  [紧急采购] {material_id}: 选{fastest['supplier_id']}（交期{fastest['lead_time_days']}天）")
             return fastest
         
         # 策略2：检查供应商近期表现（从数据库查询）
@@ -1391,7 +1399,7 @@ class FactorySimulation:
             delay_count = perf.get("recent_delays", 0)
             if delay_count >= 3:  # 最近10次中延迟3次以上，标记为不可靠
                 unreliable_suppliers.add(sup_id)
-                print(f"  [供应商评估] {sup_id}: 最近10次交货延迟{delay_count}次，准时率{perf['on_time_rate']:.0%}")
+                logger.info(f"  [供应商评估] {sup_id}: 最近10次交货延迟{delay_count}次，准时率{perf['on_time_rate']:.0%}")
         
         # 过滤掉不可靠供应商（除非所有都不可靠）
         reliable_suppliers = [s for s in suppliers if s["supplier_id"] not in unreliable_suppliers]
@@ -1413,7 +1421,7 @@ class FactorySimulation:
                 supplier = backup[0]
                 strategy = "备选供应商（负载均衡）"
             
-            print(f"  [智能采购] {material_id}: 选{supplier['supplier_id']}（{strategy}）")
+            logger.info(f"  [智能采购] {material_id}: 选{supplier['supplier_id']}（{strategy}）")
             return supplier
         
         # 策略4：只有主供应商或只有备选供应商 → 选第一个
@@ -1422,92 +1430,182 @@ class FactorySimulation:
         
         return suppliers[0]
     
-    def create_purchase_order_for_shortage(self, wom: dict):
-        """P2-13: 为缺料创建采购订单（含EOQ批量策略）"""
-        material_id = wom["material_id"]
-        shortage_qty = wom.get("shortage_quantity", 0)
-        wom_id = wom["wom_id"]
-        wo_id = wom["work_order_id"]
-
-        if shortage_qty <= 0:
-            return
-
-        sms = self.supplier_materials.get(material_id, [])
-        if not sms:
+    def group_shortage_by_supplier(self, shortage_woms: list) -> dict:
+        """
+        按供应商分组缺料清单
+        
+        Returns:
+            {
+                'SUP-001': [wom1, wom2, ...],
+                'SUP-002': [wom3, wom4, ...]
+            }
+        """
+        supplier_groups = {}
+        
+        for wom in shortage_woms:
+            material_id = wom["material_id"]
+            sms = self.supplier_materials.get(material_id, [])
+            
+            if not sms:
+                continue
+            
+            # 智能选择供应商
+            supplier = self.select_supplier_smart(
+                material_id, 
+                sms, 
+                wom.get("shortage_quantity", 0),
+                wom.get("work_order_id", "")
+            )
+            
+            supplier_id = supplier["supplier_id"]
+            
+            if supplier_id not in supplier_groups:
+                supplier_groups[supplier_id] = []
+            
+            supplier_groups[supplier_id].append(wom)
+        
+        return supplier_groups
+    
+    def create_merged_purchase_order(self, supplier_id: str, shortage_list: list):
+        """
+        创建合并的采购订单（同一供应商的多个物料）
+        
+        Args:
+            supplier_id: 供应商ID
+            shortage_list: 缺料清单 [{material_id, shortage_quantity, wom_id, work_order_id, ...}]
+        """
+        if not shortage_list:
             return
         
-        # 【完整供应商策略】智能选择供应商（替换原简单逻辑）
-        supplier = self.select_supplier_smart(material_id, sms, shortage_qty, wo_id)
-
-        # P2-13: EOQ批量策略
-        mat_info = self.materials.get(material_id, {})
-        eoq = mat_info.get("eoq", 0.0)
-        min_order = supplier.get("min_order_qty", shortage_qty)
-
-        if eoq > 0:
-            # 取EOQ和缺料量的较大者，再对齐到min_order_qty整数倍
-            base_qty = max(shortage_qty, eoq)
-            if min_order > 0:
-                po_qty = math.ceil(base_qty / min_order) * min_order
-            else:
-                po_qty = base_qty
-        else:
-            po_qty = max(shortage_qty, min_order)
-
-        # P0-3: 供应商可靠性扰动（正态分布交期）
-        lead_time_mean = supplier.get("lead_time_days", 3)
-        lead_time_std = supplier.get("lead_time_stddev_days", 0.5)
-        # 可靠性影响：不可靠供应商偶发性延迟（5%概率额外延迟1-3天）
-        actual_lead = normal_sample(lead_time_mean, lead_time_std, min_val=1.0)
-        reliability = supplier.get("reliability_score", 0.95)
-        if random.random() > reliability:
-            extra_delay = random.randint(1, 3)
-            actual_lead += extra_delay
-            print(f"  [供应商扰动] {supplier['supplier_id']} 延迟{extra_delay}天, 实际交期={actual_lead:.1f}天")
-
+        # 获取供应商信息（从第一个物料的供应商物料关系中获取）
+        first_material = shortage_list[0]["material_id"]
+        sms_list = self.supplier_materials.get(first_material, [])
+        supplier = next((sm for sm in sms_list if sm["supplier_id"] == supplier_id), None)
+        
+        if not supplier:
+            return
+        
+        # 创建PO主单
         po_id = self.next_id("PO")
         now_dt = self.sim_time_to_datetime(self.env.now)
-        expected_delivery = now_dt + timedelta(days=actual_lead)
-
+        
+        # 计算交期（取最长交期）
+        max_lead_time = 0.0
+        total_amount = 0.0
+        
+        for wom in shortage_list:
+            material_id = wom["material_id"]
+            shortage_qty = wom.get("shortage_quantity", 0)
+            
+            # 重新查询该物料的供应商信息
+            mat_sms = self.supplier_materials.get(material_id, [])
+            mat_supplier = next((sm for sm in mat_sms if sm["supplier_id"] == supplier_id), supplier)
+            
+            # EOQ计算
+            mat_info = self.materials.get(material_id, {})
+            eoq = mat_info.get("eoq", 0.0)
+            min_order = mat_supplier.get("min_order_qty", shortage_qty)
+            
+            if eoq > 0:
+                base_qty = max(shortage_qty, eoq)
+                if min_order > 0:
+                    po_qty = math.ceil(base_qty / min_order) * min_order
+                else:
+                    po_qty = base_qty
+            else:
+                po_qty = max(shortage_qty, min_order)
+            
+            # 交期扰动
+            lead_time_mean = mat_supplier.get("lead_time_days", 3)
+            lead_time_std = mat_supplier.get("lead_time_stddev_days", 0.5)
+            actual_lead = normal_sample(lead_time_mean, lead_time_std, min_val=1.0)
+            
+            # 可靠性扰动
+            reliability = mat_supplier.get("reliability_score", 0.95)
+            if random.random() > reliability:
+                extra_delay = random.randint(1, 3)
+                actual_lead += extra_delay
+            
+            max_lead_time = max(max_lead_time, actual_lead)
+            total_amount += po_qty * mat_supplier.get("unit_price", 1.0)
+        
+        # 创建PO
+        expected_delivery = now_dt + timedelta(days=max_lead_time)
+        
         po_data = {
             "po_id": po_id,
-            "supplier_id": supplier["supplier_id"],
+            "supplier_id": supplier_id,
             "order_date": now_dt,
             "expected_delivery_date": expected_delivery,
             "status": "已创建",
-            "total_amount": po_qty * supplier.get("unit_price", 1.0),
-            "note": f"为工单{wo_id}补料，EOQ={eoq:.0f}"
+            "total_amount": total_amount,
+            "note": f"合并采购，{len(shortage_list)}种物料"
         }
         self.db.insert("purchase_order", po_data)
-
-        line_data = {
-            "line_id": self.next_id("POL"),
-            "po_id": po_id,
-            "material_id": material_id,
-            "quantity": po_qty,
-            "unit_price": supplier.get("unit_price", 1.0),
-            "related_work_order_id": wo_id,
-            "related_wom_id": wom_id
-        }
-        self.db.insert("purchase_order_line", line_data)
-
-        inv = self.inventory_state.get(material_id)
-        if inv:
-            inv["in_transit"] += po_qty
-
-        # 标记安全库存补货进行中（P2-11防重复）
-        self.safety_stock_po_pending.discard(material_id)
-
-        # P0-3: 到货事件使用实际交期（含扰动）
-        self.env.process(self.purchase_arrival_event(po_id, material_id, po_qty, actual_lead))
-
-        print(f"  [采购] {material_id}: PO={po_id}, 数量={po_qty:.0f}(EOQ={eoq:.0f}), "
-              f"供应商={supplier['supplier_id']}, 预计到货={expected_delivery.strftime('%m-%d')}")
+        
+        # 创建多个POL（每行一个物料）
+        for wom in shortage_list:
+            material_id = wom["material_id"]
+            shortage_qty = wom.get("shortage_quantity", 0)
+            wom_id = wom["wom_id"]
+            wo_id = wom["work_order_id"]
+            
+            # 重新查询供应商信息
+            mat_sms = self.supplier_materials.get(material_id, [])
+            mat_supplier = next((sm for sm in mat_sms if sm["supplier_id"] == supplier_id), supplier)
+            
+            # EOQ计算
+            mat_info = self.materials.get(material_id, {})
+            eoq = mat_info.get("eoq", 0.0)
+            min_order = mat_supplier.get("min_order_qty", shortage_qty)
+            
+            if eoq > 0:
+                base_qty = max(shortage_qty, eoq)
+                if min_order > 0:
+                    po_qty = math.ceil(base_qty / min_order) * min_order
+                else:
+                    po_qty = base_qty
+            else:
+                po_qty = max(shortage_qty, min_order)
+            
+            # 创建POL
+            line_data = {
+                "line_id": self.next_id("POL"),
+                "po_id": po_id,
+                "material_id": material_id,
+                "quantity": po_qty,
+                "unit_price": mat_supplier.get("unit_price", 1.0),
+                "related_work_order_id": wo_id,
+                "related_wom_id": wom_id
+            }
+            self.db.insert("purchase_order_line", line_data)
+            
+            # 更新在途库存
+            inv = self.inventory_state.get(material_id)
+            if inv:
+                inv["in_transit"] += po_qty
+            
+            # 标记安全库存补货进行中
+            self.safety_stock_po_pending.discard(material_id)
+            
+            # 到货事件
+            lead_time_mean = mat_supplier.get("lead_time_days", 3)
+            lead_time_std = mat_supplier.get("lead_time_stddev_days", 0.5)
+            actual_lead = normal_sample(lead_time_mean, lead_time_std, min_val=1.0)
+            reliability = mat_supplier.get("reliability_score", 0.95)
+            if random.random() > reliability:
+                extra_delay = random.randint(1, 3)
+                actual_lead += extra_delay
+            
+            self.env.process(self.purchase_arrival_event(po_id, material_id, po_qty, actual_lead))
+        
+        logger.info(f"  [合并采购] PO={po_id}, 供应商={supplier_id}, {len(shortage_list)}种物料, "
+              f"总金额={total_amount:.0f}, 预计交货={expected_delivery.strftime('%m-%d')}")
 
     def _second_batch_arrival(self, po_id: str, material_id: str, qty: float, delay_days: float):
         """Task6: 分批到货的第二批"""
         yield self.env.timeout(delay_days * 24.0)
-        print(f"  [到货-2批] PO={po_id}, 物料={material_id}, 第二批数量={qty:.1f}")
+        logger.info(f"  [到货-2批] PO={po_id}, 物料={material_id}, 第二批数量={qty:.1f}")
         yield from self._receive_material_batch(po_id, material_id, qty, batch_no=2)
 
     def _receive_material_batch(self, po_id: str, material_id: str, qty: float, batch_no: int = 1):
@@ -1564,7 +1662,7 @@ class FactorySimulation:
             batch1_qty = round(qty * batch1_ratio, 2)
             batch2_qty = round(qty - batch1_qty, 2)
             delay_days = random.uniform(1.0, 3.0)
-            print(f"  [分批到货] PO={po_id}, 第1批{batch1_qty:.1f}, 第2批{batch2_qty:.1f}延{delay_days:.1f}天后到")
+            logger.info(f"  [分批到货] PO={po_id}, 第1批{batch1_qty:.1f}, 第2批{batch2_qty:.1f}延{delay_days:.1f}天后到")
             # 启动第二批到货进程
             self.env.process(self._second_batch_arrival(po_id, material_id, batch2_qty, delay_days))
             # 本次只处理第一批
@@ -1588,7 +1686,7 @@ class FactorySimulation:
             accepted_qty = qty - reject_qty
             iqc_result = "让步接收" if reject_rate < 0.10 else "拒收部分"
             iqc_disposition = f"拒收{reject_qty:.1f}，实收{accepted_qty:.1f}"
-            print(f"  [IQC] PO={po_id} {material_id}: 拒收{reject_qty:.1f}/{qty:.0f}（{reject_rate*100:.0f}%）")
+            logger.info(f"  [IQC] PO={po_id} {material_id}: 拒收{reject_qty:.1f}/{qty:.0f}（{reject_rate*100:.0f}%）")
 
         # 写入IQC质检记录
         insp_id = self.next_id("QI")
@@ -1629,7 +1727,7 @@ class FactorySimulation:
             description=f"采购订单{po_id}到货，IQC实收{accepted_qty:.1f}({iqc_result})"
         )
 
-        print(f"  [到货] {material_id}: PO={po_id}, 数量={accepted_qty:.0f}")
+        logger.info(f"  [到货] {material_id}: PO={po_id}, 数量={accepted_qty:.0f}")
         
         # 【供应商绩效管理】更新数据库中的实际交货日期
         if supplier:
@@ -1645,7 +1743,7 @@ class FactorySimulation:
             # 从数据库查询供应商表现（用于日志输出）
             perf = self.get_supplier_performance_from_db(supplier_id)
             if perf["total_deliveries"] > 0:
-                print(f"  [供应商表现] {supplier_id}: 累计交货{perf['total_deliveries']}次，准时率{perf['on_time_rate']:.0%}，平均延迟{perf['avg_delay_days']:.1f}天")
+                logger.info(f"  [供应商表现] {supplier_id}: 累计交货{perf['total_deliveries']}次，准时率{perf['on_time_rate']:.0%}，平均延迟{perf['avg_delay_days']:.1f}天")
 
         # P0-3: 到货后触发增量MRP重分配（以实收数量）
         self.incremental_mrp_after_arrival(material_id, accepted_qty)

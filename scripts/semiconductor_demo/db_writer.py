@@ -1,4 +1,4 @@
-"""
+"""  
 半导体演示数据 - 数据库操作封装
 提供仿真引擎所需的CRUD和查询接口
 直接操作SQLite数据库
@@ -8,6 +8,10 @@ import sqlite3
 import json
 from datetime import datetime, date
 from typing import Dict, List, Any, Optional, Callable
+from simulation_logger import get_simulation_logger
+
+# 获取日志记录器
+logger = get_simulation_logger()
 
 
 class SimulationDBWriter:
@@ -66,7 +70,7 @@ class SimulationDBWriter:
             if auto_commit:
                 self._conn.commit()
         except Exception as e:
-            print(f"[DB Insert Error] {table}: {e}")
+            logger.error(f"[DB Insert Error] {table}: {e}")
     
     def begin_transaction(self):
         """开始事务"""
@@ -120,7 +124,7 @@ class SimulationDBWriter:
         except sqlite3.IntegrityError:
             pass
         except Exception as e:
-            print(f"[DB Bulk Insert Error] {table}: {e}")
+            logger.error(f"[DB Bulk Insert Error] {table}: {e}")
     
     def update(self, table: str, where: dict, data: dict):
         """更新记录
@@ -162,7 +166,7 @@ class SimulationDBWriter:
             self._cursor.execute(update_sql, update_vals + where_vals)
             self._conn.commit()
         except Exception as e:
-            print(f"[DB Update Error] {table}: {e}")
+            logger.error(f"[DB Update Error] {table}: {e}")
     
     def _query_sql(self, sql: str, params: tuple = ()) -> List[dict]:
         """执行原始SQL查询（内部方法）"""

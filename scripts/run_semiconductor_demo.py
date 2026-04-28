@@ -32,85 +32,89 @@ from semiconductor_demo.factory_data import (
     generate_work_calendar
 )
 from semiconductor_demo.simulation import FactorySimulation
+from simulation_logger import get_simulation_logger
 import simpy
+
+# 获取日志记录器
+logger = get_simulation_logger()
 
 
 def insert_static_data(db: SimulationDBWriter):
     """插入工厂静态配置数据"""
-    print("[1/4] 插入静态主数据...")
+    logger.info("[1/4] 插入静态主数据...")
     
     # 产品
     for p in PRODUCTS:
         db.insert("product", p)
-    print(f"  - 产品: {db.count_records('product')} 条")
+    logger.info(f"  - 产品: {db.count_records('product')} 条")
     
     # 物料
     for m in MATERIALS:
         db.insert("material", m)
-    print(f"  - 物料: {db.count_records('material')} 条")
+    logger.info(f"  - 物料: {db.count_records('material')} 条")
     
     # BOM
     for b in BOMS:
         db.insert("bom", b)
-    print(f"  - BOM: {db.count_records('bom')} 条")
+    logger.info(f"  - BOM: {db.count_records('bom')} 条")
     
     # 工艺路线
     for r in PROCESS_ROUTES:
         db.insert("process_route", r)
-    print(f"  - 工艺路线: {db.count_records('process_route')} 条")
+    logger.info(f"  - 工艺路线: {db.count_records('process_route')} 条")
     
     # 工序（批量插入）
     db.bulk_insert_with_transaction("route_step", ROUTE_STEPS, batch_size=1000)
-    print(f"  - 工序: {db.count_records('route_step')} 条")
+    logger.info(f"  - 工序: {db.count_records('route_step')} 条")
     
     # 工作中心
     for wc in WORK_CENTERS:
         db.insert("work_center", wc)
-    print(f"  - 工作中心: {db.count_records('work_center')} 条")
+    logger.info(f"  - 工作中心: {db.count_records('work_center')} 条")
     
     # 机台
     for m in MACHINES:
         db.insert("machine", m)
-    print(f"  - 机台: {db.count_records('machine')} 条")
+    logger.info(f"  - 机台: {db.count_records('machine')} 条")
     
     # 机台能力矩阵（批量插入）
     db.bulk_insert_with_transaction("machine_capability", MACHINE_CAPABILITIES, batch_size=1000)
-    print(f"  - 机台能力: {db.count_records('machine_capability')} 条")
+    logger.info(f"  - 机台能力: {db.count_records('machine_capability')} 条")
     
     # 换线矩阵（批量插入）
     db.bulk_insert_with_transaction("setup_matrix", SETUP_MATRIX, batch_size=1000)
-    print(f"  - 换线矩阵: {db.count_records('setup_matrix')} 条")
+    logger.info(f"  - 换线矩阵: {db.count_records('setup_matrix')} 条")
     
     # 供应商
     for s in SUPPLIERS:
         db.insert("supplier", s)
-    print(f"  - 供应商: {db.count_records('supplier')} 条")
+    logger.info(f"  - 供应商: {db.count_records('supplier')} 条")
     
     # 供应商物料关系（批量插入）
     db.bulk_insert_with_transaction("supplier_material", SUPPLIER_MATERIALS, batch_size=500)
-    print(f"  - 供应商物料: {db.count_records('supplier_material')} 条")
+    logger.info(f"  - 供应商物料: {db.count_records('supplier_material')} 条")
     
     # 物料替代（批量插入）
     db.bulk_insert_with_transaction("material_substitute", MATERIAL_SUBSTITUTES, batch_size=100)
-    print(f"  - 物料替代: {db.count_records('material_substitute')} 条")
+    logger.info(f"  - 物料替代: {db.count_records('material_substitute')} 条")
     
     # 班次
     for sp in SHIFT_PATTERNS:
         db.insert("shift_pattern", sp)
-    print(f"  - 班次: {db.count_records('shift_pattern')} 条")
+    logger.info(f"  - 班次: {db.count_records('shift_pattern')} 条")
     
     # 班次日历（30天）
     start_date = datetime.fromisoformat(SIMULATION_CONFIG['start_date'].split(' ')[0])  # 只取日期部分
     calendars = generate_work_calendar(start_date, SIMULATION_CONFIG["duration_days"])
     db.bulk_insert("work_calendar", calendars)
-    print(f"  - 班次日历: {db.count_records('work_calendar')} 条")
+    logger.info(f"  - 班次日历: {db.count_records('work_calendar')} 条")
     
     # 初始库存
     for inv in INITIAL_INVENTORY:
         inv["inventory_id"] = f"INV-{inv['material_id']}-{inv['location']}"
         inv["last_updated"] = start_date
         db.insert("inventory", inv)
-    print(f"  - 库存: {db.count_records('inventory')} 条")
+    logger.info(f"  - 库存: {db.count_records('inventory')} 条")
     
     # T2: 初始化成品库存（初始为0）
     for p in PRODUCTS:
@@ -125,32 +129,32 @@ def insert_static_data(db: SimulationDBWriter):
             "shipped_quantity": 0.0,
             "last_updated": start_date
         })
-    print(f"  - 成品库存：{db.count_records('finished_goods_inventory')} 条")
+    logger.info(f"  - 成品库存：{db.count_records('finished_goods_inventory')} 条")
     
-    print("[1/4] 静态主数据插入完成!\n")
+    logger.info("[1/4] 静态主数据插入完成!\n")
 
 
 def init_simulation_state(sim: FactorySimulation, db: SimulationDBWriter):
     """初始化仿真状态（从静态数据加载到内存）"""
-    print("[2/4] 初始化仿真状态...")
+    logger.info("[2/4] 初始化仿真状态...")
     
     # 加载产品
     rows = db.query("SELECT * FROM product")
     for r in rows:
         sim.products[r["product_id"]] = dict(r)
-    print(f"  - 加载产品: {len(sim.products)}")
+    logger.info(f"  - 加载产品: {len(sim.products)}")
     
     # 加载物料（含EOQ等扩展字段）
     rows = db.query("SELECT * FROM material")
     for r in rows:
         sim.materials[r["material_id"]] = dict(r)
-    print(f"  - 加载物料: {len(sim.materials)}")
+    logger.info(f"  - 加载物料: {len(sim.materials)}")
     
     # 加载BOM
     rows = db.query("SELECT * FROM bom")
     for r in rows:
         sim.boms[r["product_id"]].append(dict(r))
-    print(f"  - 加载BOM: {sum(len(v) for v in sim.boms.values())}")
+    logger.info(f"  - 加载BOM: {sum(len(v) for v in sim.boms.values())}")
     
     # 加载工艺路线工序（含新增的wait_time_hours等字段）
     rows = db.query("SELECT rs.*, pr.product_id FROM route_step rs JOIN process_route pr ON rs.route_id = pr.route_id")
@@ -158,7 +162,7 @@ def init_simulation_state(sim: FactorySimulation, db: SimulationDBWriter):
         r_dict = dict(r)
         sim.route_steps[r["route_id"]].append(r_dict)
         sim.route_steps_by_step_id[r["step_id"]] = r_dict
-    print(f"  - 加载工序: {sum(len(v) for v in sim.route_steps.values())}")
+    logger.info(f"  - 加载工序: {sum(len(v) for v in sim.route_steps.values())}")
     
     # Lot批量加工：构建step_id到工序代码的映射（从step_name提取，如"RECV-10" -> "RECV"）
     for step_id, step in sim.route_steps_by_step_id.items():
@@ -167,25 +171,25 @@ def init_simulation_state(sim: FactorySimulation, db: SimulationDBWriter):
         if "-" in step_name:
             step_code = step_name.split("-")[0]
             sim.step_code_map[step_id] = step_code
-    print(f"  - 构建工序代码映射: {len(sim.step_code_map)}条")
+    logger.info(f"  - 构建工序代码映射: {len(sim.step_code_map)}条")
     
     # 加载机台
     rows = db.query("SELECT * FROM machine")
     for r in rows:
         sim.machines[r["machine_id"]] = dict(r)
-    print(f"  - 加载机台: {len(sim.machines)}")
+    logger.info(f"  - 加载机台: {len(sim.machines)}")
     
     # 加载能力矩阵
     rows = db.query("SELECT * FROM machine_capability")
     for r in rows:
         sim.machine_capabilities[(r["machine_id"], r["product_id"])] = dict(r)
-    print(f"  - 加载能力矩阵: {len(sim.machine_capabilities)}")
+    logger.info(f"  - 加载能力矩阵: {len(sim.machine_capabilities)}")
     
     # 加载换线矩阵
     rows = db.query("SELECT * FROM setup_matrix")
     for r in rows:
         sim.setup_matrix[(r["machine_id"], r["from_product_id"], r["to_product_id"])] = r["setup_time_minutes"]
-    print(f"  - 加载换线矩阵: {len(sim.setup_matrix)}")
+    logger.info(f"  - 加载换线矩阵: {len(sim.setup_matrix)}")
     
     # 加载供应商物料（含lead_time_stddev_days）
     rows = db.query("SELECT sm.*, s.reliability_score, s.lead_time_stddev_days FROM supplier_material sm JOIN supplier s ON sm.supplier_id = s.supplier_id")
@@ -193,42 +197,42 @@ def init_simulation_state(sim: FactorySimulation, db: SimulationDBWriter):
         r_dict = dict(r)
         # 合并供应商可靠性信息到供应商物料记录
         sim.supplier_materials[r["material_id"]].append(r_dict)
-    print(f"  - 加载供应商物料: {sum(len(v) for v in sim.supplier_materials.values())}")
+    logger.info(f"  - 加载供应商物料: {sum(len(v) for v in sim.supplier_materials.values())}")
     
     # P1-7: 加载物料替代
     rows = db.query("SELECT * FROM material_substitute")
     for r in rows:
         sim.material_substitutes[r["material_id"]].append(dict(r))
-    print(f"  - 加载物料替代: {sum(len(v) for v in sim.material_substitutes.values())}")
+    logger.info(f"  - 加载物料替代: {sum(len(v) for v in sim.material_substitutes.values())}")
     
     # 加载工作中心
     rows = db.query("SELECT * FROM work_center")
     for r in rows:
         sim.work_centers[r["work_center_id"]] = dict(r)
-    print(f"  - 加载工作中心: {len(sim.work_centers)}")
+    logger.info(f"  - 加载工作中心: {len(sim.work_centers)}")
     
     # 初始化库存状态
     sim.init_inventory(INITIAL_INVENTORY)
-    print(f"  - 初始化库存状态完成")
+    logger.info(f"  - 初始化库存状态完成")
     
     # T2: 初始化成品库存内存状态
     for p in PRODUCTS:
         pid = p["product_id"]
         sim.fg_inventory_state[pid] = {"total": 0.0, "available": 0.0, "reserved": 0.0, "shipped": 0.0}
-    print(f"  - 初始化成品库存内存状态完成")
+    logger.info(f"  - 初始化成品库存内存状态完成")
     
     # 初始化机台资源
     sim.init_machines(MACHINES)
-    print(f"  - 初始化机台资源完成")
+    logger.info(f"  - 初始化机台资源完成")
     
-    print("[2/4] 仿真状态初始化完成!\n")
+    logger.info("[2/4] 仿真状态初始化完成!\n")
 
 
 def run_simulation(db: SimulationDBWriter):
     """运行DES仿真"""
-    print("[3/4] 启动SimPy离散事件仿真...")
-    print(f"  - 仿真周期: {SIMULATION_CONFIG['duration_days']} 天")
-    print(f"  - 开始时间: {SIMULATION_CONFIG['start_date']}")
+    logger.info("[3/4] 启动SimPy离散事件仿真...")
+    logger.info(f"  - 仿真周期: {SIMULATION_CONFIG['duration_days']} 天")
+    logger.info(f"  - 开始时间: {SIMULATION_CONFIG['start_date']}")
     
     start_date = datetime.fromisoformat(SIMULATION_CONFIG['start_date'])
     env = simpy.Environment()
@@ -238,13 +242,13 @@ def run_simulation(db: SimulationDBWriter):
     
     sim.run()
     
-    print("[3/4] 仿真运行完成!\n")
+    logger.info("[3/4] 仿真运行完成!\n")
     return sim
 
 
 def validate_data(db: SimulationDBWriter):
     """数据完整性校验"""
-    print("[4/4] 执行数据完整性校验...")
+    logger.info("[4/4] 执行数据完整性校验...")
     errors = []
     warnings = []
     
@@ -258,7 +262,7 @@ def validate_data(db: SimulationDBWriter):
         for r in rows[:3]:
             errors.append(f"  {r['inventory_id']}: reserved={r['reserved_quantity']:.2f} > total={r['total_quantity']:.2f}")
     else:
-        print("  [PASS] R1: 库存预留 ≤ 总库存")
+        logger.info("  [PASS] R1: 库存预留 ≤ 总库存")
     
     # R2: 工单物料消耗不能超过分配量
     rows = db.query("""
@@ -268,7 +272,7 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         errors.append(f"R2-物料消耗超限: {len(rows)} 条记录")
     else:
-        print("  [PASS] R2: 物料消耗 ≤ 分配量")
+        logger.info("  [PASS] R2: 物料消耗 ≤ 分配量")
     
     # R3: 生产任务实际结束时间必须晚于开始时间
     rows = db.query("""
@@ -280,14 +284,14 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         errors.append(f"R3-时间逆序: {len(rows)} 条记录")
     else:
-        print("  [PASS] R3: 生产任务时间单调")
+        logger.info("  [PASS] R3: 生产任务时间单调")
     
     # R4: 调拨数量必须为正
     rows = db.query("SELECT transfer_id, quantity FROM material_transfer WHERE quantity <= 0")
     if rows:
         errors.append(f"R4-调拨数量异常: {len(rows)} 条记录")
     else:
-        print("  [PASS] R4: 调拨数量正常")
+        logger.info("  [PASS] R4: 调拨数量正常")
     
     # R5: 采购订单行单价必须为正
     rows = db.query("""
@@ -298,7 +302,7 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         errors.append(f"R5-采购订单行金额异常: {len(rows)} 条记录")
     else:
-        print("  [PASS] R5: 采购订单行金额正常")
+        logger.info("  [PASS] R5: 采购订单行金额正常")
     
     # R6: 外键一致性检查 - 生产任务的machine_id必须存在于machine表
     rows = db.query("""
@@ -310,7 +314,7 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         errors.append(f"R6-外键断链(machine): {len(rows)} 条")
     else:
-        print("  [PASS] R6: 外键一致性(machine)")
+        logger.info("  [PASS] R6: 外键一致性(machine)")
     
     # R7: WorkOrderMaterial的work_order_id必须存在于work_order表
     rows = db.query("""
@@ -322,7 +326,7 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         errors.append(f"R7-外键断链(work_order): {len(rows)} 条")
     else:
-        print("  [PASS] R7: 外键一致性(work_order)")
+        logger.info("  [PASS] R7: 外键一致性(work_order)")
     
     # R8: 库存事务流水余额非负
     rows = db.query("""
@@ -332,7 +336,7 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         errors.append(f"R8-库存余额为负: {len(rows)} 条")
     else:
-        print("  [PASS] R8: 库存余额非负")
+        logger.info("  [PASS] R8: 库存余额非负")
     
     # 新增R9: 工序前驱约束验证（不应出现上一工序未完成而下一工序已完成的情况）
     rows = db.query("""
@@ -347,7 +351,7 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         warnings.append(f"R9-前驱约束疑似违反: {len(rows)} 条（可能为正在执行中）")
     else:
-        print("  [PASS] R9: 工序前驱约束")
+        logger.info("  [PASS] R9: 工序前驱约束")
     
     # 新增R10: 良率传递验证（下一工序的required_input_qty应<=上一工序的completed_output_qty × 1.01（允许1%误差）
     rows = db.query("""
@@ -361,13 +365,13 @@ def validate_data(db: SimulationDBWriter):
     if rows:
         warnings.append(f"R10-良率传递偏差过大: {len(rows)} 条")
     else:
-        print("  [PASS] R10: 良率损耗传递正常")
+        logger.info("  [PASS] R10: 良率损耗传递正常")
     
     # 新增R11: PM维护日志验证
     pm_rows = db.query("SELECT COUNT(*) as cnt FROM machine_status_log WHERE status='维护'")
     pm_cnt = pm_rows[0]["cnt"] if pm_rows else 0
     if pm_cnt > 0:
-        print(f"  [PASS] R11: 机台PM维护已执行 {pm_cnt} 次")
+        logger.info(f"  [PASS] R11: 机台PM维护已执行 {pm_cnt} 次")
     else:
         warnings.append("R11-未记录到PM维护事件")
     
@@ -377,7 +381,7 @@ def validate_data(db: SimulationDBWriter):
         WHERE note LIKE '%安全库存%'
     """)
     ss_cnt = ss_rows[0]["cnt"] if ss_rows else 0
-    print(f"  [INFO] R12: 安全库存补货触发 {ss_cnt} 次")
+    logger.info(f"  [INFO] R12: 安全库存补货触发 {ss_cnt} 次")
     
     # 新增R13: OEE闭环更新验证
     oee_rows = db.query("""
@@ -386,7 +390,7 @@ def validate_data(db: SimulationDBWriter):
     """)
     oee_cnt = oee_rows[0]["cnt"] if oee_rows else 0
     if oee_cnt > 0:
-        print(f"  [PASS] R13: MachineCapability已动态更新 {oee_cnt} 条")
+        logger.info(f"  [PASS] R13: MachineCapability已动态更新 {oee_cnt} 条")
     else:
         warnings.append("R13-MachineCapability未动态更新（可能仿真天数不足3天）")
     
@@ -406,7 +410,7 @@ def validate_data(db: SimulationDBWriter):
         ship_rate = shipped_co / max(1, total_co) * 100
         otd_rate = otd_co / max(1, shipped_co) * 100 if shipped_co > 0 else 0
         if ship_rate >= 30:
-            print(f"  [PASS] R14: 客户订单发货率={ship_rate:.0f}%({shipped_co}/{total_co}), 按时交付={otd_rate:.0f}%({otd_co}/{max(1,shipped_co)})")
+            logger.info(f"  [PASS] R14: 客户订单发货率={ship_rate:.0f}%({shipped_co}/{total_co}), 按时交付={otd_rate:.0f}%({otd_co}/{max(1,shipped_co)})")
         else:
             warnings.append(f"R14-发货率偏低: {ship_rate:.0f}%({shipped_co}/{total_co})，可能仳真周期过短")
 
@@ -414,7 +418,7 @@ def validate_data(db: SimulationDBWriter):
     sch_rows = db.query("SELECT COUNT(*) as cnt FROM schedule")
     sch_cnt = sch_rows[0]["cnt"] if sch_rows else 0
     if sch_cnt >= 14:
-        print(f"  [PASS] R15: Schedule快照已写入 {sch_cnt} 条（现有产能利用率快照）")
+        logger.info(f"  [PASS] R15: Schedule快照已写入 {sch_cnt} 条（现有产能利用率快照）")
     else:
         warnings.append(f"R15-Schedule快照不足: 仅{sch_cnt}条（期望≥0）")
 
@@ -431,7 +435,7 @@ def validate_data(db: SimulationDBWriter):
         iqc_cnt = qi_rows[0]['iqc_cnt'] or 0
         ip_cnt = qi_rows[0]['in_process_cnt'] or 0
         if qi_total > 0:
-            print(f"  [PASS] R16: 质检记录共{qi_total}条（IQC={iqc_cnt}, 过程质检={ip_cnt}）")
+            logger.info(f"  [PASS] R16: 质检记录共{qi_total}条（IQC={iqc_cnt}, 过程质检={ip_cnt}）")
         else:
             warnings.append("R16-未产生质检记录")
     
@@ -441,7 +445,7 @@ def validate_data(db: SimulationDBWriter):
     """)
     bd_cnt = breakdown_rows[0]['cnt'] if breakdown_rows else 0
     if bd_cnt >= 3:
-        print(f"  [PASS] R17: 机台随机故障{bd_cnt}次（非计划停机场景已触发）")
+        logger.info(f"  [PASS] R17: 机台随机故障{bd_cnt}次（非计划停机场景已触发）")
     else:
         warnings.append(f"R17-机台故障次数偏少: {bd_cnt}次（期望≥5次）")
     
@@ -457,7 +461,7 @@ def validate_data(db: SimulationDBWriter):
         cancelled_co = cancel_rows[0]['cancelled'] or 0
         cancel_rate = cancelled_co / max(1, total_co_all) * 100
         if cancelled_co > 0:
-            print(f"  [PASS] R18: 订单取消{cancelled_co}笔，取消率={cancel_rate:.1f}%（订单取消场景已触发）")
+            logger.info(f"  [PASS] R18: 订单取消{cancelled_co}笔，取消率={cancel_rate:.1f}%（订单取消场景已触发）")
         else:
             warnings.append("R18-未触发订单取消场景")
     
@@ -467,7 +471,7 @@ def validate_data(db: SimulationDBWriter):
     """)
     fqc_cnt = fqc_rows[0]['cnt'] if fqc_rows else 0
     if fqc_cnt > 0:
-        print(f"  [PASS] R19: FQC出货检验{fqc_cnt}条（成品出货前检验场景已触发）")
+        logger.info(f"  [PASS] R19: FQC出货检验{fqc_cnt}条（成品出货前检验场景已触发）")
     else:
         warnings.append("R19-未产生 FQC 检验记录")
     
@@ -477,7 +481,7 @@ def validate_data(db: SimulationDBWriter):
     """)
     ipqc_cnt = ipqc_rows[0]['cnt'] if ipqc_rows else 0
     if ipqc_cnt > 0:
-        print(f"  [PASS] R20: 首件检验(IPQC){ipqc_cnt}条（换线后首件检验场景已触发）")
+        logger.info(f"  [PASS] R20: 首件检验(IPQC){ipqc_cnt}条（换线后首件检验场景已触发）")
     else:
         warnings.append("R20-未产生首件检验(IPQC)记录")
     
@@ -493,7 +497,7 @@ def validate_data(db: SimulationDBWriter):
         started_wo = wo_start_rows[0]['with_start'] or 0
         start_fill_rate = started_wo / max(1, total_wo) * 100
         if start_fill_rate >= 50:
-            print(f"  [PASS] R21: 工单实际开工日期填充率={start_fill_rate:.0f}%({started_wo}/{total_wo})）")
+            logger.info(f"  [PASS] R21: 工单实际开工日期填充率={start_fill_rate:.0f}%({started_wo}/{total_wo})）")
         else:
             warnings.append(f"R21-工单开工日期填充率偏低: {start_fill_rate:.0f}%")
     
@@ -509,7 +513,7 @@ def validate_data(db: SimulationDBWriter):
     """)
     split_po_cnt = split_rows[0]['split_pos'] if split_rows else 0
     if split_po_cnt > 0:
-        print(f"  [PASS] R22: 分批到货{split_po_cnt}笔PO（同一PO有多次到货记录）")
+        logger.info(f"  [PASS] R22: 分批到货{split_po_cnt}笔PO（同一PO有多次到货记录）")
     else:
         warnings.append("R22-未触发分批到货场景")
     
@@ -522,12 +526,12 @@ def validate_data(db: SimulationDBWriter):
     """)
     sun_cnt = sunday_task_rows[0]['cnt'] if sunday_task_rows else 0
     if sun_cnt == 0:
-        print(f"  [PASS] R23: 周日排程时段（09-11时）无新建任务，工作日历驱动排程已生效")
+        logger.info(f"  [PASS] R23: 周日排程时段（09-11时）无新建任务，工作日历驱动排程已生效")
     else:
         warnings.append(f"R23-周日排程时段09-11时仍存在{sun_cnt}笔新建任务（周日应跳过排程）")
     
     # 统计信息
-    print("\n  === 数据统计 ===")
+    logger.info("\n  === 数据统计 ===")
     tables = [
         ("customer_order", "客户订单"),
         ("work_order", "生产工单"),
@@ -546,22 +550,22 @@ def validate_data(db: SimulationDBWriter):
     ]
     for table, name in tables:
         cnt = db.count_records(table)
-        print(f"    {name}: {cnt} 条")
+        logger.info(f"    {name}: {cnt} 条")
     
     # 场景验证
-    print("\n  === 场景验证 ===")
+    logger.info("\n  === 场景验证 ===")
     
     # 调拨场景
     transfer_cnt = db.count_records("material_transfer")
     if transfer_cnt > 0:
-        print(f"    [OK] 物料调拨: {transfer_cnt} 笔（缺料挪用场景已触发）")
+        logger.info(f"    [OK] 物料调拨: {transfer_cnt} 笔（缺料挪用场景已触发）")
     else:
         warnings.append("未产生物料调拨记录（缺料场景未触发）")
     
     # 采购场景
     po_cnt = db.count_records("purchase_order")
     if po_cnt > 0:
-        print(f"    [OK] 采购订单: {po_cnt} 笔（补料场景已触发）")
+        logger.info(f"    [OK] 采购订单: {po_cnt} 笔（补料场景已触发）")
     else:
         warnings.append("未产生采购订单（补料场景未触发）")
     
@@ -572,46 +576,46 @@ def validate_data(db: SimulationDBWriter):
             SELECT COUNT(*) as cnt FROM production_task WHERE setup_time_actual > 0
         """)
         setup_cnt = setup_tasks[0]["cnt"] if setup_tasks else 0
-        print(f"    [OK] 生产任务: {task_cnt} 笔（含换线{setup_cnt}笔）")
+        logger.info(f"    [OK] 生产任务: {task_cnt} 笔（含换线{setup_cnt}笔）")
     else:
         warnings.append("未产生生产任务（排程场景未触发）")
     
     if errors:
-        print(f"\n  [FAIL] 发现 {len(errors)} 个错误:")
+        logger.warning(f"\n  [FAIL] 发现 {len(errors)} 个错误:")
         for e in errors:
-            print(f"    - {e}")
+            logger.warning(f"    - {e}")
     else:
-        print("\n  [PASS] 所有数据完整性校验通过!")
+        logger.info("\n  [PASS] 所有数据完整性校验通过!")
     
     if warnings:
-        print(f"\n  [WARN] 发现 {len(warnings)} 个警告:")
+        logger.warning(f"\n  [WARN] 发现 {len(warnings)} 个警告:")
         for w in warnings:
-            print(f"    - {w}")
+            logger.warning(f"    - {w}")
     
-    print("[4/4] 数据校验完成!\n")
+    logger.info("[4/4] 数据校验完成!\n")
     return len(errors) == 0
 
 
 def main():
     """主入口"""
     db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "semiconductor_data.db")
-    print("=" * 70)
-    print("  半导体制造业APS+MRP演示数据生成器")
-    print("  Semiconductor Manufacturing Demo Data Generator")
-    print("=" * 70)
-    print(f"\n目标数据库: {db_path}\n")
+    logger.info("=" * 70)
+    logger.info("  半导体制造业APS+MRP演示数据生成器")
+    logger.info("  Semiconductor Manufacturing Demo Data Generator")
+    logger.info("=" * 70)
+    logger.info(f"\n目标数据库: {db_path}\n")
     
     # 连接数据库
     db = SimulationDBWriter(db_path)
     
     try:
         # 步骤1: 创建表结构（重建以应用新字段，清空所有数据）
-        print("[0/4] 创建数据库表结构（重建以应用新增字段）...")
+        logger.info("[0/4] 创建数据库表结构（重建以应用新增字段）...")
         engine_url = f"sqlite:///{db_path}"
         # 先删表再重建（因db_models有新增字段，必须重建）
         drop_tables(engine_url)
         create_tables(engine_url)
-        print("[0/4] 表结构创建完成!\n")
+        logger.info("[0/4] 表结构创建完成!\n")
         
         # 步骤2: 插入静态数据
         insert_static_data(db)
@@ -622,12 +626,12 @@ def main():
         # 步骤4: 数据校验
         is_valid = validate_data(db)
         
-        print("=" * 70)
+        logger.info("=" * 70)
         if is_valid:
-            print("  演示数据生成成功! 所有校验通过。")
+            logger.info("  演示数据生成成功! 所有校验通过。")
         else:
-            print("  演示数据生成完成，但存在数据问题，请检查。")
-        print("=" * 70)
+            logger.info("  演示数据生成完成，但存在数据问题，请检查。")
+        logger.info("=" * 70)
         
     finally:
         db.close()
