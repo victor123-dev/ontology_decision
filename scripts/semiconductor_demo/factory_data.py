@@ -348,6 +348,23 @@ def generate_materials() -> List[Dict]:
     materials.append({"material_id": "MAT-DA-PASTE", "material_name": "贴片银浆",
                       "material_type": "辅料", "unit_of_measure": "G", "safety_stock_level": 200.0,
                       "reorder_point": 400.0, "lot_size": 800.0, "eoq": 600.0})
+    materials.append({"material_id": "MAT-DA-PASTE-ALT", "material_name": "贴片银浆（替代品牌）",
+                      "material_type": "辅料", "unit_of_measure": "G", "safety_stock_level": 100.0,
+                      "reorder_point": 200.0, "lot_size": 400.0, "eoq": 300.0})
+    
+    # 替代物料（EMC/键合线/基板的替代品）
+    materials.append({"material_id": "MAT-EMC-BGA-ALT", "material_name": "BGA塑封料（替代型号）",
+                      "material_type": "原材料", "unit_of_measure": "KG", "safety_stock_level": 20.0,
+                      "reorder_point": 40.0, "lot_size": 80.0, "eoq": 60.0})
+    materials.append({"material_id": "MAT-EMC-QFN-ALT", "material_name": "QFN塑封料（替代型号）",
+                      "material_type": "原材料", "unit_of_measure": "KG", "safety_stock_level": 20.0,
+                      "reorder_point": 40.0, "lot_size": 80.0, "eoq": 60.0})
+    materials.append({"material_id": "MAT-WIRE-BGA-CU", "material_name": "BGA铜键合线（替代金线）",
+                      "material_type": "原材料", "unit_of_measure": "米", "safety_stock_level": 300.0,
+                      "reorder_point": 600.0, "lot_size": 1200.0, "eoq": 900.0})
+    materials.append({"material_id": "MAT-SUB-BGA-V2", "material_name": "BGA基板（供应商B）",
+                      "material_type": "原材料", "unit_of_measure": "片", "safety_stock_level": 30.0,
+                      "reorder_point": 60.0, "lot_size": 120.0, "eoq": 90.0})
     # BOM第2层：基板原材料
     materials += [
         {"material_id": "MAT-CU-FOIL", "material_name": "电解铜箔", "material_type": "原材料",
@@ -413,7 +430,7 @@ MACHINE_CFG = {
     "WC-SAM":      2,  # 保持不变
     "WC-TEST-CP":  6,  # 10→6（负荷5%，减4台）
     "WC-TEST-FT":  6,  # 12→6（负荷3%，减6台）
-    "WC-TEST-BI":  4,  # 6→4（减2台）
+    "WC-TEST-BI":  6,  # 4→6（瓶颈工序！增加2台，降低利用率到94%）
     "WC-TEST-SYS": 3,  # 4→3（减1台）
     "WC-CLEAN":    4,  # 6→4（减2台）
     "WC-BAKE":     6,  # 4→6（负荷50-75%，增加2台）
@@ -540,11 +557,22 @@ SHIFT_PATTERNS = [
 # ============================================================================
 
 SUPPLIERS = [
+    # 主供应商（5个）
     {"supplier_id": "SUP-001", "supplier_name": "本地基板供应商", "supplier_type": "直供", "avg_lead_time_days": 3, "reliability_score": 0.95, "min_order_quantity": 100.0, "lead_time_stddev_days": 0.5},
     {"supplier_id": "SUP-002", "supplier_name": "区域塑封料供应商", "supplier_type": "直供", "avg_lead_time_days": 5, "reliability_score": 0.88, "min_order_quantity": 50.0, "lead_time_stddev_days": 1.0},
     {"supplier_id": "SUP-003", "supplier_name": "TechMat国际进口商", "supplier_type": "进口", "avg_lead_time_days": 15, "reliability_score": 0.80, "min_order_quantity": 200.0, "lead_time_stddev_days": 3.0},
     {"supplier_id": "SUP-004", "supplier_name": "键合线供应商", "supplier_type": "直供", "avg_lead_time_days": 2, "reliability_score": 0.97, "min_order_quantity": 500.0, "lead_time_stddev_days": 0.3},
     {"supplier_id": "SUP-005", "supplier_name": "锡球供应商", "supplier_type": "直供", "avg_lead_time_days": 4, "reliability_score": 0.92, "min_order_quantity": 50.0, "lead_time_stddev_days": 0.8},
+    
+    # 备选供应商（8个）- 真实OSAT供应链策略
+    {"supplier_id": "SUP-006", "supplier_name": "备选基板供应商（中国台湾）", "supplier_type": "进口", "avg_lead_time_days": 7, "reliability_score": 0.90, "min_order_quantity": 150.0, "lead_time_stddev_days": 1.5},
+    {"supplier_id": "SUP-007", "supplier_name": "备选塑封料供应商（日本）", "supplier_type": "进口", "avg_lead_time_days": 12, "reliability_score": 0.93, "min_order_quantity": 80.0, "lead_time_stddev_days": 2.0},
+    {"supplier_id": "SUP-008", "supplier_name": "国产Die供应商（中国大陆）", "supplier_type": "直供", "avg_lead_time_days": 10, "reliability_score": 0.85, "min_order_quantity": 300.0, "lead_time_stddev_days": 2.0},
+    {"supplier_id": "SUP-009", "supplier_name": "备选键合线供应商（韩国）", "supplier_type": "进口", "avg_lead_time_days": 5, "reliability_score": 0.91, "min_order_quantity": 600.0, "lead_time_stddev_days": 1.0},
+    {"supplier_id": "SUP-010", "supplier_name": "备选锡球供应商（东南亚）", "supplier_type": "进口", "avg_lead_time_days": 8, "reliability_score": 0.87, "min_order_quantity": 80.0, "lead_time_stddev_days": 1.5},
+    {"supplier_id": "SUP-011", "supplier_name": "辅料供应商（本地）", "supplier_type": "直供", "avg_lead_time_days": 2, "reliability_score": 0.94, "min_order_quantity": 50.0, "lead_time_stddev_days": 0.5},
+    {"supplier_id": "SUP-012", "supplier_name": "基板原材料供应商（中国台湾）", "supplier_type": "进口", "avg_lead_time_days": 10, "reliability_score": 0.88, "min_order_quantity": 300.0, "lead_time_stddev_days": 2.0},
+    {"supplier_id": "SUP-013", "supplier_name": "特种材料供应商（欧洲）", "supplier_type": "进口", "avg_lead_time_days": 18, "reliability_score": 0.82, "min_order_quantity": 100.0, "lead_time_stddev_days": 3.5},
 ]
 
 # ============================================================================
@@ -580,6 +608,84 @@ def generate_supplier_materials() -> List[Dict]:
     # 贴片银浆
     sms.append({"sm_id": "SM-001-DA", "supplier_id": "SUP-001", "material_id": "MAT-DA-PASTE",
                 "unit_price": 0.5, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": True})
+    
+    # 替代物料的供应商（新增）
+    # 替代品牌银浆（SUP-002也提供）
+    sms.append({"sm_id": "SM-002-DA-ALT", "supplier_id": "SUP-002", "material_id": "MAT-DA-PASTE-ALT",
+                "unit_price": 0.55, "lead_time_days": 4, "min_order_qty": 80.0, "is_preferred": False})
+    
+    # 替代EMC塑封料（原供应商也提供替代型号）
+    sms.append({"sm_id": "SM-002-BGA-ALT", "supplier_id": "SUP-002", "material_id": "MAT-EMC-BGA-ALT",
+                "unit_price": 8.3, "lead_time_days": 5, "min_order_qty": 50.0, "is_preferred": False})
+    sms.append({"sm_id": "SM-002-QFN-ALT", "supplier_id": "SUP-002", "material_id": "MAT-EMC-QFN-ALT",
+                "unit_price": 8.3, "lead_time_days": 5, "min_order_qty": 50.0, "is_preferred": False})
+    
+    # 铜键合线（SUP-004提供铜线替代方案）
+    sms.append({"sm_id": "SM-004-WIRE-CU", "supplier_id": "SUP-004", "material_id": "MAT-WIRE-BGA-CU",
+                "unit_price": 0.035, "lead_time_days": 2, "min_order_qty": 500.0, "is_preferred": False})
+    
+    # 供应商B的基板（SUP-001的竞争对手）
+    sms.append({"sm_id": "SM-001-SUB-V2", "supplier_id": "SUP-001", "material_id": "MAT-SUB-BGA-V2",
+                "unit_price": 2.6, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": False})
+    
+    # BOM第2层：基板原材料供应商（新增）
+    # 电解铜箔供应商
+    sms.append({"sm_id": "SM-001-CU", "supplier_id": "SUP-001", "material_id": "MAT-CU-FOIL",
+                "unit_price": 12.0, "lead_time_days": 7, "min_order_qty": 200.0, "is_preferred": True})
+    # 环氧树脂供应商
+    sms.append({"sm_id": "SM-002-RESIN", "supplier_id": "SUP-002", "material_id": "MAT-RESIN",
+                "unit_price": 5.0, "lead_time_days": 5, "min_order_qty": 100.0, "is_preferred": True})
+    # 玻纤布供应商
+    sms.append({"sm_id": "SM-001-GLASS", "supplier_id": "SUP-001", "material_id": "MAT-GLASS-FIBER",
+                "unit_price": 8.0, "lead_time_days": 7, "min_order_qty": 100.0, "is_preferred": True})
+    
+    # ========== 备选供应商配置（真实OSAT供应链策略） ==========
+    
+    # 基板备选供应商（SUP-006 中国台湾）
+    for pkg in ("BGA","WLCSP","FANOUT","LGA","CSP","SIP"):
+        sms.append({"sm_id": f"SM-006-SUB-{pkg}", "supplier_id": "SUP-006", "material_id": f"MAT-SUB-{pkg}",
+                    "unit_price": 2.8, "lead_time_days": 7, "min_order_qty": 150.0, "is_preferred": False})
+    
+    # 引线框架备选供应商（SUP-006）
+    for pkg in ("QFN","SOP","QFP","SOT"):
+        sms.append({"sm_id": f"SM-006-LF-{pkg}", "supplier_id": "SUP-006", "material_id": f"MAT-LF-{pkg}",
+                    "unit_price": 1.7, "lead_time_days": 7, "min_order_qty": 150.0, "is_preferred": False})
+    
+    # EMC塑封料备选供应商（SUP-007 日本，质量更好但贵）
+    for pkg in PKG_CFG:
+        sms.append({"sm_id": f"SM-007-EMC-{pkg}", "supplier_id": "SUP-007", "material_id": f"MAT-EMC-{pkg}",
+                    "unit_price": 9.5, "lead_time_days": 12, "min_order_qty": 80.0, "is_preferred": False})
+    
+    # 国产Die备选供应商（SUP-008 中国大陆，交期短但良率略低）
+    for pkg in PKG_CFG:
+        sms.append({"sm_id": f"SM-008-DIE-{pkg}", "supplier_id": "SUP-008", "material_id": f"MAT-DIE-{pkg}",
+                    "unit_price": 12.0, "lead_time_days": 10, "min_order_qty": 300.0, "is_preferred": False})
+    
+    # 键合线备选供应商（SUP-009 韩国）
+    for pkg in ("BGA","QFN","SOP","QFP","SIP","LGA","CSP","SOT"):
+        sms.append({"sm_id": f"SM-009-WIRE-{pkg}", "supplier_id": "SUP-009", "material_id": f"MAT-WIRE-{pkg}",
+                    "unit_price": 0.055, "lead_time_days": 5, "min_order_qty": 600.0, "is_preferred": False})
+    
+    # 锡球备选供应商（SUP-010 东南亚）
+    for pkg in ("BGA","WLCSP","FANOUT","CSP","SIP"):
+        sms.append({"sm_id": f"SM-010-BALL-{pkg}", "supplier_id": "SUP-010", "material_id": f"MAT-BALL-{pkg}",
+                    "unit_price": 0.023, "lead_time_days": 8, "min_order_qty": 80.0, "is_preferred": False})
+    
+    # 辅料备选供应商（SUP-011 本地）
+    sms.append({"sm_id": "SM-011-DA", "supplier_id": "SUP-011", "material_id": "MAT-DA-PASTE",
+                "unit_price": 0.52, "lead_time_days": 2, "min_order_qty": 50.0, "is_preferred": False})
+    sms.append({"sm_id": "SM-011-DA-ALT", "supplier_id": "SUP-011", "material_id": "MAT-DA-PASTE-ALT",
+                "unit_price": 0.57, "lead_time_days": 2, "min_order_qty": 50.0, "is_preferred": False})
+    
+    # 基板原材料备选供应商（SUP-012 中国台湾）
+    sms.append({"sm_id": "SM-012-CU", "supplier_id": "SUP-012", "material_id": "MAT-CU-FOIL",
+                "unit_price": 13.5, "lead_time_days": 10, "min_order_qty": 300.0, "is_preferred": False})
+    sms.append({"sm_id": "SM-012-GLASS", "supplier_id": "SUP-012", "material_id": "MAT-GLASS-FIBER",
+                "unit_price": 9.0, "lead_time_days": 10, "min_order_qty": 200.0, "is_preferred": False})
+    
+    # 特种材料供应商（SUP-013 欧洲，高端产品用）
+    sms.append({"sm_id": "SM-013-RESIN", "supplier_id": "SUP-013", "material_id": "MAT-RESIN",
+                "unit_price": 6.5, "lead_time_days": 18, "min_order_qty": 100.0, "is_preferred": False})
     return sms
 
 SUPPLIER_MATERIALS = generate_supplier_materials()
@@ -589,8 +695,23 @@ SUPPLIER_MATERIALS = generate_supplier_materials()
 # ============================================================================
 
 MATERIAL_SUBSTITUTES = [
-    {"ms_id": "MS-001", "material_id": "MAT-DA-PASTE", "substitute_material_id": "MAT-DA-PASTE",
-     "substitute_priority": 1, "quality_grade": "同等级", "approval_status": "已批准", "cost_delta_percent": 0.0},
+    # 贴片银浆替代（不同品牌）
+    {"ms_id": "MS-001", "material_id": "MAT-DA-PASTE", "substitute_material_id": "MAT-DA-PASTE-ALT",
+     "substitute_priority": 1, "quality_grade": "同等级", "approval_status": "已批准", "cost_delta_percent": 5.0},
+    
+    # EMC塑封料替代（不同型号）
+    {"ms_id": "MS-002", "material_id": "MAT-EMC-BGA", "substitute_material_id": "MAT-EMC-BGA-ALT",
+     "substitute_priority": 1, "quality_grade": "同等级", "approval_status": "已批准", "cost_delta_percent": 3.0},
+    {"ms_id": "MS-003", "material_id": "MAT-EMC-QFN", "substitute_material_id": "MAT-EMC-QFN-ALT",
+     "substitute_priority": 1, "quality_grade": "同等级", "approval_status": "已批准", "cost_delta_percent": 3.0},
+    
+    # 键合线替代（金线→铜线）
+    {"ms_id": "MS-004", "material_id": "MAT-WIRE-BGA", "substitute_material_id": "MAT-WIRE-BGA-CU",
+     "substitute_priority": 2, "quality_grade": "略低", "approval_status": "已批准", "cost_delta_percent": -30.0},
+    
+    # 基板替代（不同供应商）
+    {"ms_id": "MS-005", "material_id": "MAT-SUB-BGA", "substitute_material_id": "MAT-SUB-BGA-V2",
+     "substitute_priority": 1, "quality_grade": "同等级", "approval_status": "已批准", "cost_delta_percent": 2.0},
 ]
 
 # ============================================================================
@@ -619,8 +740,8 @@ INITIAL_INVENTORY = generate_initial_inventory()
 
 SIMULATION_CONFIG = {
     # ========== 基础时间配置 ==========
-    "duration_days": 120,  # 仿真总天数（默认120天，约4个月）
-    "start_date": "2026-04-01 08:00:00",  # 仿真开始时间（ISO 8601格式）
+    "duration_days": 60,  # 仿真总天数
+    "start_date": "2026-02-26 08:00:00",  # 仿真开始时间（ISO 8601格式）
     "day_start_hour": 8,  # 日班开始时间（08:00）
     "day_end_hour": 20,  # 日班结束时间（20:00），夜班自动接续到次日08:00
     
@@ -629,7 +750,7 @@ SIMULATION_CONFIG = {
     "order_quantity_min": 5,  # 订单数量下限（5个芯片）
     "order_quantity_max": 80,  # 订单数量上限（80个芯片）
     "order_priority_weights": [0.2, 0.3, 0.5],  # 订单优先级分布 [P1紧急:20%, P3普通:30%, P5宽松:50%]
-    "order_cancel_daily_prob": 0.20,  # 订单每日取消概率（20%）
+    "order_cancel_daily_prob": 0.10,  # 订单每日取消概率（10%）
     "split_delivery_prob": 0.30,  # 拆分发货概率（30%订单会分批交付）
     "priority_escalation_daily_prob": 0.08,  # 订单每日优先级提升概率（8%）
     "lead_time_commitment_days": 7,  # CTP交期承诺最低天数（订单日期+7天）
@@ -665,8 +786,9 @@ SIMULATION_CONFIG = {
     # ========== 质检配置 ==========
     "ipqc_reject_rate": 0.15,  # IPQC首件检验不合格率（15%）
     "ipqc_inspection_hours": 0.5,  # IPQC首件检验耗时（0.5小时）
-    "fqc_reject_rate": 0.05,  # FQC成品检验不合格率（5%）   
-    "fqc_scrap_rate_range": [0.05, 0.20],  # FQC质检报废率范围（5%-20%）
+    "fqc_reject_rate": 0.05,  # FQC成品检验不合格率（5%）
+    "reworkable_rate": 0.80,  # FQC不合格后可重工比例（80%）
+    "rework_yield_rate": 0.90,  # 重工良率（90%）
     "iqc_reject_rate": 0.03,  # IQC来料检验不合格率（3%）
     "iqc_scrap_rate_range": [0.03, 0.15],  # IQC来料报废率范围（3%-15%）
     "under_performance_rate_range": [0.05, 0.15],  # 性能不达标率范围（5%-15%）
@@ -683,9 +805,31 @@ SIMULATION_CONFIG = {
     "setup_cost_weight": 2.0,  # 换线成本权重（排程算法中换线时间的权重系数）
     "critical_ratio_threshold": 1.1,  # 关键比阈值（<1.1表示工期紧张）
     "ctp_capacity_buffer": 0.15,  # CTP产能缓冲（15%，预留产能应对突发订单）
-    "max_queue_hours_per_op": 1.0,  # 每道工序最大预估排队时间（1小时，用于CTP计算）
     "work_hours_per_day": 12.0,  # 每日工作小时数（白班12小时）
     "scheduler_check_interval_hours": 4.0,  # 排程器检查间隔（4小时，配合实时排程）
+    "schedule_cooldown_hours": 0.5,  # 实时排程冷却时间（0.5小时，防抖动）
+    "lookahead_horizon_hours": 24.0,  # 前瞻排程预测时间窗口（24小时）
+    "lookahead_enabled": True,  # 前瞻排程开关
+    
+    # ========== CTP优化配置（完整优化版） ==========
+    
+    # 排队时间配置（基于负荷分级，保守估计）
+    "queue_hours_low_load": 4.0,       # 低负荷（<50%）：4小时
+    "queue_hours_medium_load": 10.0,   # 中负荷（50-70%）：10小时
+    "queue_hours_high_load": 18.0,     # 高负荷（70-85%）：18小时
+    "queue_hours_bottleneck": 36.0,    # 瓶颈（>85%）：36小时
+    
+    # 换线时间配置（基于实际Setup Group逻辑）
+    "avg_ipqc_time_hours": 0.33,       # 平均IPQC检验时间（20分钟）
+    "ipqc_rework_rate": 0.15,          # IPQC不合格率（15%）
+    "ipqc_rework_time_hours": 0.5,     # IPQC不合格返工时间（30分钟）
+    
+    # 物料等待配置
+    "avg_material_delay_hours": 12.0,  # 平均物料等待时间（12小时）
+    
+    # 其他配置
+    "ctp_avg_efficiency": 0.96,        # 日夜班加权平均效率（日班100% + 夜班92%）
+    "ctp_buffer_hours": 4.0,           # CTP最终缓冲时间（4小时）
 }
 
 # ============================================================================

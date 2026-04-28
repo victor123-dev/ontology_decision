@@ -53,7 +53,7 @@ class SimulationDBWriter:
     # 基础CRUD
     # ========================================================================
     
-    def insert(self, table: str, data: dict):
+    def insert(self, table: str, data: dict, auto_commit: bool = True):
         """单条插入"""
         if not data:
             return
@@ -63,11 +63,46 @@ class SimulationDBWriter:
         sql = f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders})"
         try:
             self._cursor.execute(sql, vals)
-            self._conn.commit()
-        except sqlite3.IntegrityError:
-            pass  # 忽略主键重复（演示数据允许重复运行）
+            if auto_commit:
+                self._conn.commit()
         except Exception as e:
             print(f"[DB Insert Error] {table}: {e}")
+    
+    def begin_transaction(self):
+        """开始事务"""
+        pass  # SQLite自动开始事务
+    
+    def commit_transaction(self):
+        """提交事务"""
+        if self._conn:
+            self._conn.commit()
+    
+    def bulk_insert_with_transaction(self, table: str, data_list: list, batch_size: int = 1000):
+        """批量插入（使用事务）
+        
+        参数：
+        - table: 表名
+        - data_list: 数据列表 [{}, {}, ...]
+        - batch_size: 每批COMMIT的条数（默认1000）
+        """
+        if not data_list:
+            return
+        
+        cols = list(data_list[0].keys())
+        placeholders = ",".join(["?"] * len(cols))
+        sql = f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders})"
+        
+        for i in range(0, len(data_list), batch_size):
+            batch = data_list[i:i+batch_size]
+            for data in batch:
+                vals = [self._serialize_value(data[c]) for c in cols]
+                try:
+                    self._cursor.execute(sql, vals)
+                except sqlite3.IntegrityError:
+                    pass  # 忽略重复
+            
+            # 每batch_size条COMMIT一次
+            self._conn.commit()
     
     def bulk_insert(self, table: str, data_list: List[dict]):
         """批量插入"""
@@ -319,6 +354,26 @@ class SimulationDBWriter:
     def query_by_status(self, table: str, status: str) -> List[dict]:
         """按status字段查询记录"""
         return self.query_table(table, {"status": status})
+    
+    def query_active_work_orders(self) -> List[dict]:
+        """查询所有生产中的工单（已下达或生产中）"""
+        sql = """
+            SELECT * FROM work_order 
+            WHERE status IN ('已下达', '生产中', '延期')
+            ORDER BY priority, planned_completion_date
+        """
+        rows = self._conn.execute(sql).fetchall()
+        return [dict(row) for row in rows]
+    
+    def get_work_order_materials(self, work_order_id: str) -> List[dict]:
+        """查询工单的物料需求"""
+        sql = """
+            SELECT * FROM work_order_material
+            WHERE work_order_id = ?
+            ORDER BY material_id
+        """
+        rows = self._conn.execute(sql, (work_order_id,)).fetchall()
+        return [dict(row) for row in rows]
 
     def get_work_order_by_co(self, order_id: str) -> Optional[dict]:
         """通过客户订单ID获取工单"""

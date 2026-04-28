@@ -59,9 +59,8 @@ def insert_static_data(db: SimulationDBWriter):
         db.insert("process_route", r)
     print(f"  - 工艺路线: {db.count_records('process_route')} 条")
     
-    # 工序
-    for s in ROUTE_STEPS:
-        db.insert("route_step", s)
+    # 工序（批量插入）
+    db.bulk_insert_with_transaction("route_step", ROUTE_STEPS, batch_size=1000)
     print(f"  - 工序: {db.count_records('route_step')} 条")
     
     # 工作中心
@@ -74,14 +73,12 @@ def insert_static_data(db: SimulationDBWriter):
         db.insert("machine", m)
     print(f"  - 机台: {db.count_records('machine')} 条")
     
-    # 机台能力矩阵
-    for mc in MACHINE_CAPABILITIES:
-        db.insert("machine_capability", mc)
+    # 机台能力矩阵（批量插入）
+    db.bulk_insert_with_transaction("machine_capability", MACHINE_CAPABILITIES, batch_size=1000)
     print(f"  - 机台能力: {db.count_records('machine_capability')} 条")
     
-    # 换线矩阵
-    for sm in SETUP_MATRIX:
-        db.insert("setup_matrix", sm)
+    # 换线矩阵（批量插入）
+    db.bulk_insert_with_transaction("setup_matrix", SETUP_MATRIX, batch_size=1000)
     print(f"  - 换线矩阵: {db.count_records('setup_matrix')} 条")
     
     # 供应商
@@ -89,14 +86,12 @@ def insert_static_data(db: SimulationDBWriter):
         db.insert("supplier", s)
     print(f"  - 供应商: {db.count_records('supplier')} 条")
     
-    # 供应商物料关系
-    for sm in SUPPLIER_MATERIALS:
-        db.insert("supplier_material", sm)
+    # 供应商物料关系（批量插入）
+    db.bulk_insert_with_transaction("supplier_material", SUPPLIER_MATERIALS, batch_size=500)
     print(f"  - 供应商物料: {db.count_records('supplier_material')} 条")
     
-    # 物料替代
-    for ms in MATERIAL_SUBSTITUTES:
-        db.insert("material_substitute", ms)
+    # 物料替代（批量插入）
+    db.bulk_insert_with_transaction("material_substitute", MATERIAL_SUBSTITUTES, batch_size=100)
     print(f"  - 物料替代: {db.count_records('material_substitute')} 条")
     
     # 班次

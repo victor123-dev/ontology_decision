@@ -260,7 +260,8 @@ class WorkOrder(Base):
     work_order_id = Column(String(50), primary_key=True)
     customer_order_id = Column(String(50), ForeignKey("customer_order.order_id"), nullable=True)
     product_id = Column(String(50), ForeignKey("product.product_id"), nullable=False)
-    planned_quantity = Column(Float, nullable=False)
+    planned_quantity = Column(Float, nullable=False)  # 计划投入量（含过量）
+    expected_output_qty = Column(Float, nullable=True)  # 预期产出量（订单数量）
     planned_start_date = Column(DateTime, nullable=True)
     planned_completion_date = Column(DateTime, nullable=True)
     actual_start_date = Column(DateTime, nullable=True)
@@ -269,7 +270,7 @@ class WorkOrder(Base):
     priority = Column(Integer, default=5)
     setup_group = Column(String(50), nullable=True)
     current_step_id = Column(String(50), ForeignKey("route_step.step_id"), nullable=True)
-    completed_quantity = Column(Float, default=0.0)
+    completed_quantity = Column(Float, default=0.0)  # 实际产出量（良品）
     scrapped_quantity = Column(Float, default=0.0)
     note = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

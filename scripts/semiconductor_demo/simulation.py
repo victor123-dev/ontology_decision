@@ -127,6 +127,17 @@ class FactorySimulation:
         # P2-11: 安全库存补货防重复创建标记
         self.safety_stock_po_pending = set()   # material_id
 
+        # 优化4: 实时排程防抖动机制（避免短时间内重复排程）
+        self.schedule_cooldown = {}  # wo_id -> last_schedule_sim_time
+        self.schedule_cooldown_hours = self.config.get("schedule_cooldown_hours", 0.5)  # 冷却时间（小时）
+        
+        # 优化6: 动态关键比算法（基于产品实际工序时间）
+        self.product_avg_op_time = {}  # product_id -> avg_hours（缓存）
+        
+        # 优化5: 前瞻排程状态缓存（避免重复计算）
+        self.lookahead_cache = {}  # cache_key -> {timestamp, result}
+        self.lookahead_cache_ttl = 2.0  # 缓存有效期2小时
+
         # Task4: 工作日历集合 (date, wc_id) -> is_workday
         self.work_calendar_set = set()  # 存储 (date_str, wc_id) 可工作的组合
 
@@ -136,6 +147,181 @@ class FactorySimulation:
     # ========================================================================
     # 工具方法
     # ========================================================================
+
+    def calculate_avg_op_time(self, product_id: str) -> float:
+        """
+        【优化6】计算产品实际工序平均时间（考虑批量调整后的时间）
+        
+        返回：该产品的平均工序时间（小时/道）
+        """
+        if product_id in self.product_avg_op_time:
+            return self.product_avg_op_time[product_id]
+        
+        route_id = self.get_route_for_product(product_id)
+        if not route_id:
+            return 4.0  # 默认值（向后兼容）
+        
+        steps = self.route_steps.get(route_id, [])
+        if not steps:
+            return 4.0
+        
+        # 计算平均标准时间（已经是批量调整后的）
+        total_time = sum(step.get("standard_time_hours", 0) for step in steps)
+        avg_time = total_time / len(steps)
+        
+        # 加上平均等待/转运时间
+        avg_wait = sum(step.get("wait_time_hours", 0) + step.get("transport_time_hours", 0) 
+                      for step in steps) / len(steps)
+        
+        avg_time += avg_wait
+        
+        # 缓存结果
+        self.product_avg_op_time[product_id] = avg_time
+        return avg_time
+    
+    # ========================================================================
+    # 优化5: 前瞻排程（Look-Ahead Scheduling）
+    # ========================================================================
+    
+    def look_ahead_schedule(self, horizon_hours: float = None) -> dict:
+        """
+        【优化5】前瞻排程：预测未来horizon_hours内的瓶颈和冲突
+        
+        预测维度：
+        1. 物料齐套性预测（哪些工序会缺料）
+        2. 机台可用性预测（维护/故障时间段）
+        3. 交期风险预测（哪些订单可能延误）
+        
+        返回：{
+            "material_shortages": {...},
+            "machine_maintenance": {...},
+            "at_risk_orders": [...],
+            "capacity_heatmap": {...}
+        }
+        """
+        if horizon_hours is None:
+            horizon_hours = self.config.get("lookahead_horizon_hours", 24.0)
+        
+        # 检查缓存
+        cache_key = f"lookahead_{horizon_hours}"
+        now = self.env.now
+        if cache_key in self.lookahead_cache:
+            cache = self.lookahead_cache[cache_key]
+            if now - cache["timestamp"] < self.lookahead_cache_ttl:
+                return cache["result"]  # 使用缓存
+        
+        # 执行预测（简化版，避免过度复杂）
+        result = {
+            "material_shortages": self._predict_material_shortages(horizon_hours),
+            "machine_maintenance": self._predict_machine_maintenance(horizon_hours),
+            "at_risk_orders": self._predict_delivery_risks(horizon_hours),
+        }
+        
+        # 更新缓存
+        self.lookahead_cache[cache_key] = {
+            "timestamp": now,
+            "result": result
+        }
+        
+        return result
+    
+    def _predict_material_shortages(self, horizon_hours: float) -> dict:
+        """预测未来物料缺口（简化版：只检查当前库存不足）"""
+        shortages = {}
+        
+        # 查询所有生产中的工单物料需求
+        active_wos = self.db.query_active_work_orders()
+        
+        for wo in active_wos:
+            wo_id = wo["work_order_id"]
+            product_id = wo.get("product_id")
+            
+            # 获取该工单未完成的工序物料需求
+            materials = self.db.get_work_order_materials(wo_id)
+            for mat in materials:
+                if mat.get("status") != "已齐套":
+                    material_id = mat["material_id"]
+                    required_qty = mat.get("required_qty", 0)
+                    allocated_qty = mat.get("allocated_qty", 0)
+                    
+                    # 检查缺口
+                    gap = required_qty - allocated_qty
+                    if gap > 0:
+                        if material_id not in shortages:
+                            shortages[material_id] = {
+                                "total_gap": 0,
+                                "affected_wos": []
+                            }
+                        shortages[material_id]["total_gap"] += gap
+                        shortages[material_id]["affected_wos"].append(wo_id)
+        
+        return shortages
+    
+    def _predict_machine_maintenance(self, horizon_hours: float) -> dict:
+        """预测未来机台维护时间窗口"""
+        maintenance_windows = {}
+        
+        for machine_id, state in self.machine_state.items():
+            last_pm = state.get("last_pm_hours", 0)
+            maintenance_freq = self.config.get("maintenance_frequency_hours", 168)
+            
+            # 计算下次维护时间
+            next_maintenance = last_pm + maintenance_freq
+            
+            # 如果在前瞻窗口内，记录维护时间
+            if next_maintenance <= self.env.now + horizon_hours:
+                maintenance_windows[machine_id] = {
+                    "next_maintenance_time": next_maintenance,
+                    "maintenance_duration": self.config.get("maintenance_duration_hours", 4)
+                }
+        
+        return maintenance_windows
+    
+    def _predict_delivery_risks(self, horizon_hours: float) -> list:
+        """预测交期风险订单（简化版：检查关键比）"""
+        at_risk = []
+        
+        # 查询所有生产中的工单
+        active_wos = self.db.query_active_work_orders()
+        
+        for wo in active_wos:
+            wo_id = wo["work_order_id"]
+            due_date = wo.get("planned_completion_date")
+            
+            if not due_date:
+                continue
+            
+            due_sim = self.datetime_to_sim_hours(due_date)
+            now_sim = self.env.now
+            remaining_time = due_sim - now_sim
+            
+            # 如果交期在前瞻窗口内，评估风险
+            if 0 < remaining_time <= horizon_hours:
+                # 获取剩余工序数
+                remaining_ops = wo.get("remaining_op_count", 0)
+                product_id = wo.get("product_id")
+                
+                # 计算预估完成时间
+                avg_op_time = self.calculate_avg_op_time(product_id)
+                estimated_time = remaining_ops * avg_op_time
+                
+                # 判断风险等级
+                if estimated_time > remaining_time * 1.2:  # 预估超期20%以上
+                    risk_level = "HIGH"
+                elif estimated_time > remaining_time:
+                    risk_level = "MEDIUM"
+                else:
+                    risk_level = "LOW"
+                
+                if risk_level in ["HIGH", "MEDIUM"]:
+                    at_risk.append({
+                        "wo_id": wo_id,
+                        "risk_level": risk_level,
+                        "delay_hours": estimated_time - remaining_time,
+                        "remaining_ops": remaining_ops
+                    })
+        
+        return at_risk
 
     def sim_time_to_datetime(self, sim_hours: float) -> datetime:
         """仿真小时数转真实时间"""
@@ -155,19 +341,30 @@ class FactorySimulation:
             sim_hours = self.env.now
         return int(sim_hours // 24)
 
-    def is_working_hours(self, sim_hours: float = None) -> bool:
-        """判断当前是否在工作时间（8:00-20:00）"""
+    def is_day_shift(self, sim_hours: float = None) -> bool:
+        """判断是否为日班（可配置，默认8:00-20:00）"""
         if sim_hours is None:
             sim_hours = self.env.now
         hour_of_day = sim_hours % 24
-        return 8 <= hour_of_day < 20
+        
+        # 使用配置的工作时间
+        day_start = self.config.get("day_start_hour", 8)
+        day_end = self.config.get("day_end_hour", 20)
+        
+        return day_start <= hour_of_day < day_end
 
     def is_night_shift(self, sim_hours: float = None) -> bool:
-        """P2-10: 判断是否为夜班（20:00-08:00）"""
+        """P2-10: 判断是否为夜班（可配置，默认20:00-08:00）"""
         if sim_hours is None:
             sim_hours = self.env.now
         hour_of_day = sim_hours % 24
-        return hour_of_day >= 20 or hour_of_day < 8
+        
+        # 使用配置的工作时间
+        day_start = self.config.get("day_start_hour", 8)
+        day_end = self.config.get("day_end_hour", 20)
+        
+        # 夜班 = 不在工作时间内
+        return hour_of_day < day_start or hour_of_day >= day_end
 
     def get_shift_efficiency(self, sim_hours: float = None) -> float:
         """P2-10: 获取当前班次效率系数"""
@@ -176,14 +373,18 @@ class FactorySimulation:
         return 1.0
 
     def wait_until_next_work_start(self):
-        """等待到下一个工作日的8:00"""
+        """等待到下一个工作日的开始时间（可配置）"""
         current = self.env.now
         day = int(current // 24)
         hour = current % 24
-        if hour < 8:
-            next_start = day * 24 + 8
+        
+        # 使用配置的工作开始时间
+        day_start = self.config.get("day_start_hour", 8)
+        
+        if hour < day_start:
+            next_start = day * 24 + day_start
         else:
-            next_start = (day + 1) * 24 + 8
+            next_start = (day + 1) * 24 + day_start
         return self.env.timeout(next_start - current)
 
     def next_id(self, prefix: str) -> str:
@@ -226,41 +427,207 @@ class FactorySimulation:
         buffer = self.config.get("ctp_capacity_buffer", 0.15)
         return max(0.0, work_hours_in_horizon * (1.0 - buffer) - already_occupied)
 
-    # P2-12: 简化CTP交期承诺
+    # P2-12: CTP交期承诺（完整优化版）
     def estimate_completion_date(self, product_id: str, qty: float) -> datetime:
-        """基于产能负荷估算工单完工日期"""
+        """
+        基于产能负荷估算工单完工日期（优化版：考虑真实生产约束）
+        
+        计算公式：
+        total_hours = 加工时间 + 等待转运 + 排队时间(动态) + 换线时间 + IPQC检验 
+                    + 物料等待 + 周日跳过 + 故障缓冲 + 安全缓冲
+        """
         route_id = self.get_route_for_product(product_id)
         if not route_id:
             return self.sim_time_to_datetime(self.env.now) + timedelta(days=self.config["lead_time_commitment_days"])
 
         steps = sorted(self.route_steps.get(route_id, []), key=lambda x: x["sequence_no"])
+        
+        # 初始化各项时间
         total_process_hours = 0.0
-        max_queue_hours = 0.0
-
+        total_wait_hours = 0.0
+        total_transport_hours = 0.0
+        total_queue_hours = 0.0
+        total_setup_hours = 0.0
+        total_ipqc_hours = 0.0
+        
+        num_lots = max(1, math.ceil(qty / self.config["wip_lot_size"]))
+        
+        # 换线相关参数（基于Setup Group配置）
+        setup_skip_enabled = self.config.get("setup_skip_same_group", False)
+        
+        # IPQC相关参数
+        ipqc_time = self.config.get("avg_ipqc_time_hours", 0.33)  # 20分钟
+        ipqc_fail_rate = self.config.get("ipqc_rework_rate", 0.15)  # 15%不合格
+        ipqc_rework_time = self.config.get("ipqc_rework_time_hours", 0.5)  # 返工30分钟
+        
+        # 日夜班加权效率
+        avg_efficiency_factor = self.config.get("ctp_avg_efficiency", 0.96)
+        
+        # 遍历所有工序
         for step in steps:
             std_time = step["standard_time_hours"]
             wait = step.get("wait_time_hours", 0.0)
             transport = step.get("transport_time_hours", 0.0)
-            num_lots = max(1, math.ceil(qty / self.config["wip_lot_size"]))
             wc_id = step.get("machine_type_required")
-
-            # 找该工作中心效率最高的机台
-            machines_in_wc = [m for m in self.machines.values() if m.get("work_center_id") == wc_id]
+            
+            # 1. 加工时间（含夜班效率折减）
+            machines_in_wc = [m for m in self.machines.values() 
+                              if m.get("work_center_id") == wc_id]
             if machines_in_wc:
                 best_efficiency = max(
                     self.machine_capabilities.get((m["machine_id"], product_id), {}).get("efficiency_factor", 1.0)
                     for m in machines_in_wc
                 )
                 min_eff = self.config.get("min_efficiency_factor", 0.5)
-                process_time = std_time * num_lots / max(best_efficiency, min_eff)
+                # 使用加权平均效率（日班100% + 夜班92%）
+                process_time = std_time * num_lots / (max(best_efficiency, min_eff) * avg_efficiency_factor)
             else:
                 process_time = std_time * num_lots
-
-            total_process_hours += process_time + wait + transport
-            max_queue_hours += self.config.get("max_queue_hours_per_op", 1.0)  # 每道工序预留排队时间
-
-        total_hours = total_process_hours + max_queue_hours
-        return self.sim_time_to_datetime(self.env.now) + timedelta(hours=total_hours + 4)
+            
+            total_process_hours += process_time
+            total_wait_hours += wait
+            total_transport_hours += transport
+            
+            # 2. 排队时间（基于工作中心负荷动态计算）⭐
+            avg_load = self.estimate_work_center_load(wc_id)
+            
+            if avg_load < 0.5:
+                queue_time = self.config.get("queue_hours_low_load", 4.0)
+            elif avg_load < 0.7:
+                queue_time = self.config.get("queue_hours_medium_load", 10.0)
+            elif avg_load < 0.85:
+                queue_time = self.config.get("queue_hours_high_load", 18.0)
+            else:
+                queue_time = self.config.get("queue_hours_bottleneck", 36.0)
+            
+            total_queue_hours += queue_time
+            
+            # 3. 换线时间估算（基于Setup Group逻辑）
+            # 假设：第一道工序需要换线，后续工序如果Setup Group不同则需要换线
+            # 保守估计：70%工序需要换线（考虑多工单混合生产）
+            if not setup_skip_enabled:
+                # 如果未启用Setup Group减免，所有工序都考虑换线
+                setup_probability = 1.0
+            else:
+                # 启用Setup Group减免，估计70%需要换线
+                setup_probability = 0.70
+            
+            # 查询该机台的平均换线时间
+            if machines_in_wc:
+                # 取第一个机台的换线时间作为代表
+                mid = machines_in_wc[0]["machine_id"]
+                avg_setup_min = self.get_setup_time(mid, "UNKNOWN", product_id)
+                avg_setup_hours = avg_setup_min / 60.0
+            else:
+                avg_setup_hours = 0.5  # 默认0.5小时
+            
+            expected_setup = setup_probability * avg_setup_hours
+            total_setup_hours += expected_setup
+        
+        # 4. IPQC检验时间（基于换线次数）
+        # 换线次数 = 工序数 × 换线概率
+        num_setups = len(steps) * (0.70 if setup_skip_enabled else 1.0)
+        expected_ipqc_per_setup = ipqc_time + ipqc_fail_rate * ipqc_rework_time
+        total_ipqc_hours = num_setups * expected_ipqc_per_setup
+        
+        # 5. 物料等待时间（简化估算）
+        material_delay = self.config.get("avg_material_delay_hours", 12.0)
+        
+        # 6. 故障缓冲（加工时间的5%）
+        breakdown_buffer = total_process_hours * 0.05
+        
+        # 7. 总计（不含周日跳过）
+        total_hours = (total_process_hours + total_wait_hours + 
+                      total_transport_hours + total_queue_hours +
+                      total_setup_hours + total_ipqc_hours +
+                      material_delay + breakdown_buffer +
+                      self.config.get("ctp_buffer_hours", 4.0))
+        
+        # 8. 计算周日跳过 ⭐
+        current_dt = self.sim_time_to_datetime(self.env.now)
+        estimated_end_dt = current_dt + timedelta(hours=total_hours)
+        sunday_delay = self.calculate_sunday_delay(current_dt, estimated_end_dt)
+        
+        total_hours += sunday_delay
+        
+        # 9. 最终日期
+        completion_date = current_dt + timedelta(hours=total_hours)
+        
+        # 10. 与最低承诺交期比较（不低于7天）
+        committed_date = current_dt + timedelta(
+            days=self.config.get("lead_time_commitment_days", 7)
+        )
+        required_date = max(completion_date, committed_date)
+        
+        # 打印CTP分解（便于调试）
+        print(f"  [CTP计算] {product_id}×{qty}: 加工{total_process_hours:.1f}h + 排队{total_queue_hours:.1f}h + 换线{total_setup_hours:.1f}h + IPQC{total_ipqc_hours:.1f}h + 周日{sunday_delay:.1f}h = {total_hours:.1f}h ({total_hours/24:.1f}天)")
+        
+        return required_date
+    
+    def estimate_work_center_load(self, wc_id: str) -> float:
+        """
+        估算工作中心当前负荷（0.0-1.0+）
+        
+        计算方法：
+        - 统计该机台未来24小时已排程任务
+        - 负荷 = 已排程时间 / 可用时间
+        - 负荷>1.0表示已超负荷
+        """
+        machines_in_wc = [m for m in self.machines.values() 
+                          if m.get("work_center_id") == wc_id]
+        
+        if not machines_in_wc:
+            return 0.0
+        
+        total_load_hours = 0.0
+        total_available_hours = len(machines_in_wc) * 24.0  # 24小时窗口
+        
+        for machine in machines_in_wc:
+            mid = machine["machine_id"]
+            state = self.machine_state.get(mid, {})
+            
+            # 机台下次可用时间
+            next_avail = state.get("next_available_time", self.env.now)
+            
+            # 已占用时间（从当前到下次可用）
+            occupied = max(0.0, next_avail - self.env.now)
+            
+            # 限制在24小时内
+            occupied = min(occupied, 24.0)
+            
+            total_load_hours += occupied
+        
+        return total_load_hours / total_available_hours
+    
+    def calculate_sunday_delay(self, start_dt: datetime, end_dt: datetime) -> float:
+        """
+        计算两个日期之间的周日延迟时间
+        
+        规则：
+        - 周日不生产（24小时）
+        - 如果跨周日，加24小时延迟
+        """
+        # 快速计算（避免循环）
+        total_days = (end_dt - start_dt).days
+        if total_days <= 0:
+            return 0.0
+        
+        start_weekday = start_dt.weekday()
+        
+        # 完整周数
+        full_weeks = total_days // 7
+        
+        # 剩余天数
+        remaining_days = total_days % 7
+        
+        # 周日数量 = 完整周数 + 剩余天数中是否包含周日
+        sunday_count = full_weeks
+        
+        # 检查剩余天数是否跨越周日
+        if start_weekday <= 6 < start_weekday + remaining_days:
+            sunday_count += 1
+        
+        return sunday_count * 24.0
 
     # ========================================================================
     # 库存管理
@@ -436,24 +803,29 @@ class FactorySimulation:
             yield self.env.timeout(24)
 
     def create_work_order(self, order_data: dict):
-        """基于客户订单创建生产工单"""
+        """基于客户订单创建生产工单（投入过量方案）"""
         product_id = order_data["product_id"]
-        qty = order_data["quantity"]
+        order_qty = order_data["quantity"]  # 客户订单数量（需要的良品数）
         order_id = order_data["order_id"]
         priority = order_data.get("priority", 5)
 
         wo_id = self.next_id("WO")
         now_dt = self.sim_time_to_datetime(self.env.now)
         planned_start = now_dt + timedelta(hours=4)
+        
+        # 【投入过量方案】根据工序总良率反推需要投入的数量
+        planned_qty = self.calculate_required_input_qty(product_id, order_qty)
+        
+        print(f"  [工单创建] {wo_id}: 订单{order_qty}个 → 计划投入{planned_qty:.1f}个（良率补偿）")
 
-        # P2-12: 用CTP估算计划完工日期（而非固定3天）
-        planned_completion = self.estimate_completion_date(product_id, qty)
+        # P2-12: 用CTP估算计划完工日期（使用投入量计算）
+        planned_completion = self.estimate_completion_date(product_id, planned_qty)
 
         wo_data = {
             "work_order_id": wo_id,
             "customer_order_id": order_id,
             "product_id": product_id,
-            "planned_quantity": qty,
+            "planned_quantity": planned_qty,  # 计划投入量（过量）
             "planned_start_date": planned_start,
             "planned_completion_date": planned_completion,
             "status": "已下达",
@@ -461,6 +833,7 @@ class FactorySimulation:
             "setup_group": self.products.get(product_id, {}).get("setup_group", "DEFAULT"),
             "completed_quantity": 0.0,
             "scrapped_quantity": 0.0,
+            "expected_output_qty": order_qty,  # 预期产出量（订单数量）
             "created_at": now_dt
         }
         self.db.insert("work_order", wo_data)
@@ -469,19 +842,59 @@ class FactorySimulation:
             "current_step_idx": 0,
             "allocated_materials": {},
             "product_id": product_id,
-            "quantity": qty
+            "quantity": planned_qty,  # 使用投入量
+            "order_quantity": order_qty  # 保存订单数量
         }
 
-        # 展开工单工序
-        self.expand_work_order_operations(wo_id, product_id, qty, priority)
+        # 展开工单工序（使用投入量）
+        self.expand_work_order_operations(wo_id, product_id, planned_qty, priority)
 
-        # 展开工单物料需求
-        self.expand_work_order_materials(wo_id, product_id, qty, planned_start)
+        # 展开工单物料需求（使用投入量）
+        self.expand_work_order_materials(wo_id, product_id, planned_qty, planned_start)
 
-        # 创建WIP Lot
-        self.create_wip_lots(wo_id, product_id, qty)
+        # 创建WIP Lot（使用投入量）
+        self.create_wip_lots(wo_id, product_id, planned_qty)
 
         return wo_id
+    
+    def calculate_required_input_qty(self, product_id: str, required_output_qty: float) -> float:
+        """
+        根据工序总良率反推需要投入的数量
+        
+        公式：投入量 = 需求产出量 / 总良率
+        总良率 = 工序1良率 × 工序2良率 × ... × 工序N良率
+        
+        参数：
+        - product_id: 产品ID
+        - required_output_qty: 需要的良品数量（订单数量）
+        
+        返回：
+        - required_input_qty: 需要投入的数量
+        """
+        route_id = self.get_route_for_product(product_id)
+        if not route_id:
+            # 无工艺路线，直接返回订单数量
+            return required_output_qty
+        
+        steps = self.route_steps.get(route_id, [])
+        if not steps:
+            return required_output_qty
+        
+        # 计算总良率
+        total_yield_rate = 1.0
+        for step in steps:
+            # 每道工序的良率 = 工序标准良率
+            step_yield = step.get("yield_rate_standard", self.config.get("default_yield_rate", 0.98))
+            total_yield_rate *= step_yield
+        
+        # 反推投入量
+        required_input_qty = required_output_qty / total_yield_rate
+        
+        # 向上取整到Lot大小的倍数
+        lot_size = self.config.get("wip_lot_size", 25)
+        required_input_qty = math.ceil(required_input_qty / lot_size) * lot_size
+        
+        return required_input_qty
 
     def expand_work_order_operations(self, wo_id: str, product_id: str, qty: float, priority: int):
         """按工艺路线展开工单工序"""
@@ -716,10 +1129,30 @@ class FactorySimulation:
 
             sub_mat_id = sub["substitute_material_id"]
             sub_inv = self.inventory_state.get(sub_mat_id)
-            if not sub_inv or sub_inv["available"] <= 0:
+            
+            # 【完整替代料策略】如果替代料库存不足，触发采购
+            available = sub_inv["available"] if sub_inv else 0
+            if available <= 0:
+                # 替代料也没库存，触发采购替代料
+                print(f"  [替代料缺料] {sub_mat_id}库存不足，触发采购")
+                sub_shortage_wom = {
+                    "wom_id": self.next_id("WOM"),
+                    "work_order_id": wo_id,
+                    "wo_op_id": shortage_wom.get("wo_op_id"),
+                    "material_id": sub_mat_id,
+                    "required_quantity": shortage_qty,
+                    "allocated_quantity": 0,
+                    "consumed_quantity": 0.0,
+                    "shortage_quantity": shortage_qty,
+                    "required_date": shortage_wom.get("required_date"),
+                    "status": "缺料",
+                    "note": f"替代{material_id}，需采购"
+                }
+                self.db.insert("work_order_material", sub_shortage_wom)
+                self.create_purchase_order_for_shortage(sub_shortage_wom)
                 continue
-
-            use_qty = min(shortage_qty, sub_inv["available"])
+            
+            use_qty = min(shortage_qty, available)
 
             # 从替代料库存扣减
             sub_inv["available"] -= use_qty
@@ -857,7 +1290,138 @@ class FactorySimulation:
         )
 
         print(f"  [调拨] {material_id}: {from_wo} -> {to_wo}, 数量={qty:.1f}, 原因={reason}")
-
+    
+    def get_supplier_performance_from_db(self, supplier_id: str) -> dict:
+        """
+        从数据库查询供应商历史交货表现（基于采购订单记录）
+        
+        返回：
+        {
+            "total_deliveries": 总交货次数,
+            "on_time_deliveries": 准时交货次数,
+            "recent_delays": 最近10次中的延迟次数,
+            "avg_delay_days": 平均延迟天数,
+            "on_time_rate": 准时率
+        }
+        """
+        # 查询该供应商的所有已完成采购订单
+        sql = """
+            SELECT 
+                po_id,
+                order_date,
+                expected_delivery_date,
+                actual_delivery_date,
+                julianday(actual_delivery_date) - julianday(expected_delivery_date) as delay_days
+            FROM purchase_order
+            WHERE supplier_id = ?
+              AND status = '已入库'
+              AND actual_delivery_date IS NOT NULL
+            ORDER BY actual_delivery_date DESC
+            LIMIT 100
+        """
+        rows = self.db._conn.execute(sql, (supplier_id,)).fetchall()
+        
+        if not rows:
+            return {
+                "total_deliveries": 0,
+                "on_time_deliveries": 0,
+                "recent_delays": 0,
+                "avg_delay_days": 0.0,
+                "on_time_rate": 1.0
+            }
+        
+        total = len(rows)
+        on_time = 0
+        total_delay = 0.0
+        recent_delays = 0
+        
+        for i, row in enumerate(rows):
+            delay_days = row["delay_days"] if row["delay_days"] else 0.0
+            total_delay += delay_days
+            
+            # 允许10%误差（1天以内的延迟算准时）
+            is_on_time = (delay_days <= 1.0)
+            if is_on_time:
+                on_time += 1
+            
+            # 统计最近10次
+            if i < 10 and not is_on_time:
+                recent_delays += 1
+        
+        return {
+            "total_deliveries": total,
+            "on_time_deliveries": on_time,
+            "recent_delays": recent_delays,
+            "avg_delay_days": total_delay / total if total > 0 else 0.0,
+            "on_time_rate": on_time / total if total > 0 else 1.0
+        }
+    
+    def select_supplier_smart(self, material_id: str, suppliers: list, shortage_qty: float, wo_id: str) -> dict:
+        """
+        【完整供应商策略】智能选择供应商
+        
+        策略优先级：
+        1. 紧急订单：选交期最短的供应商（即使贵20%）
+        2. 成本优化：选最便宜的供应商（交期可接受）
+        3. 默认策略：70%主供应商 + 30%备选供应商（负载均衡）
+        4. 风险评估：避开最近频繁延迟的供应商
+        5. 地缘分散：避免过度依赖单一地区
+        
+        返回：选中的供应商记录
+        """
+        if not suppliers:
+            return None
+        
+        # 获取工单优先级（用于判断紧急程度）
+        wo_info = self.work_order_state.get(wo_id, {})
+        wo_priority = wo_info.get("priority", 3)
+        
+        # 策略1：紧急订单（P1/P2）→ 交期优先
+        if wo_priority <= 2:
+            # 选交期最短的供应商（即使不是主供应商）
+            fastest = min(suppliers, key=lambda s: s.get("lead_time_days", 999))
+            print(f"  [紧急采购] {material_id}: 选{fastest['supplier_id']}（交期{fastest['lead_time_days']}天）")
+            return fastest
+        
+        # 策略2：检查供应商近期表现（从数据库查询）
+        unreliable_suppliers = set()
+        for sup in suppliers:
+            sup_id = sup["supplier_id"]
+            perf = self.get_supplier_performance_from_db(sup_id)
+            delay_count = perf.get("recent_delays", 0)
+            if delay_count >= 3:  # 最近10次中延迟3次以上，标记为不可靠
+                unreliable_suppliers.add(sup_id)
+                print(f"  [供应商评估] {sup_id}: 最近10次交货延迟{delay_count}次，准时率{perf['on_time_rate']:.0%}")
+        
+        # 过滤掉不可靠供应商（除非所有都不可靠）
+        reliable_suppliers = [s for s in suppliers if s["supplier_id"] not in unreliable_suppliers]
+        if reliable_suppliers:
+            suppliers = reliable_suppliers
+        
+        # 策略3：默认策略 → 70%主供应商 + 30%备选供应商（负载均衡）
+        preferred = [s for s in suppliers if s.get("is_preferred")]
+        backup = [s for s in suppliers if not s.get("is_preferred")]
+        
+        if preferred and backup:
+            # 有主供应商和备选供应商，执行负载均衡
+            if random.random() < 0.7:
+                # 70%概率选主供应商
+                supplier = preferred[0]
+                strategy = "主供应商"
+            else:
+                # 30%概率选备选供应商（维持供应商关系）
+                supplier = backup[0]
+                strategy = "备选供应商（负载均衡）"
+            
+            print(f"  [智能采购] {material_id}: 选{supplier['supplier_id']}（{strategy}）")
+            return supplier
+        
+        # 策略4：只有主供应商或只有备选供应商 → 选第一个
+        if preferred:
+            return preferred[0]
+        
+        return suppliers[0]
+    
     def create_purchase_order_for_shortage(self, wom: dict):
         """P2-13: 为缺料创建采购订单（含EOQ批量策略）"""
         material_id = wom["material_id"]
@@ -869,11 +1433,11 @@ class FactorySimulation:
             return
 
         sms = self.supplier_materials.get(material_id, [])
-        preferred = [s for s in sms if s.get("is_preferred")]
-        supplier = preferred[0] if preferred else (sms[0] if sms else None)
-
-        if not supplier:
+        if not sms:
             return
+        
+        # 【完整供应商策略】智能选择供应商（替换原简单逻辑）
+        supplier = self.select_supplier_smart(material_id, sms, shortage_qty, wo_id)
 
         # P2-13: EOQ批量策略
         mat_info = self.materials.get(material_id, {})
@@ -1066,6 +1630,22 @@ class FactorySimulation:
         )
 
         print(f"  [到货] {material_id}: PO={po_id}, 数量={accepted_qty:.0f}")
+        
+        # 【供应商绩效管理】更新数据库中的实际交货日期
+        if supplier:
+            supplier_id = supplier.get("supplier_id", "UNKNOWN")
+            now_dt = self.sim_time_to_datetime(self.env.now)
+            
+            # 更新采购订单的实际交货日期
+            self.db.update("purchase_order", {"po_id": po_id}, {
+                "actual_delivery_date": now_dt,
+                "status": "已入库"
+            })
+            
+            # 从数据库查询供应商表现（用于日志输出）
+            perf = self.get_supplier_performance_from_db(supplier_id)
+            if perf["total_deliveries"] > 0:
+                print(f"  [供应商表现] {supplier_id}: 累计交货{perf['total_deliveries']}次，准时率{perf['on_time_rate']:.0%}，平均延迟{perf['avg_delay_days']:.1f}天")
 
         # P0-3: 到货后触发增量MRP重分配（以实收数量）
         self.incremental_mrp_after_arrival(material_id, accepted_qty)
@@ -1240,6 +1820,27 @@ class FactorySimulation:
                 print(f"  [日历] {today} 为周日，跳过排程")
                 yield self.env.timeout(23.0)
                 continue
+            
+            # 【优化5】前瞻排程：预测未来瓶颈（每天一次）
+            lookahead_enabled = self.config.get("lookahead_enabled", True)
+            if lookahead_enabled:
+                lookahead_result = self.look_ahead_schedule()
+                
+                # 输出预测结果（只输出有风险的）
+                material_shortages = lookahead_result.get("material_shortages", {})
+                at_risk_orders = lookahead_result.get("at_risk_orders", [])
+                
+                if material_shortages:
+                    print(f"  [前瞻预警] 发现{len(material_shortages)}种物料缺口")
+                    for mat_id, info in list(material_shortages.items())[:3]:  # 只显示前3个
+                        print(f"    - {mat_id}: 缺口{info['total_gap']:.0f}，影响{len(info['affected_wos'])}个工单")
+                
+                if at_risk_orders:
+                    high_risk = [o for o in at_risk_orders if o["risk_level"] == "HIGH"]
+                    if high_risk:
+                        print(f"  [交期预警] {len(high_risk)}个订单高风险延期")
+                        for order in high_risk[:3]:  # 只显示前3个
+                            print(f"    - {order['wo_id']}: 预计延期{order['delay_hours']:.1f}小时")
 
             # P0-1: 只获取前驱工序已完成的待开工工序
             ready_ops = self.db.query_ready_operations_with_precedence()
@@ -1249,15 +1850,28 @@ class FactorySimulation:
                 yield self.env.timeout(4.0)
                 continue
 
-            # P1-8: 按关键比（Critical Ratio）+优先级排序
+            # P1-8: 按关键比（Critical Ratio）+优先级排序（使用动态平均时间）
             now_sim = self.env.now
             scored_ops = []
             for op in ready_ops:
+                product_id = op.get("product_id")
+                remaining_ops = op.get("remaining_op_count", 1)
+                
+                # 【优化6】使用产品实际平均时间，而不是硬编码4.0
+                avg_op_time = self.calculate_avg_op_time(product_id)
+                
+                # 计算剩余工期预估
+                estimated_remaining_time = remaining_ops * avg_op_time
+                
+                # 加上排队时间
+                queue_time = self.config.get("queue_time_hours", 0.5)
+                estimated_remaining_time += remaining_ops * queue_time
+                
+                # 关键比 = 剩余时间 / 剩余工期预估（越小越紧急）
                 due_sim = self.datetime_to_sim_hours(op.get("planned_end"))
                 remaining_time = max(1.0, due_sim - now_sim)
-                remaining_ops = op.get("remaining_op_count", 1)
-                # 关键比 = 剩余时间 / 剩余工序估计用时（越小越紧急）
-                critical_ratio = remaining_time / (remaining_ops * 4.0)  # 假设每工序4小时
+                critical_ratio = remaining_time / max(estimated_remaining_time, 0.1)
+                
                 priority = op.get("priority", 5)
                 scored_ops.append((critical_ratio, priority, op))
 
@@ -1723,8 +2337,18 @@ class FactorySimulation:
         self.db.update("work_order", {"work_order_id": wo_id}, {"status": new_status})
     
     def realtime_schedule_after_completion(self, completed_wo_op_id: str, wo_id: str):
-        """【新增】事件驱动实时排程：工序完成后立即检查并排程后续工序"""
-        # 等待一小段时间，确保数据库更新完成
+        """【优化4】事件驱动实时排程：工序完成后立即检查并排程后续工序（带防抖动）"""
+        now = self.env.now
+        
+        # 1. 防抖动检查：冷却期内不重复排程
+        last_schedule = self.schedule_cooldown.get(wo_id, 0)
+        if now - last_schedule < self.schedule_cooldown_hours:
+            return  # 冷却期内，跳过排程
+        
+        # 2. 更新冷却时间
+        self.schedule_cooldown[wo_id] = now
+        
+        # 3. 等待一小段时间，确保数据库更新完成
         yield self.env.timeout(0.1)
         
         # 查询因当前工序完成而变为ready的后续工序
@@ -1748,14 +2372,28 @@ class FactorySimulation:
         if not relevant_ops:
             return
         
-        # 按关键比排序（与daily_scheduler逻辑一致）
+        # 按关键比排序（使用动态平均时间）
         now_sim = self.env.now
         scored_ops = []
         for op in relevant_ops:
+            product_id = op.get("product_id")
+            remaining_ops = op.get("remaining_op_count", 1)
+            
+            # 【优化6】使用产品实际平均时间，而不是硬编码4.0
+            avg_op_time = self.calculate_avg_op_time(product_id)
+            
+            # 计算剩余工期预估
+            estimated_remaining_time = remaining_ops * avg_op_time
+            
+            # 加上排队时间
+            queue_time = self.config.get("queue_time_hours", 0.5)
+            estimated_remaining_time += remaining_ops * queue_time
+            
+            # 计算关键比（剩余时间/剩余工期）
             due_sim = self.datetime_to_sim_hours(op.get("planned_end"))
             remaining_time = max(1.0, due_sim - now_sim)
-            remaining_ops = op.get("remaining_op_count", 1)
-            critical_ratio = remaining_time / (remaining_ops * 4.0)
+            critical_ratio = remaining_time / max(estimated_remaining_time, 0.1)
+            
             priority = op.get("priority", 5)
             scored_ops.append((critical_ratio, priority, op))
         
@@ -1907,9 +2545,101 @@ class FactorySimulation:
         # 注：成品库存独立记录到 finished_goods_inventory 表
         # product_id 不在 material 表中，不写入 inventory_transaction 避免外键断链
         print(f"  [完工入库] 工单{wo_id} -> 成品{product_id} +{completed_qty:.1f} 入成品仓")
-
-        # 触发发货
-        self.try_ship_customer_order(wo_id, product_id, completed_qty)
+        
+        # 更新工单的实际产出量和良率统计
+        wo_info = self.work_order_state.get(wo_id, {})
+        planned_qty = wo_info.get("quantity", 0)  # 计划投入量
+        order_qty = wo_info.get("order_quantity", planned_qty)  # 订单数量
+        
+        # 更新工单的completed_quantity
+        self.db.update("work_order", {"work_order_id": wo_id}, {
+            "completed_quantity": completed_qty,
+            "status": "已完成"
+        })
+        
+        # 计算良率统计信息（用于成本核算）
+        actual_yield_rate = completed_qty / planned_qty if planned_qty > 0 else 0
+        expected_yield_rate = order_qty / planned_qty if planned_qty > 0 else 0
+        
+        print(f"  [良率统计] 工单{wo_id}: 投入{planned_qty:.1f} → 产出{completed_qty:.1f} (实际{actual_yield_rate:.2%}, 预期{expected_yield_rate:.2%})")
+        
+        # 判断是否为重工工单
+        wo_info = self.work_order_state.get(wo_id, {})
+        is_rework_wo = wo_info.get("work_order_type") == "重工"
+        original_order_id = wo_info.get("customer_order_id")
+        
+        if is_rework_wo and original_order_id:
+            # 重工工单完成：需要FQC复检
+            print(f"  [重工完成] {wo_id} 完成，等待FQC复检")
+            self.rework_fqc_and_reship(original_order_id, product_id, completed_qty, wo_id)
+        else:
+            # 正常工单完成：直接触发发货
+            self.try_ship_customer_order(wo_id, product_id, completed_qty)
+    
+    def rework_fqc_and_reship(self, order_id: str, product_id: str, rework_qty: float, rework_wo_id: str):
+        """
+        重工完成后FQC复检并重新发货
+        
+        流程：
+        1. FQC复检（重工后必须再次检验）
+        2. 合格 -> 触发发货 -> 更新订单状态为"已发货"
+        3. 不合格 -> 报废 -> 更新订单状态为"已取消"
+        """
+        import random
+        
+        print(f"  [重工FQC] 开始复检订单{order_id}，数量{rework_qty:.1f}")
+        
+        # 1. FQC复检
+        fqc_passed = self._run_fqc(order_id, product_id, rework_qty)
+        
+        if not fqc_passed:
+            # 复检仍不合格：报废处理
+            print(f"  [重工失败] 订单{order_id} FQC复检仍不合格，报废{rework_qty:.1f}")
+            
+            # 从成品库存中移除（报废）
+            fg_state = self.fg_inventory_state.get(product_id, {})
+            fg_state["total"] = max(0, fg_state.get("total", 0) - rework_qty)
+            fg_state["available"] = max(0, fg_state.get("available", 0) - rework_qty)
+            
+            # 更新数据库
+            fg_inv_id = f"FGI-{product_id}"
+            self.db.update("finished_goods_inventory", {"fg_inv_id": fg_inv_id}, {
+                "total_quantity": lambda col: max(0, (col or 0) - rework_qty),
+                "available_quantity": lambda col: max(0, (col or 0) - rework_qty),
+                "last_updated": self.sim_time_to_datetime(self.env.now)
+            })
+            
+            # 更新重工工单状态
+            self.db.update("work_order", {"work_order_id": rework_wo_id}, {
+                "status": "已取消",
+                "note": "重工后FQC复检仍不合格，报废处理"
+            })
+            
+            # 更新原订单状态
+            self.db.update("customer_order", {"order_id": order_id}, {
+                "status": "已取消",
+                "note": "重工失败，订单取消"
+            })
+            
+            return
+        
+        # 2. 复检合格：触发发货流程
+        print(f"  [重工成功] 订单{order_id} FQC复检合格，触发发货")
+        
+        # 更新重工工单状态
+        self.db.update("work_order", {"work_order_id": rework_wo_id}, {
+            "status": "已完成",
+            "note": f"重工完成，FQC复检合格，数量{rework_qty:.1f}"
+        })
+        
+        # 更新原订单状态为"重工完成"
+        self.db.update("customer_order", {"order_id": order_id}, {
+            "status": "重工完成",
+            "note": f"重工完成，等待发货，数量{rework_qty:.1f}"
+        })
+        
+        # 3. 重新触发发货（使用重工工单ID）
+        self.try_ship_customer_order(rework_wo_id, product_id, rework_qty)
 
     def try_ship_customer_order(self, wo_id: str, product_id: str, available_qty: float):
         """客户订单发货闭环（含Task9: FQC成品出货检验）"""
@@ -1943,15 +2673,21 @@ class FactorySimulation:
         # Task9: FQC成品出货检验
         fqc_passed = self._run_fqc(co["order_id"], product_id, ship_qty)
         if not fqc_passed:
-            # FQC不合格：Hold批次，打印告警，此次不发货
-            print(f"  [FQC不合格] 订单{co['order_id']}出货检验不合格，Hold批次，暂停发货")
+            # FQC不合格：启动完整重工流程
+            print(f"  [FQC不合格] 订单{co['order_id']}出货检验不合格，启动重工流程")
+            
+            # 1. 从成品库存中移除（转入重工区）
+            fg_state["available"] = max(0, fg_state.get("available", 0) - ship_qty)
+            fg_state["total"] = max(0, fg_state.get("total", 0) - ship_qty)
+            
+            # 2. 创建重工工单
+            rework_wo_id = self.create_fqc_rework_order(co["order_id"], product_id, ship_qty)
+            
+            # 3. 更新客户订单状态
             self.db.update("customer_order", {"order_id": co["order_id"]}, {
-                "note": f"FQC不合格，Hold中，待重工后重新发货"
+                "status": "重工中",
+                "note": f"FQC不合格，已创建重工工单{rework_wo_id}"
             })
-            # 退回成品库存
-            fg_state["available"] = fg_state.get("available", 0) + ship_qty
-            fg_state["total"] = fg_state.get("total", 0) + ship_qty
-            fg_state["shipped"] = max(0, fg_state.get("shipped", 0) - ship_qty)
             return
 
         # 计算OTD
@@ -2181,6 +2917,170 @@ class FactorySimulation:
         })
         return passed
 
+    def create_fqc_rework_order(self, order_id: str, product_id: str, rework_qty: float) -> str:
+        """
+        创建FQC重工工单（符合真实半导体行业实践）
+        
+        重工原则：
+        1. 复用正常工艺路线，不创建新工序
+        2. 走正常排程流程，占用机台资源
+        3. 优先级设置为1（最高）
+        4. 工序标记为重工类型，便于追溯
+        5. 应用投入过量方案，考虑重工工序良率损耗
+        
+        重工场景：
+        - FQC不合格通常是包装/标识问题，重工从"重新包装"开始
+        - 严重功能不良直接报废，不重工
+        """
+        import random
+        
+        # 1. 判定是否可重工（80%可重工，20%直接报废）
+        reworkable = random.random() < self.config.get("reworkable_rate", 0.80)
+        
+        if not reworkable:
+            # 严重不良，直接报废
+            print(f"  [重工判定] 订单{order_id}不良严重，无法重工，报废{rework_qty:.1f}")
+            
+            # 更新订单状态
+            self.db.update("customer_order", {"order_id": order_id}, {
+                "status": "已取消",
+                "note": f"FQC不合格，不良严重无法重工，报废{rework_qty:.1f}"
+            })
+            return None
+        
+        # 2. 获取重工工序（最后3道）
+        route_id = self.get_route_for_product(product_id)
+        if not route_id:
+            print(f"  [重工错误] 产品{product_id}无工艺路线")
+            return None
+        
+        all_steps = self.route_steps.get(route_id, [])
+        if not all_steps:
+            print(f"  [重工错误] 工艺路线{route_id}无工序")
+            return None
+        
+        # 取最后3道工序作为重工工序（包装、测试、最终检查）
+        rework_step_count = min(3, len(all_steps))
+        rework_steps = all_steps[-rework_step_count:]
+        
+        # 3. 【投入过量方案】计算重工需要的投入量
+        # 重工工序的总良率 = 0.98^3 = 94.1%
+        rework_total_yield = 1.0
+        for step in rework_steps:
+            step_yield = step.get("yield_rate_standard", self.config.get("default_yield_rate", 0.98))
+            rework_total_yield *= step_yield
+        
+        # 反推重工投入量
+        rework_input_qty = rework_qty / rework_total_yield
+        
+        # 向上取整到Lot大小的倍数
+        lot_size = self.config.get("wip_lot_size", 25)
+        rework_input_qty = math.ceil(rework_input_qty / lot_size) * lot_size
+        
+        print(f"  [重工计算] 订单{order_id}：需要{rework_qty:.1f}个 → 重工投入{rework_input_qty:.1f}个（良率{rework_total_yield:.2%}）")
+        
+        # 4. 创建重工工单（使用投入量）
+        rework_wo_id = self.next_id("WO-RW")
+        now_dt = self.sim_time_to_datetime(self.env.now)
+        
+        # 数据库记录
+        rework_wo = {
+            "work_order_id": rework_wo_id,
+            "customer_order_id": order_id,
+            "product_id": product_id,
+            "planned_quantity": rework_input_qty,  # ✅ 重工投入量（过量）
+            "expected_output_qty": rework_qty,  # ✅ 预期产出量（FQC不合格数量）
+            "priority": 1,  # 重工工单最高优先级
+            "status": "已下达",
+            "work_order_type": "重工",
+            "planned_start_date": now_dt,
+            "planned_completion_date": now_dt,
+            "note": f"FQC不合格重工，原订单{order_id}，投入{rework_input_qty:.1f}→预期{rework_qty:.1f}",
+            "created_at": now_dt
+        }
+        self.db.insert("work_order", rework_wo)
+        
+        # 内存状态（必须包含所有必需字段）
+        self.work_order_state[rework_wo_id] = {
+            "status": "已下达",
+            "current_step_idx": 0,
+            "allocated_materials": {},
+            "product_id": product_id,
+            "quantity": rework_input_qty,  # ✅ 投入量
+            "order_quantity": rework_qty,  # ✅ 订单数量（FQC不合格数量）
+            "work_order_type": "重工"
+        }
+        
+        print(f"  [重工工单] 创建{rework_wo_id}：产品{product_id}，投入{rework_input_qty:.1f}→预期{rework_qty:.1f}，优先级1")
+        
+        # 5. 展开重工工序（复用正常工艺路线）
+        print(f"  [重工路线] 复用{route_id}的最后{rework_step_count}道工序")
+        
+        # 展开工序（标记为重工）
+        rework_ops = []
+        base_date = now_dt
+        current_input_qty = rework_input_qty  # 当前工序投入量
+        
+        for idx, step in enumerate(rework_steps):
+            wo_op_id = self.next_id("WOOP")
+            
+            # 计算计划时间（复用正常逻辑）
+            std_time = step.get("std_time", 0.1) * current_input_qty
+            planned_start = base_date
+            planned_end = base_date + timedelta(hours=std_time + 0.5)  # 0.5小时排队时间
+            
+            wo_op = {
+                "wo_op_id": wo_op_id,
+                "work_order_id": rework_wo_id,
+                "step_id": step["step_id"],
+                "sequence_no": step["sequence_no"],
+                "status": "待开工",
+                "planned_start": planned_start,
+                "planned_end": planned_end,
+                "required_input_qty": round(current_input_qty, 4),  # ✅ 使用当前工序投入量
+                "is_rework": True  # 标记为重工序工，便于追溯和统计
+            }
+            self.db.insert("work_order_operation", wo_op)
+            rework_ops.append(wo_op)
+            
+            # 下一道工序的投入 = 本道工序产出（×良率）
+            step_yield = step.get("yield_rate_standard", self.config.get("default_yield_rate", 0.98))
+            current_input_qty *= step_yield
+            
+            base_date = planned_end
+        
+        # 6. 创建WIP Lot（待重工）- 使用投入量
+        rework_lot_id = self.next_id("LOT-RW")
+        rework_lot = {
+            "lot_id": rework_lot_id,
+            "work_order_id": rework_wo_id,
+            "product_id": product_id,
+            "lot_size": rework_input_qty,  # ✅ 使用投入量
+            "current_qty": rework_input_qty,  # ✅ 使用投入量
+            "lot_status": "待重工",
+            "status": "排队中",
+            "created_at": now_dt,
+            "queue_start_time": now_dt
+        }
+        self.db.insert("wip_lot", rework_lot)
+        
+        # 内存状态（必须包含wo_id，否则_get_lot_for_op会报错）
+        self.wip_lot_state[rework_lot_id] = {
+            "wo_id": rework_wo_id,  # ← 关键字段！
+            "product_id": product_id,
+            "current_step_idx": 0,
+            "status": "排队中",
+            "current_qty": rework_input_qty  # ✅ 使用投入量
+        }
+        
+        print(f"  [重工Lot] 创建{rework_lot_id}，投入{rework_input_qty:.1f}个，状态：待重工")
+        
+        # 7. 触发实时排程（重工工单进入排程队列）
+        # 注：重工工单和正常工单一样，走daily_scheduler和realtime_schedule排程
+        # 由于优先级=1，会被优先排程
+        
+        return rework_wo_id
+    
     def _rework_hold_release(self, lot_id: str, rework_qty: float):
         """简化返工处理：Hold 4小时后自动解除，Lot 重回排队"""
         yield self.env.timeout(4.0)
