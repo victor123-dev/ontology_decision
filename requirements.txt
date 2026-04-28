@@ -19,3 +19,4 @@ jinja2>=3.0.0
 fastapi-mcp==0.4.0
 openpyxl==3.1.2
 simpy==4.1.1
+ortools==9.15.6755

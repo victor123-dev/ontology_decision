@@ -429,12 +429,13 @@ function ToolCall({
       : undefined;
     
     const hasDetails = formattedArgs || formattedResult;
+    const displayLabel = description ?? `${t.toolCalls.ontologySemanticUnderstanding}: ${name}`;
     
     if (!hasDetails) {
       return (
         <ChainOfThoughtStep
           key={id}
-          label={description ?? t.toolCalls.ontologySemanticUnderstanding}
+          label={displayLabel}
           icon={BrainIcon}
         ></ChainOfThoughtStep>
       );
@@ -447,7 +448,7 @@ function ToolCall({
             key={id}
             label={
               <div className="flex items-center justify-between">
-                <span>{description ?? t.toolCalls.ontologySemanticUnderstanding}</span>
+                <span>{displayLabel}</span>
                 <ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
               </div>
             }
@@ -499,12 +500,13 @@ function ToolCall({
       : undefined;
     
     const hasDetails = formattedArgs || formattedResult;
-    
+    const displayLabel = description ?? `${t.toolCalls.ontologyDataAnalysis}: ${name}`;
+
     if (!hasDetails) {
       return (
         <ChainOfThoughtStep
           key={id}
-          label={description ?? t.toolCalls.ontologyDataAnalysis}
+          label={displayLabel}
           icon={SearchIcon}
         ></ChainOfThoughtStep>
       );
@@ -517,7 +519,7 @@ function ToolCall({
             key={id}
             label={
               <div className="flex items-center justify-between">
-                <span>{description ?? t.toolCalls.ontologyDataAnalysis}</span>
+                <span>{displayLabel}</span>
                 <ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
               </div>
             }

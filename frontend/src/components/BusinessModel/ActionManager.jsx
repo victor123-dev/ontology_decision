@@ -21,6 +21,8 @@ function ActionManager({ businessModels, modelLinks }) {
   const [currentStep, setCurrentStep] = useState(0)
   const [form] = Form.useForm()
   const [executeForm] = Form.useForm()
+  const [executing, setExecuting] = useState(false)
+  const [executionResult, setExecutionResult] = useState(null)
 
   useEffect(() => {
     fetchActions()
@@ -316,20 +318,46 @@ function ActionManager({ businessModels, modelLinks }) {
   const handleExecute = (action) => {
     setSelectedAction(action)
     executeForm.resetFields()
+    setExecutionResult(null)
+    setExecuting(false)
     setExecuteModalVisible(true)
   }
 
   const handleExecuteSubmit = async (values) => {
+    setExecuting(true)
+    setExecutionResult(null)
     try {
+      // 解析 array 和 object 类型的参数
+      const parsedParameters = { ...values }
+      if (selectedAction?.parameters) {
+        selectedAction.parameters.forEach(param => {
+          const value = parsedParameters[param.name]
+          if (value && typeof value === 'string') {
+            if (param.type === 'array' || param.type === 'object') {
+              try {
+                parsedParameters[param.name] = JSON.parse(value)
+              } catch (e) {
+                message.error(`参数 ${param.name} 的 JSON 格式不正确: ${e.message}`)
+                setExecuting(false)
+                return
+              }
+            }
+          }
+        })
+      }
+
       const response = await actionApi.execute({
         action_id: selectedAction.id,
-        parameters: values
+        parameters: parsedParameters
       })
+      setExecutionResult(response.data)
       message.success('执行成功')
       console.log('Action execution result:', response.data)
-      setExecuteModalVisible(false)
     } catch (error) {
-      message.error('执行失败: ' + (error.response?.data?.detail || error.message))
+      setExecutionResult({ error: error.response?.data?.detail || error.message })
+      message.error('执行失败')
+    } finally {
+      setExecuting(false)
     }
   }
 
@@ -736,7 +764,10 @@ result = {
         open={executeModalVisible}
         onOk={executeForm.submit}
         onCancel={() => setExecuteModalVisible(false)}
-        width={600}
+        width={800}
+        okText="执行"
+        cancelText="关闭"
+        okButtonProps={{ loading: executing }}
       >
         <Form form={executeForm} layout="vertical" onFinish={handleExecuteSubmit}>
           {selectedAction?.parameters?.map((param, index) => (
@@ -763,6 +794,40 @@ result = {
             </div>
           )}
         </Form>
+
+        {/* 执行结果显示区域 */}
+        {executing && (
+          <div style={{ marginTop: 24, textAlign: 'center', padding: '40px' }}>
+            <div style={{ fontSize: '16px', color: '#1890ff', marginBottom: '16px' }}>
+              正在执行中，请稍候...
+            </div>
+          </div>
+        )}
+
+        {executionResult && !executing && (
+          <div style={{ marginTop: 24 }}>
+            <Divider>执行结果</Divider>
+            <Card 
+              size="small" 
+              style={{ 
+                maxHeight: '400px', 
+                overflow: 'auto',
+                backgroundColor: executionResult.error ? '#fff2f0' : '#f6ffed',
+                border: executionResult.error ? '1px solid #ffccc7' : '1px solid #b7eb8f'
+              }}
+            >
+              <pre style={{ 
+                margin: 0, 
+                fontSize: '12px',
+                lineHeight: '1.5',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}>
+                {JSON.stringify(executionResult, null, 2)}
+              </pre>
+            </Card>
+          </div>
+        )}
       </Modal>
     </div>
   )

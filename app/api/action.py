@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.services.action_service import get_action_service, ActionService
 from app.utils.shared_utils import get_db
+import traceback
+from app.utils.logger import get_logger, get_request_logger
 
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -14,6 +17,7 @@ def create_action(action_data: dict, action_service: ActionService = Depends(get
             raise HTTPException(status_code=500, detail="Failed to create action")
         return action
     except Exception as e:
+        logger.error(f"完整堆栈跟踪:\n{traceback.format_exc()}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
