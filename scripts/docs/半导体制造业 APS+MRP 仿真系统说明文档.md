@@ -24,19 +24,27 @@ python run_semiconductor_demo.py
 scripts/
 ├── run_semiconductor_demo.py            # 主运行脚本（入口）
 └── semiconductor_demo/
-    ├── factory_data.py                  # 工厂静态主数据 + 仿真参数
-    ├── db_models.py                     # 数据库表结构（26张表）
+    ├── factory_data.py                  # 工厂静态主数据 + 仿真参数（含10个真实客户）
+    ├── db_models.py                     # 数据库表结构（32张表）
     ├── db_writer.py                     # 数据库写入/查询工具类
     └── simulation.py                    # SimPy 离散事件仿真引擎（核心）
 ```
 
 ---
 
-## 三、数据库表结构（26张核心表）
+## 三、数据库表结构（32张核心表）
 
 数据全部写入项目根目录的 `data.db`（SQLite）。
 
-### 3.1 基础主数据层
+### 3.1 客户主数据层
+
+| 表名 | 说明 |
+|---|---|
+| `customer` | 客户主数据（10个真实客户：AMD、NVIDIA、华为海思等） |
+| `customer_product` | 客户-产品关系（客户可购买的产品清单、特定价格） |
+| `customer_order` | 客户订单（关联客户ID、客户PO号、单价、发货地址） |
+
+### 3.2 基础主数据层
 
 | 表名 | 说明 |
 |---|---|
@@ -178,7 +186,7 @@ SIMULATION_CONFIG = {
 
 | 进程方法 | 触发方式 | 功能 |
 |---|---|---|
-| `order_arrival_process` | 每天泊松到达 | 生成客户订单并创建工单 |
+| `order_arrival_process` | 每天泊松到达 | 从真实客户中生成订单（验证客户-产品关系） |
 | `daily_mrp_run` | 每天08:30 | 运行MRP，计算物料缺口并触发采购/调拨 |
 | `daily_scheduler` | 每天09:00 + 每4小时 | 运行APS排程（跳过周日） |
 | `realtime_schedule_after_completion` | 工序完成时 | **实时排程后续工序（v3.0新增）** |

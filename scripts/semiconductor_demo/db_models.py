@@ -237,17 +237,60 @@ class WorkCalendar(Base):
 # 需求与计划层
 # ============================================================================
 
+class Customer(Base):
+    __tablename__ = "customer"
+    __table_args__ = (
+        Index('idx_customer_level', 'customer_level'),
+        Index('idx_customer_industry', 'industry'),
+    )
+    customer_id = Column(String(50), primary_key=True)
+    customer_name = Column(String(200), nullable=False)
+    customer_level = Column(String(50), default="普通")  # VIP/重要/普通
+    industry = Column(String(100), nullable=True)  # 行业类别
+    credit_limit = Column(Float, default=0.0)  # 信用额度（万元）
+    payment_terms = Column(String(100), default="月结30天")  # 付款条件
+    contact_person = Column(String(100), nullable=True)  # 联系人
+    contact_phone = Column(String(50), nullable=True)  # 联系电话
+    contact_email = Column(String(100), nullable=True)  # 联系邮箱
+    address = Column(String(500), nullable=True)  # 地址
+    country = Column(String(50), default="中国")  # 国家
+    region = Column(String(50), default="大陆")  # 地区：大陆/台湾/欧美/亚太
+    status = Column(String(50), default="活跃")  # 活跃/暂停/黑名单
+    note = Column(String(500), nullable=True)
+
+class CustomerProduct(Base):
+    """客户-产品关系（客户可购买的产品清单、特定价格）"""
+    __tablename__ = "customer_product"
+    __table_args__ = (
+        Index('idx_cp_customer', 'customer_id'),
+        Index('idx_cp_product', 'product_id'),
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(50), ForeignKey("customer.customer_id"), nullable=False)
+    product_id = Column(String(50), ForeignKey("product.product_id"), nullable=False)
+    special_price = Column(Float, nullable=True)  # 客户特定价格
+    min_order_qty = Column(Float, default=1.0)  # 最小订单量
+    lead_time_days = Column(Integer, default=7)  # 特定交期（天）
+    quality_level = Column(String(50), default="标准")  # 质量等级：标准/车规/工规
+    status = Column(String(50), default="活跃")
+
 class CustomerOrder(Base):
     __tablename__ = "customer_order"
     __table_args__ = (Index('idx_co_required', 'required_date'),)
     order_id = Column(String(50), primary_key=True)
-    customer_name = Column(String(100), nullable=False)
+    customer_id = Column(String(50), ForeignKey("customer.customer_id"), nullable=False)
+    customer_name = Column(String(200), nullable=False)
+    customer_po_number = Column(String(100), nullable=True)  # 客户采购订单号
     product_id = Column(String(50), ForeignKey("product.product_id"), nullable=False)
     quantity = Column(Float, nullable=False)
+    unit_price = Column(Float, nullable=True)  # 订单单价
     order_date = Column(DateTime, nullable=False)
     required_date = Column(DateTime, nullable=False)
     priority = Column(Integer, default=5)
     status = Column(String(50), default="已确认")
+    shipping_address = Column(String(500), nullable=True)  # 发货地址
+    quality_requirement = Column(String(100), default="标准")  # 质量要求
+    packaging_requirement = Column(String(200), nullable=True)  # 包装要求
     note = Column(String(500), nullable=True)
 
 class WorkOrder(Base):

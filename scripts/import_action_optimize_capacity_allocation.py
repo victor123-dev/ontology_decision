@@ -90,6 +90,24 @@ def execute_optimize_capacity_allocation(parameters):
         # 获取机台
         machines = client.models.Machine.find(is_active=True)
         
+        # 【新增】获取客户信息，用于优先级加权
+        customer_weights = {}  # work_order_id -> customer_weight
+        for wo in work_orders:
+            customer_weight = 1.0
+            # 尝试获取工单关联的订单
+            if hasattr(wo, 'customer_order_id') and wo.customer_order_id:
+                order = client.models.CustomerOrder.get(wo.customer_order_id)
+                if order and hasattr(order, 'customer_id') and order.customer_id:
+                    customer = client.models.Customer.get(order.customer_id)
+                    if customer:
+                        customer_level = customer.customer_level or "普通"
+                        customer_weight = {
+                            "VIP": 2.0,
+                            "重要": 1.5,
+                            "普通": 1.0
+                        }.get(customer_level, 1.0)
+            customer_weights[wo.work_order_id] = customer_weight
+        
         # 创建决策变量
         x = {}
         S = {}
@@ -170,12 +188,30 @@ def execute_optimize_capacity_allocation(parameters):
             
             solver.Add(E[last_op.wo_op_id] <= due_hours + BIG_M * (1 - C[wo.work_order_id]))
         
-        # 目标函数: 最大化按时交付的优先级加权和
+        # 目标函数: 最大化按时交付的优先级加权和（客户等级 × 订单优先级）
         objective = solver.Objective()
         for wo in work_orders:
-            priority_weight = _get_priority_weight(wo.priority)
-            objective.SetCoefficient(C[wo.work_order_id], priority_weight)
+            # 订单优先级权重
+            order_priority = wo.priority or 3
+            order_priority_weight = {1: 10, 3: 5, 5: 1}.get(order_priority, 5)
+            
+            # 客户等级权重
+            customer_weight = customer_weights.get(wo.work_order_id, 1.0)
+            
+            # 综合权重 = 客户等级权重 × 订单优先级权重
+            total_weight = customer_weight * order_priority_weight
+            
+            objective.SetCoefficient(C[wo.work_order_id], total_weight)
         objective.SetMaximization()
+        
+        # 打印权重信息
+        print(f"[产能优化] 工单数量: {len(work_orders)}")
+        for wo in work_orders:
+            order_priority = wo.priority or 3
+            order_priority_weight = {1: 10, 3: 5, 5: 1}.get(order_priority, 5)
+            customer_weight = customer_weights.get(wo.work_order_id, 1.0)
+            total_weight = customer_weight * order_priority_weight
+            print(f"  - 工单 {wo.work_order_id}: P{order_priority}({order_priority_weight}x) × 客户({customer_weight}x) = {total_weight}x")
         
         # 求解
         solver.SetTimeLimit(120000)  # 2分钟
@@ -208,6 +244,16 @@ def execute_optimize_capacity_allocation(parameters):
                 "total_work_orders": len(work_orders),
                 "on_time_count": on_time_count,
                 "on_time_rate": round(on_time_count / len(work_orders) * 100, 2),
+                "customer_weight_applied": True,
+                "work_order_priorities": [
+                    {
+                        "work_order_id": wo.work_order_id,
+                        "order_priority": wo.priority or 3,
+                        "customer_weight": customer_weights.get(wo.work_order_id, 1.0),
+                        "total_weight": customer_weights.get(wo.work_order_id, 1.0) * {1: 10, 3: 5, 5: 1}.get(wo.priority or 3, 5)
+                    }
+                    for wo in work_orders
+                ],
                 "schedule": schedule
             }
             

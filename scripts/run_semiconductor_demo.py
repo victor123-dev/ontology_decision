@@ -28,6 +28,7 @@ from semiconductor_demo.factory_data import (
     PRODUCTS, MATERIALS, BOMS, PROCESS_ROUTES, ROUTE_STEPS,
     WORK_CENTERS, MACHINES, MACHINE_CAPABILITIES, SETUP_MATRIX,
     SUPPLIERS, SUPPLIER_MATERIALS, MATERIAL_SUBSTITUTES,
+    CUSTOMERS, CUSTOMER_PRODUCTS,
     SHIFT_PATTERNS, INITIAL_INVENTORY, SIMULATION_CONFIG,
     generate_work_calendar
 )
@@ -97,6 +98,15 @@ def insert_static_data(db: SimulationDBWriter):
     # 物料替代（批量插入）
     db.bulk_insert_with_transaction("material_substitute", MATERIAL_SUBSTITUTES, batch_size=100)
     logger.info(f"  - 物料替代: {db.count_records('material_substitute')} 条")
+    
+    # 【客户管理】客户主数据
+    for c in CUSTOMERS:
+        db.insert("customer", c)
+    logger.info(f"  - 客户: {db.count_records('customer')} 条")
+    
+    # 【客户管理】客户-产品关系
+    db.bulk_insert_with_transaction("customer_product", CUSTOMER_PRODUCTS, batch_size=100)
+    logger.info(f"  - 客户产品关系: {db.count_records('customer_product')} 条")
     
     # 班次
     for sp in SHIFT_PATTERNS:
@@ -204,6 +214,18 @@ def init_simulation_state(sim: FactorySimulation, db: SimulationDBWriter):
     for r in rows:
         sim.material_substitutes[r["material_id"]].append(dict(r))
     logger.info(f"  - 加载物料替代: {sum(len(v) for v in sim.material_substitutes.values())}")
+    
+    # 【客户管理】加载客户主数据
+    rows = db.query("SELECT * FROM customer")
+    for r in rows:
+        sim.customers.append(dict(r))
+    logger.info(f"  - 加载客户: {len(sim.customers)}")
+    
+    # 【客户管理】加载客户-产品关系
+    rows = db.query("SELECT * FROM customer_product")
+    for r in rows:
+        sim.customer_products[r["customer_id"]].append(dict(r))
+    logger.info(f"  - 加载客户产品关系: {sum(len(v) for v in sim.customer_products.values())}")
     
     # 加载工作中心
     rows = db.query("SELECT * FROM work_center")

@@ -4,10 +4,12 @@
 
 功能：
 1. 清空现有数据（可选，默认开启）
-2. 导入29个BusinessModel（对象）
+2. 导入32个BusinessModel（对象）
 3. 导入所有BusinessModelField（字段）
-4. 导入65个BusinessModelLink（关系）
+4. 导入73个BusinessModelLink（关系）
    - 主数据域关系：18个（R1-R8系列）
+   - 供应链域关系：4个（R8.1-R8.4系列）
+   - 客户域关系：5个（R8.5-R8.9系列）
    - 计划域关系：6个（R9-R10系列）
    - 执行域关系：8个（R11-R13系列）
    - 库存域关系：5个（R14-R16系列）
@@ -15,6 +17,7 @@
    - 采购与供应商域关系：2个（R17系列）
    - 库存事务与调拨域关系：5个（R17系列）
    - 工作日历与排程域关系：6个（R17系列）
+   - 监控域关系：2个（R30-R31系列）
 
 特点：
 - 默认先清空再导入，确保干净的全量导入
@@ -130,7 +133,7 @@ BUSINESS_MODELS = [
     {
         "id": "supplier_material",
         "api_name": "SupplierMaterial",
-        "name": "供应商物料关系",
+        "name": "供应商物料清单",
         "description": "供应商能供应的物料及其价格、交期、最小订购量",
         "primary_key_id": "sm_id",
         "data_source_id": DATA_SOURCE_ID
@@ -138,7 +141,7 @@ BUSINESS_MODELS = [
     {
         "id": "material_substitute",
         "api_name": "MaterialSubstitute",
-        "name": "物料替代关系",
+        "name": "物料可用替代料",
         "description": "物料缺料时可用的替代料关系",
         "primary_key_id": "ms_id",
         "data_source_id": DATA_SOURCE_ID
@@ -151,7 +154,31 @@ BUSINESS_MODELS = [
         "primary_key_id": "bom_id",
         "data_source_id": DATA_SOURCE_ID
     },
-    
+    # 客户域 (3个)
+    {
+        "id": "customer",
+        "api_name": "Customer",
+        "name": "客户",
+        "description": "客户主数据",
+        "primary_key_id": "customer_id",
+        "data_source_id": DATA_SOURCE_ID
+    },
+    {
+        "id": "customer_product",
+        "api_name": "CustomerProduct",
+        "name": "客户可购产品清单",
+        "description": "客户可购买的产品清单及特定价格、交期、质量等级",
+        "primary_key_id": "id",
+        "data_source_id": DATA_SOURCE_ID
+    },
+    {
+        "id": "customer_order",
+        "api_name": "CustomerOrder",
+        "name": "客户订单",
+        "description": "客户采购订单，包含产品、数量、交期、优先级",
+        "primary_key_id": "order_id",
+        "data_source_id": DATA_SOURCE_ID
+    },
     # 计划域 (6个)
     {
         "id": "customer_order",
@@ -439,15 +466,47 @@ ALL_FIELDS = {
         {"field_id": "effective_date", "data_type": "DATE", "name": "生效日期"},
         {"field_id": "expiry_date", "data_type": "DATE", "name": "失效日期"},
     ],
+    "customer": [
+        {"field_id": "customer_id", "data_type": "VARCHAR(50)", "name": "客户ID"},
+        {"field_id": "customer_name", "data_type": "VARCHAR(200)", "name": "客户名称"},
+        {"field_id": "customer_level", "data_type": "VARCHAR(50)", "name": "客户等级"},
+        {"field_id": "industry", "data_type": "VARCHAR(100)", "name": "行业类别"},
+        {"field_id": "credit_limit", "data_type": "FLOAT", "name": "信用额度(万元)"},
+        {"field_id": "payment_terms", "data_type": "VARCHAR(100)", "name": "付款条件"},
+        {"field_id": "contact_person", "data_type": "VARCHAR(100)", "name": "联系人"},
+        {"field_id": "contact_phone", "data_type": "VARCHAR(50)", "name": "联系电话"},
+        {"field_id": "contact_email", "data_type": "VARCHAR(100)", "name": "联系邮箱"},
+        {"field_id": "address", "data_type": "VARCHAR(500)", "name": "地址"},
+        {"field_id": "country", "data_type": "VARCHAR(50)", "name": "国家"},
+        {"field_id": "region", "data_type": "VARCHAR(50)", "name": "地区"},
+        {"field_id": "status", "data_type": "VARCHAR(50)", "name": "状态"},
+        {"field_id": "note", "data_type": "VARCHAR(500)", "name": "备注"},
+    ],
+    "customer_product": [
+        {"field_id": "id", "data_type": "INTEGER", "name": "ID"},
+        {"field_id": "customer_id", "data_type": "VARCHAR(50)", "name": "客户ID"},
+        {"field_id": "product_id", "data_type": "VARCHAR(50)", "name": "产品ID"},
+        {"field_id": "special_price", "data_type": "FLOAT", "name": "客户特定价格"},
+        {"field_id": "min_order_qty", "data_type": "FLOAT", "name": "最小订单量"},
+        {"field_id": "lead_time_days", "data_type": "INTEGER", "name": "特定交期(天)"},
+        {"field_id": "quality_level", "data_type": "VARCHAR(50)", "name": "质量等级"},
+        {"field_id": "status", "data_type": "VARCHAR(50)", "name": "状态"},
+    ],
     "customer_order": [
         {"field_id": "order_id", "data_type": "VARCHAR(50)", "name": "订单ID"},
-        {"field_id": "customer_name", "data_type": "VARCHAR(100)", "name": "客户名称"},
+        {"field_id": "customer_id", "data_type": "VARCHAR(50)", "name": "客户ID"},
+        {"field_id": "customer_name", "data_type": "VARCHAR(200)", "name": "客户名称"},
+        {"field_id": "customer_po_number", "data_type": "VARCHAR(100)", "name": "客户采购订单号"},
         {"field_id": "product_id", "data_type": "VARCHAR(50)", "name": "产品ID"},
         {"field_id": "quantity", "data_type": "FLOAT", "name": "订单数量"},
+        {"field_id": "unit_price", "data_type": "FLOAT", "name": "订单单价"},
         {"field_id": "order_date", "data_type": "DATETIME", "name": "下单日期"},
         {"field_id": "required_date", "data_type": "DATETIME", "name": "要求交期"},
         {"field_id": "priority", "data_type": "INTEGER", "name": "优先级"},
         {"field_id": "status", "data_type": "VARCHAR(50)", "name": "状态"},
+        {"field_id": "shipping_address", "data_type": "VARCHAR(500)", "name": "发货地址"},
+        {"field_id": "quality_requirement", "data_type": "VARCHAR(100)", "name": "质量要求"},
+        {"field_id": "packaging_requirement", "data_type": "VARCHAR(200)", "name": "包装要求"},
         {"field_id": "note", "data_type": "VARCHAR(500)", "name": "备注"},
     ],
     "work_order": [
@@ -676,7 +735,7 @@ BUSINESS_MODEL_LINKS = [
     # 1. 产品 → 工艺路线 (1:N)
     {
         "id": "R1_has_route",
-        "name": "产品工艺路线关系",
+        "name": "产品定义工艺路线",
         "description": "产品对应的工艺路线定义（支持多版本）",
         "source_model": "product",
         "source_key": "product_id",
@@ -689,7 +748,7 @@ BUSINESS_MODEL_LINKS = [
     # 2. 工艺路线 → 工序 (1:N)
     {
         "id": "R2_has_steps",
-        "name": "工艺路线工序关系",
+        "name": "工艺路线包含工序",
         "description": "一条工艺路线包含80-120道工序",
         "source_model": "process_route",
         "source_key": "route_id",
@@ -702,7 +761,7 @@ BUSINESS_MODEL_LINKS = [
     # 3. 产品 ↔ 物料 N:N（通过BOM中间表）
     {
         "id": "R3_has_bom",
-        "name": "产品BOM关系",
+        "name": "产品物料组成",
         "description": "产品由哪些物料组成及用量",
         "source_model": "product",
         "source_key": "product_id",
@@ -718,7 +777,7 @@ BUSINESS_MODEL_LINKS = [
     # 3.1 产品 → BOM (1:N)
     {
         "id": "R3_1_product_has_bom",
-        "name": "产品BOM明细关系",
+        "name": "产品BOM组成明细",
         "description": "产品的BOM组成明细",
         "source_model": "product",
         "source_key": "product_id",
@@ -731,7 +790,7 @@ BUSINESS_MODEL_LINKS = [
     # 3.2 BOM → 物料 (N:1)
     {
         "id": "R3_2_bom_has_material",
-        "name": "BOM物料关系",
+        "name": "BOM对应物料",
         "description": "BOM明细对应的物料",
         "source_model": "bom",
         "source_key": "material_id",
@@ -744,7 +803,7 @@ BUSINESS_MODEL_LINKS = [
     # 3.3 工序 → BOM (1:N)
     {
         "id": "R3_3_step_has_bom",
-        "name": "工序BOM消耗关系",
+        "name": "工序消耗物料",
         "description": "工序消耗的物料BOM",
         "source_model": "route_step",
         "source_key": "step_id",
@@ -757,7 +816,7 @@ BUSINESS_MODEL_LINKS = [
     # 4. 机台 → 工作中心 (N:1)
     {
         "id": "R4_belongs_to",
-        "name": "机台归属关系",
+        "name": "机台所属工作中心",
         "description": "每台机台属于一个工作中心",
         "source_model": "machine",
         "source_key": "work_center_id",
@@ -770,7 +829,7 @@ BUSINESS_MODEL_LINKS = [
     # 5. 机台 ↔ 产品 N:N（通过能力矩阵中间表）
     {
         "id": "R5_capable_of",
-        "name": "机台能力关系",
+        "name": "机台可加工产品",
         "description": "机台能生产哪些产品及效率",
         "source_model": "machine",
         "source_key": "machine_id",
@@ -786,7 +845,7 @@ BUSINESS_MODEL_LINKS = [
     # 5.1 机台 → 能力矩阵 (1:N)
     {
         "id": "R5_1_machine_has_capability",
-        "name": "机台能力矩阵关系",
+        "name": "机台产品能力配置",
         "description": "机台的产品能力配置",
         "source_model": "machine",
         "source_key": "machine_id",
@@ -799,7 +858,7 @@ BUSINESS_MODEL_LINKS = [
     # 5.2 产品 → 能力矩阵 (1:N)
     {
         "id": "R5_2_product_has_capability",
-        "name": "产品机台能力关系",
+        "name": "产品可被机台加工",
         "description": "产品可在哪些机台生产",
         "source_model": "product",
         "source_key": "product_id",
@@ -812,7 +871,7 @@ BUSINESS_MODEL_LINKS = [
     # 6. 产品 ↔ 产品 N:N（通过换线矩阵中间表）
     {
         "id": "R6_setup_between",
-        "name": "产品换线关系",
+        "name": "产品切换需换线",
         "description": "产品A切换到产品B需要的换线时间",
         "source_model": "product",
         "source_key": "product_id",
@@ -828,7 +887,7 @@ BUSINESS_MODEL_LINKS = [
     # 6.1 机台 → 换线矩阵 (1:N)
     {
         "id": "R6_1_machine_has_setup",
-        "name": "机台换线矩阵关系",
+        "name": "机台换线配置",
         "description": "机台的产品换线时间配置",
         "source_model": "machine",
         "source_key": "machine_id",
@@ -841,7 +900,7 @@ BUSINESS_MODEL_LINKS = [
     # 6.2 产品 → 换线矩阵(切换前) (1:N)
     {
         "id": "R6_2_product_from_setup",
-        "name": "产品切换前换线关系",
+        "name": "产品切换前需换线",
         "description": "产品作为切换前对象的换线时间",
         "source_model": "product",
         "source_key": "product_id",
@@ -854,7 +913,7 @@ BUSINESS_MODEL_LINKS = [
     # 6.3 产品 → 换线矩阵(切换后) (1:N)
     {
         "id": "R6_3_product_to_setup",
-        "name": "产品切换后换线关系",
+        "name": "产品切换后需换线",
         "description": "产品作为切换后对象的换线时间",
         "source_model": "product",
         "source_key": "product_id",
@@ -867,7 +926,7 @@ BUSINESS_MODEL_LINKS = [
     # 7. 供应商 ↔ 物料 N:N（通过供应商物料关系中间表）
     {
         "id": "R7_supplies",
-        "name": "供应商供应关系",
+        "name": "供应商可供应物料",
         "description": "供应商能供应哪些物料及价格、交期",
         "source_model": "supplier",
         "source_key": "supplier_id",
@@ -883,7 +942,7 @@ BUSINESS_MODEL_LINKS = [
     # 7.1 供应商 → 供应商物料 (1:N)
     {
         "id": "R7_1_supplier_has_material",
-        "name": "供应商物料供应关系",
+        "name": "供应商物料清单",
         "description": "供应商能供应的物料清单",
         "source_model": "supplier",
         "source_key": "supplier_id",
@@ -896,7 +955,7 @@ BUSINESS_MODEL_LINKS = [
     # 7.2 物料 → 供应商物料 (1:N)
     {
         "id": "R7_2_material_has_supplier",
-        "name": "物料供应商关系",
+        "name": "物料可选供应商",
         "description": "物料可由哪些供应商供应",
         "source_model": "material",
         "source_key": "material_id",
@@ -909,7 +968,7 @@ BUSINESS_MODEL_LINKS = [
     # 8. 物料 ↔ 物料 N:N（通过替代关系中间表）
     {
         "id": "R8_substitutes",
-        "name": "物料替代关系",
+        "name": "物料可用替代料",
         "description": "物料缺料时可用哪些替代料",
         "source_model": "material",
         "source_key": "material_id",
@@ -925,7 +984,7 @@ BUSINESS_MODEL_LINKS = [
     # 8.1 物料 → 替代关系(原物料) (1:N)
     {
         "id": "R8_1_material_has_substitute",
-        "name": "物料替代关系(原物料)",
+        "name": "物料替代清单",
         "description": "物料的可用替代料",
         "source_model": "material",
         "source_key": "material_id",
@@ -938,7 +997,7 @@ BUSINESS_MODEL_LINKS = [
     # 8.2 物料 → 替代关系(替代物料) (1:N)
     {
         "id": "R8_2_material_is_substitute",
-        "name": "物料被替代关系",
+        "name": "物料可作为替代料",
         "description": "物料可作为哪些物料的替代料",
         "source_model": "material",
         "source_key": "material_id",
@@ -949,11 +1008,78 @@ BUSINESS_MODEL_LINKS = [
         "target_api_name": "GetMaterial"
     },
     
+    # ========== 客户域关系（5个）==========
+    # 8.5 客户 → 客户产品关系 (1:N)
+    {
+        "id": "R8_5_customer_has_products",
+        "name": "客户可购产品清单",
+        "description": "客户可购买的产品清单及特定价格、交期",
+        "source_model": "customer",
+        "source_key": "customer_id",
+        "target_model": "customer_product",
+        "target_key": "customer_id",
+        "cardinality": "one-to-many",
+        "source_api_name": "GetCustomerProducts",
+        "target_api_name": "GetCustomer"
+    },
+    # 8.6 客户产品关系 → 产品 (N:1)
+    {
+        "id": "R8_6_cp_to_product",
+        "name": "客户产品关联产品",
+        "description": "客户产品关系关联的产品",
+        "source_model": "customer_product",
+        "source_key": "product_id",
+        "target_model": "product",
+        "target_key": "product_id",
+        "cardinality": "many-to-one",
+        "source_api_name": "GetProduct",
+        "target_api_name": "GetCustomerProduct"
+    },
+    # 8.7 客户 → 客户订单 (1:N)
+    {
+        "id": "R8_7_customer_has_orders",
+        "name": "客户采购订单",
+        "description": "客户的所有采购订单",
+        "source_model": "customer",
+        "source_key": "customer_id",
+        "target_model": "customer_order",
+        "target_key": "customer_id",
+        "cardinality": "one-to-many",
+        "source_api_name": "GetCustomerOrders",
+        "target_api_name": "GetCustomer"
+    },
+    # 8.8 客户订单 → 产品 (N:1)
+    {
+        "id": "R8_8_order_to_product",
+        "name": "订单订购产品",
+        "description": "订单订购的产品",
+        "source_model": "customer_order",
+        "source_key": "product_id",
+        "target_model": "product",
+        "target_key": "product_id",
+        "cardinality": "many-to-one",
+        "source_api_name": "GetProduct",
+        "target_api_name": "GetCustomerOrder"
+    },
+    # 8.9 客户产品关系 → 客户订单 (1:N) （间接关系：客户购买的产品才能下订单）
+    {
+        "id": "R8_9_cp_validates_order",
+        "name": "客户产品验证订单",
+        "description": "客户只能订购其产品信息表中定义的产品",
+        "source_model": "customer_product",
+        "source_key": "id",
+        "target_model": "customer_order",
+        "target_key": "customer_id",
+        "cardinality": "one-to-many",
+        "source_api_name": "GetCustomerOrders",
+        "target_api_name": "GetCustomerProduct"
+    },
+    
     # ========== 计划域关系（6个）==========
     # 9. 客户订单 → 工单 (1:1)
     {
         "id": "R9_generates_wo",
-        "name": "订单生成工单关系",
+        "name": "订单生成工单",
         "description": "每个客户订单生成一个工单",
         "source_model": "customer_order",
         "source_key": "order_id",
@@ -966,7 +1092,7 @@ BUSINESS_MODEL_LINKS = [
     # 9.1 产品 → 客户订单 (1:N)
     {
         "id": "R9_1_product_has_orders",
-        "name": "产品客户订单关系",
+        "name": "产品被客户订购",
         "description": "产品被哪些客户订单订购",
         "source_model": "product",
         "source_key": "product_id",
@@ -979,7 +1105,7 @@ BUSINESS_MODEL_LINKS = [
     # 10. 工单 → 工单工序 (1:N)
     {
         "id": "R10_has_operations",
-        "name": "工单工序关系",
+        "name": "工单包含工序",
         "description": "工单包含多个工序（从工艺路线展开）",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -992,7 +1118,7 @@ BUSINESS_MODEL_LINKS = [
     # 10.1 产品 → 工单 (1:N)
     {
         "id": "R10_1_product_has_work_orders",
-        "name": "产品工单关系",
+        "name": "产品生成工单",
         "description": "产品对应的生产工单",
         "source_model": "product",
         "source_key": "product_id",
@@ -1005,7 +1131,7 @@ BUSINESS_MODEL_LINKS = [
     # 10.2 工序 → 工单 (1:N)
     {
         "id": "R10_2_step_has_work_orders",
-        "name": "工序工单关系",
+        "name": "工序执行工单",
         "description": "工序当前正在执行的工单",
         "source_model": "route_step",
         "source_key": "step_id",
@@ -1018,7 +1144,7 @@ BUSINESS_MODEL_LINKS = [
     # 10.3 工单 → 工单物料 (1:N)
     {
         "id": "R10_3_wo_has_materials",
-        "name": "工单物料需求关系",
+        "name": "工单物料需求",
         "description": "工单需要的物料清单",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1033,7 +1159,7 @@ BUSINESS_MODEL_LINKS = [
     # 10.4 工序 → 工单工序 (1:N)
     {
         "id": "R10_4_step_has_wo_operations",
-        "name": "工序工单工序关系",
+        "name": "工序实例化工单工序",
         "description": "工序定义对应的工单工序实例",
         "source_model": "route_step",
         "source_key": "step_id",
@@ -1046,7 +1172,7 @@ BUSINESS_MODEL_LINKS = [
     # 11. 工单工序 ↔ 物料 N:N（通过工单物料中间表）
     {
         "id": "R11_requires_material",
-        "name": "工序物料需求关系",
+        "name": "工序物料需求",
         "description": "工序需要哪些物料及需求量",
         "source_model": "work_order_operation",
         "source_key": "wo_op_id",
@@ -1062,7 +1188,7 @@ BUSINESS_MODEL_LINKS = [
     # 11.1 工单工序 → 工单物料 (1:N)
     {
         "id": "R11_1_wo_op_has_materials",
-        "name": "工单工序物料关系",
+        "name": "工单工序需求物料",
         "description": "工单工序需要的物料",
         "source_model": "work_order_operation",
         "source_key": "wo_op_id",
@@ -1075,7 +1201,7 @@ BUSINESS_MODEL_LINKS = [
     # 12. 工单工序 ↔ 机台 N:N（通过生产任务中间表）
     {
         "id": "R12_executed_by",
-        "name": "工序执行关系",
+        "name": "工序分配机台执行",
         "description": "工序分配到哪台机台执行（N:N关系）",
         "source_model": "work_order_operation",
         "source_key": "wo_op_id",
@@ -1091,7 +1217,7 @@ BUSINESS_MODEL_LINKS = [
     # 12.1 工单工序 → 生产任务 (1:N)
     {
         "id": "R12_1_wo_op_has_tasks",
-        "name": "工单工序生产任务关系",
+        "name": "工序分解生产任务",
         "description": "工单工序分解的生产任务",
         "source_model": "work_order_operation",
         "source_key": "wo_op_id",
@@ -1104,7 +1230,7 @@ BUSINESS_MODEL_LINKS = [
     # 12.2 工单 → 生产任务 (1:N)
     {
         "id": "R12_2_wo_has_tasks",
-        "name": "工单生产任务关系",
+        "name": "工单包含生产任务",
         "description": "工单包含的所有生产任务",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1117,7 +1243,7 @@ BUSINESS_MODEL_LINKS = [
     # 12.3 机台 → 生产任务 (1:N)
     {
         "id": "R12_3_machine_has_tasks",
-        "name": "机台生产任务关系",
+        "name": "机台执行生产任务",
         "description": "机台执行的生产任务",
         "source_model": "machine",
         "source_key": "machine_id",
@@ -1130,7 +1256,7 @@ BUSINESS_MODEL_LINKS = [
     # 13. 工单 → 在制品批次 (1:N)
     {
         "id": "R13_tracks_lot",
-        "name": "工单批次追踪关系",
+        "name": "工单拆分批次",
         "description": "工单拆分为多个Lot批次（每25片一批）",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1143,7 +1269,7 @@ BUSINESS_MODEL_LINKS = [
     # 13.1 产品 → 在制品批次 (1:N)
     {
         "id": "R13_1_product_has_lots",
-        "name": "产品在制品批次关系",
+        "name": "产品在制品批次",
         "description": "产品的在制品批次",
         "source_model": "product",
         "source_key": "product_id",
@@ -1156,7 +1282,7 @@ BUSINESS_MODEL_LINKS = [
     # 13.2 工序 → 在制品批次 (1:N)
     {
         "id": "R13_2_step_has_lots",
-        "name": "工序在制品批次关系",
+        "name": "工序在制品批次",
         "description": "工序当前正在加工的批次",
         "source_model": "route_step",
         "source_key": "step_id",
@@ -1169,7 +1295,7 @@ BUSINESS_MODEL_LINKS = [
     # 13.3 机台 → 在制品批次 (1:N)
     {
         "id": "R13_3_machine_has_lots",
-        "name": "机台在制品批次关系",
+        "name": "机台加工在制品",
         "description": "机台正在加工的批次",
         "source_model": "machine",
         "source_key": "machine_id",
@@ -1182,7 +1308,7 @@ BUSINESS_MODEL_LINKS = [
     # 13.4 批次 → 生产任务 (1:N)
     {
         "id": "R13_4_lot_has_tasks",
-        "name": "批次生产任务关系",
+        "name": "批次对应生产任务",
         "description": "批次对应的生产任务",
         "source_model": "wip_lot",
         "source_key": "lot_id",
@@ -1195,7 +1321,7 @@ BUSINESS_MODEL_LINKS = [
     # 13.5 班次 → 生产任务 (1:N)
     {
         "id": "R13_5_shift_has_tasks",
-        "name": "班次生产任务关系",
+        "name": "班次生产任务安排",
         "description": "班次内的生产任务",
         "source_model": "shift_pattern",
         "source_key": "shift_id",
@@ -1210,7 +1336,7 @@ BUSINESS_MODEL_LINKS = [
     # 14. 物料 → 原材料库存 (1:1)
     {
         "id": "R14_has_inventory",
-        "name": "物料库存关系",
+        "name": "物料实时库存",
         "description": "物料的实时库存状态",
         "source_model": "material",
         "source_key": "material_id",
@@ -1223,7 +1349,7 @@ BUSINESS_MODEL_LINKS = [
     # 15. 产品 → 成品库存 (1:1)
     {
         "id": "R15_has_fg_inventory",
-        "name": "产品成品库存关系",
+        "name": "产品成品库存",
         "description": "产品的成品库存状态",
         "source_model": "product",
         "source_key": "product_id",
@@ -1236,7 +1362,7 @@ BUSINESS_MODEL_LINKS = [
     # 16. 工单物料 ↔ 采购订单 N:N（通过采购订单行中间表）
     {
         "id": "R16_triggers_po",
-        "name": "物料需求触发采购关系",
+        "name": "物料缺料触发采购",
         "description": "物料缺料触发采购订单",
         "source_model": "work_order_material",
         "source_key": "wom_id",
@@ -1252,7 +1378,7 @@ BUSINESS_MODEL_LINKS = [
     # 16.1 采购订单 → 采购订单行 (1:N)
     {
         "id": "R16_1_po_has_lines",
-        "name": "采购订单行关系",
+        "name": "采购订单包含采购行",
         "description": "采购订单的物料明细行",
         "source_model": "purchase_order",
         "source_key": "po_id",
@@ -1265,7 +1391,7 @@ BUSINESS_MODEL_LINKS = [
     # 16.2 工单 → 采购订单行 (1:N)
     {
         "id": "R16_2_wo_has_po_line",
-        "name": "工单采购订单行关系",
+        "name": "工单关联采购行",
         "description": "工单关联的采购订单行",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1278,7 +1404,7 @@ BUSINESS_MODEL_LINKS = [
     # 16.3 物料 → 采购订单行 (1:N)
     {
         "id": "R16_3_material_has_po_lines",
-        "name": "物料采购订单行关系",
+        "name": "物料被采购行订购",
         "description": "物料的采购订单行",
         "source_model": "material",
         "source_key": "material_id",
@@ -1291,7 +1417,7 @@ BUSINESS_MODEL_LINKS = [
     # 16.4 工单物料 → 采购订单行 (1:N)
     {
         "id": "R16_4_wom_has_po_lines",
-        "name": "工单物料需求采购关系",
+        "name": "物料需求触发采购行",
         "description": "工单物料需求触发的采购订单行",
         "source_model": "work_order_material",
         "source_key": "wom_id",
@@ -1306,7 +1432,7 @@ BUSINESS_MODEL_LINKS = [
     # 17. 工单工序 → 质量检验 (1:N) 【修正：原为production_task→quality_inspection】
     {
         "id": "R17_triggers_inspection",
-        "name": "生产触发检验关系",
+        "name": "生产任务触发检验",
         "description": "工单工序完成后触发质量检验",
         "source_model": "work_order_operation",
         "source_key": "wo_op_id",
@@ -1319,7 +1445,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.1 工单工序 → 质量检验 (1:N) [重复确认]
     {
         "id": "R17_1_wo_op_has_inspections",
-        "name": "工单工序检验关系",
+        "name": "工单工序质量检验",
         "description": "工单工序的质量检验记录",
         "source_model": "work_order_operation",
         "source_key": "wo_op_id",
@@ -1332,7 +1458,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.2 批次 → 质量检验 (1:N)
     {
         "id": "R17_2_lot_has_inspections",
-        "name": "批次检验关系",
+        "name": "批次质量检验",
         "description": "批次的质量检验记录",
         "source_model": "wip_lot",
         "source_key": "lot_id",
@@ -1345,7 +1471,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.3 机台 → 质量检验 (1:N)
     {
         "id": "R17_3_machine_has_inspections",
-        "name": "机台检验关系",
+        "name": "机台加工质量检验",
         "description": "机台相关的检验记录",
         "source_model": "machine",
         "source_key": "machine_id",
@@ -1358,7 +1484,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.4 采购订单 → 质量检验 (1:N)
     {
         "id": "R17_4_po_has_inspections",
-        "name": "采购订单检验关系",
+        "name": "采购订单来料检验",
         "description": "采购订单的来料检验记录",
         "source_model": "purchase_order",
         "source_key": "po_id",
@@ -1371,7 +1497,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.5 物料 → 质量检验 (1:N)
     {
         "id": "R17_5_material_has_inspections",
-        "name": "物料检验关系",
+        "name": "物料质量检验",
         "description": "物料的质量检验记录",
         "source_model": "material",
         "source_key": "material_id",
@@ -1386,7 +1512,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.6 供应商 → 采购订单 (1:N)
     {
         "id": "R17_6_supplier_has_orders",
-        "name": "供应商采购订单关系",
+        "name": "供应商接收采购订单",
         "description": "供应商的采购订单",
         "source_model": "supplier",
         "source_key": "supplier_id",
@@ -1401,7 +1527,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.7 物料 → 库存事务 (1:N)
     {
         "id": "R17_7_material_has_transactions",
-        "name": "物料库存事务关系",
+        "name": "物料库存流水",
         "description": "物料的库存变动记录",
         "source_model": "material",
         "source_key": "material_id",
@@ -1414,7 +1540,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.8 工单 → 库存事务(调出) (1:N)
     {
         "id": "R17_8_wo_from_transactions",
-        "name": "工单库存调出关系",
+        "name": "工单库存调出",
         "description": "工单作为调出方的库存事务",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1427,7 +1553,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.9 工单 → 库存事务(调入) (1:N)
     {
         "id": "R17_9_wo_to_transactions",
-        "name": "工单库存调入关系",
+        "name": "工单库存调入",
         "description": "工单作为调入方的库存事务",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1440,7 +1566,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.10 工单物料 → 物料调拨(调出) (1:N)
     {
         "id": "R17_10_wom_from_transfers",
-        "name": "工单物料需求调出关系",
+        "name": "工单物料需求调出",
         "description": "工单物料需求作为调出方",
         "source_model": "work_order_material",
         "source_key": "wom_id",
@@ -1453,7 +1579,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.11 工单物料 → 物料调拨(调入) (1:N)
     {
         "id": "R17_11_wom_to_transfers",
-        "name": "工单物料需求调入关系",
+        "name": "工单物料需求调入",
         "description": "工单物料需求作为调入方",
         "source_model": "work_order_material",
         "source_key": "wom_id",
@@ -1468,7 +1594,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.12 工作中心 → 工作日历 (1:N)
     {
         "id": "R17_12_workcenter_has_calendar",
-        "name": "工作中心工作日历关系",
+        "name": "工作中心班次安排",
         "description": "工作中心的每日班次安排",
         "source_model": "work_center",
         "source_key": "work_center_id",
@@ -1481,7 +1607,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.13 班次 → 工作日历 (1:N)
     {
         "id": "R17_13_shift_has_calendar",
-        "name": "班次工作日历关系",
+        "name": "班次日历安排",
         "description": "班次的日历安排",
         "source_model": "shift_pattern",
         "source_key": "shift_id",
@@ -1494,7 +1620,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.14 机台 → 排程汇总 (1:N)
     {
         "id": "R17_14_machine_has_schedule",
-        "name": "机台排程汇总关系",
+        "name": "机台产能负荷统计",
         "description": "机台的每日产能负荷统计",
         "source_model": "machine",
         "source_key": "machine_id",
@@ -1507,7 +1633,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.15 工作中心 → 排程汇总 (1:N)
     {
         "id": "R17_15_workcenter_has_schedule",
-        "name": "工作中心排程汇总关系",
+        "name": "工作中心产能负荷统计",
         "description": "工作中心的每日产能负荷统计",
         "source_model": "work_center",
         "source_key": "work_center_id",
@@ -1520,7 +1646,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.16 物料 → 物料调拨 (1:N)
     {
         "id": "R17_16_material_has_transfer",
-        "name": "物料调拨关系",
+        "name": "物料工间调拨",
         "description": "物料的工间调拨记录",
         "source_model": "material",
         "source_key": "material_id",
@@ -1533,7 +1659,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.17 工单 → 物料调拨(调出) (1:N)
     {
         "id": "R17_17_wo_from_transfer",
-        "name": "工单物料调出关系",
+        "name": "工单作为调出方",
         "description": "工单作为调出方的物料调拨",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1546,7 +1672,7 @@ BUSINESS_MODEL_LINKS = [
     # 17.18 工单 → 物料调拨(调入) (1:N)
     {
         "id": "R17_18_wo_to_transfer",
-        "name": "工单物料调入关系",
+        "name": "工单作为调入方",
         "description": "工单作为调入方的物料调拨",
         "source_model": "work_order",
         "source_key": "work_order_id",
@@ -1555,6 +1681,34 @@ BUSINESS_MODEL_LINKS = [
         "cardinality": "one-to-many",
         "source_api_name": "GetMaterialTransfers",
         "target_api_name": "GetWorkOrder"
+    },
+    
+    # ========== 监控域关系（2个）==========
+    # R30 机台 → 机台状态日志 (1:N)
+    {
+        "id": "R30_machine_has_status_log",
+        "name": "机台运行状态记录",
+        "description": "机台的状态变迁记录（运行、停机、维护、故障），用于OEE分析",
+        "source_model": "machine",
+        "source_key": "machine_id",
+        "target_model": "machine_status_log",
+        "target_key": "machine_id",
+        "cardinality": "one-to-many",
+        "source_api_name": "GetMachineStatusLogs",
+        "target_api_name": "GetMachine"
+    },
+    # R31 产品 → 机台状态日志 (1:N) （可选关系，日志中可能记录生产的产品）
+    {
+        "id": "R31_product_in_status_log",
+        "name": "机台日志生产产品",
+        "description": "机台状态日志中记录的生产产品",
+        "source_model": "machine_status_log",
+        "source_key": "product_id",
+        "target_model": "product",
+        "target_key": "product_id",
+        "cardinality": "many-to-one",
+        "source_api_name": "GetProduct",
+        "target_api_name": "GetMachineStatusLog"
     },
 ]
 

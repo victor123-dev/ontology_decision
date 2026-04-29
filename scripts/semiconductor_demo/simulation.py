@@ -117,6 +117,10 @@ class FactorySimulation:
         self.work_centers = {}
         self.supplier_materials = defaultdict(list)   # material_id -> [sm_items]
         self.material_substitutes = defaultdict(list) # material_id -> [substitute_items]
+        
+        # 【客户管理】
+        self.customers = []                  # 客户列表
+        self.customer_products = defaultdict(list)  # customer_id -> [customer_product_items]
 
         # P2-9: 机台OEE统计缓存（每日结算）
         self.machine_daily_stats = defaultdict(lambda: defaultdict(list))
@@ -782,23 +786,54 @@ class FactorySimulation:
 
                 order_id = self.next_id("CO")
                 order_date = self.sim_time_to_datetime(self.env.now)
+                
+                # 【客户管理】从真实客户中选择
+                customer = random.choice(self.customers)
+                
+                # 查询该客户是否购买此产品
+                customer_products = self.customer_products.get(customer["customer_id"], [])
+                valid_products = [cp["product_id"] for cp in customer_products]
+                
+                # 如果客户不购买此产品，重新选择
+                if valid_products and product["product_id"] not in valid_products:
+                    product_id = random.choice(valid_products)
+                    product = self.products[product_id]
+                
+                # 查询客户特定价格和交期
+                cp_info = next((cp for cp in customer_products if cp["product_id"] == product["product_id"]), None)
+                unit_price = cp_info.get("special_price", 10.0) if cp_info else 10.0
+                lead_time_days = cp_info.get("lead_time_days", 7) if cp_info else 7
+                quality_level = cp_info.get("quality_level", "标准") if cp_info else "标准"
 
                 # P2-12: 基于产能负荷计算真实交期承诺
                 ctp_date = self.estimate_completion_date(product["product_id"], qty)
                 committed_date = order_date + timedelta(days=self.config["lead_time_commitment_days"])
                 required_date = max(ctp_date, committed_date)
+                
+                # 客户PO号
+                customer_po = f"PO-{customer['customer_id']}-{order_date.strftime('%Y%m%d')}-{random.randint(1000, 9999)}"
 
                 order_data = {
                     "order_id": order_id,
-                    "customer_name": f"客户-{random.randint(100, 999)}",
+                    "customer_id": customer["customer_id"],
+                    "customer_name": customer["customer_name"],
+                    "customer_po_number": customer_po,
                     "product_id": product["product_id"],
                     "quantity": qty,
+                    "unit_price": unit_price,
                     "order_date": order_date,
                     "required_date": required_date,
                     "priority": priority,
-                    "status": "已确认"
+                    "status": "已确认",
+                    "shipping_address": customer.get("address", ""),
+                    "quality_requirement": quality_level,
+                    "packaging_requirement": "标准包装" if customer["customer_level"] == "普通" else "防静电包装",
+                    "note": f"客户等级:{customer['customer_level']}, 行业:{customer.get('industry', '')}"
                 }
                 self.db.insert("customer_order", order_data)
+                
+                logger.info(f"  [订单] {order_id}: {customer['customer_name']}({customer['customer_id']}) → {product['product_id']}×{qty}, "
+                           f"单价={unit_price}, 优先级=P{priority}")
 
                 # 自动创建WorkOrder
                 self.create_work_order(order_data)

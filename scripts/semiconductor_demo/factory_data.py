@@ -8,6 +8,224 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Tuple
 
 # ============================================================================
+# 客户主数据（基于通富微电真实客户）
+# ============================================================================
+
+CUSTOMERS = [
+    {
+        "customer_id": "CUST-AMD",
+        "customer_name": "超威半导体（AMD）",
+        "customer_level": "VIP",
+        "industry": "高性能计算/AI芯片",
+        "credit_limit": 5000.0,
+        "payment_terms": "月结60天",
+        "contact_person": "张经理",
+        "contact_phone": "+1-408-xxx-xxxx",
+        "contact_email": "procurement@amd.com",
+        "address": "美国加州圣克拉拉",
+        "country": "美国",
+        "region": "欧美",
+        "status": "活跃",
+        "note": "最大客户，占80%以上封测订单，合资+合作模式"
+    },
+    {
+        "customer_id": "CUST-NVIDIA",
+        "customer_name": "英伟达（NVIDIA）",
+        "customer_level": "VIP",
+        "industry": "AI芯片/GPU",
+        "credit_limit": 3000.0,
+        "payment_terms": "月结45天",
+        "contact_person": "李总监",
+        "contact_phone": "+1-408-xxx-xxxx",
+        "contact_email": "osat@nvidia.com",
+        "address": "美国加州圣克拉拉",
+        "country": "美国",
+        "region": "欧美",
+        "status": "活跃",
+        "note": "联合开发CPO 800G模块，AI芯片封测"
+    },
+    {
+        "customer_id": "CUST-HISI",
+        "customer_name": "华为海思（HiSilicon）",
+        "customer_level": "VIP",
+        "industry": "通信/手机芯片",
+        "credit_limit": 2000.0,
+        "payment_terms": "月结30天",
+        "contact_person": "王经理",
+        "contact_phone": "+86-755-xxx-xxxx",
+        "contact_email": "procurement@hisilicon.com",
+        "address": "广东深圳",
+        "country": "中国",
+        "region": "大陆",
+        "status": "活跃",
+        "note": "麒麟9010芯片CoWoS-like封装验证通过"
+    },
+    {
+        "customer_id": "CUST-MTK",
+        "customer_name": "联发科（MediaTek）",
+        "customer_level": "重要",
+        "industry": "移动通信/SoC",
+        "credit_limit": 1500.0,
+        "payment_terms": "月结30天",
+        "contact_person": "陈工程师",
+        "contact_phone": "+886-3-xxx-xxxx",
+        "contact_email": "supply@mediatek.com",
+        "address": "台湾新竹",
+        "country": "中国",
+        "region": "台湾",
+        "status": "活跃",
+        "note": "手机SoC封测"
+    },
+    {
+        "customer_id": "CUST-GIGADEVICE",
+        "customer_name": "兆易创新（GigaDevice）",
+        "customer_level": "重要",
+        "industry": "存储/MCU",
+        "credit_limit": 800.0,
+        "payment_terms": "月结30天",
+        "contact_person": "刘经理",
+        "contact_phone": "+86-10-xxx-xxxx",
+        "contact_email": "procurement@gigadevice.com",
+        "address": "北京",
+        "country": "中国",
+        "region": "大陆",
+        "status": "活跃",
+        "note": "NOR Flash、MCU封测"
+    },
+    {
+        "customer_id": "CUST-TI",
+        "customer_name": "德州仪器（TI）",
+        "customer_level": "重要",
+        "industry": "模拟芯片/电源管理",
+        "credit_limit": 1200.0,
+        "payment_terms": "月结45天",
+        "contact_person": "赵总监",
+        "contact_phone": "+1-214-xxx-xxxx",
+        "contact_email": "outsourcing@ti.com",
+        "address": "美国德州达拉斯",
+        "country": "美国",
+        "region": "欧美",
+        "status": "活跃",
+        "note": "模拟芯片、PMIC封测"
+    },
+    {
+        "customer_id": "CUST-AWINIC",
+        "customer_name": "艾为电子（Awinic）",
+        "customer_level": "普通",
+        "industry": "模拟/音频芯片",
+        "credit_limit": 500.0,
+        "payment_terms": "月结30天",
+        "contact_person": "孙经理",
+        "contact_phone": "+86-21-xxx-xxxx",
+        "contact_email": "sales@awinic.com",
+        "address": "上海",
+        "country": "中国",
+        "region": "大陆",
+        "status": "活跃",
+        "note": "音频放大器、电源管理芯片"
+    },
+    {
+        "customer_id": "CUST-BLUETEC",
+        "customer_name": "中科蓝讯（Bluetrum）",
+        "customer_level": "普通",
+        "industry": "蓝牙/音频SoC",
+        "credit_limit": 300.0,
+        "payment_terms": "月结30天",
+        "contact_person": "周工",
+        "contact_phone": "+86-755-xxx-xxxx",
+        "contact_email": "info@bluetrum.com",
+        "address": "广东深圳",
+        "country": "中国",
+        "region": "大陆",
+        "status": "活跃",
+        "note": "蓝牙音频SoC封测"
+    },
+    {
+        "customer_id": "CUST-QUALCOMM",
+        "customer_name": "高通（Qualcomm）",
+        "customer_level": "VIP",
+        "industry": "移动通信/5G",
+        "credit_limit": 4000.0,
+        "payment_terms": "月结60天",
+        "contact_person": "吴总监",
+        "contact_phone": "+1-858-xxx-xxxx",
+        "contact_email": "osat@qualcomm.com",
+        "address": "美国加州圣迭戈",
+        "country": "美国",
+        "region": "欧美",
+        "status": "活跃",
+        "note": "5G基带、射频芯片封测"
+    },
+    {
+        "customer_id": "CUST-CXMT",
+        "customer_name": "长鑫存储（CXMT）",
+        "customer_level": "重要",
+        "industry": "DRAM存储",
+        "credit_limit": 1000.0,
+        "payment_terms": "月结30天",
+        "contact_person": "马经理",
+        "contact_phone": "+86-551-xxx-xxxx",
+        "contact_email": "procurement@cxmt.com",
+        "address": "安徽合肥",
+        "country": "中国",
+        "region": "大陆",
+        "status": "活跃",
+        "note": "DRAM封测合作"
+    },
+]
+
+# 客户-产品关系（哪些客户购买哪些产品）
+CUSTOMER_PRODUCTS = [
+    # AMD - 高性能计算、AI芯片
+    {"customer_id": "CUST-AMD", "product_id": "SOP-FPGA", "special_price": 15.0, "quality_level": "工规"},
+    {"customer_id": "CUST-AMD", "product_id": "QFN-GPU", "special_price": 12.5, "quality_level": "工规"},
+    {"customer_id": "CUST-AMD", "product_id": "BGA-CPU", "special_price": 18.0, "quality_level": "工规"},
+    {"customer_id": "CUST-AMD", "product_id": "FANOUT-ASIC", "special_price": 16.5, "quality_level": "工规"},
+    
+    # NVIDIA - AI芯片、GPU
+    {"customer_id": "CUST-NVIDIA", "product_id": "BGA-GPU", "special_price": 20.0, "quality_level": "工规"},
+    {"customer_id": "CUST-NVIDIA", "product_id": "SIP-GPU", "special_price": 25.0, "quality_level": "工规"},
+    {"customer_id": "CUST-NVIDIA", "product_id": "FANOUT-ASIC", "special_price": 17.0, "quality_level": "工规"},
+    
+    # 华为海思 - 通信、手机芯片
+    {"customer_id": "CUST-HISI", "product_id": "BGA-CPU", "special_price": 16.0, "quality_level": "工规"},
+    {"customer_id": "CUST-HISI", "product_id": "QFN-RF", "special_price": 10.5, "quality_level": "工规"},
+    {"customer_id": "CUST-HISI", "product_id": "WLCSP-PMIC", "special_price": 8.0, "quality_level": "工规"},
+    
+    # 联发科 - 移动通信
+    {"customer_id": "CUST-MTK", "product_id": "BGA-ASIC", "special_price": 14.0, "quality_level": "标准"},
+    {"customer_id": "CUST-MTK", "product_id": "QFN-MCU", "special_price": 9.5, "quality_level": "标准"},
+    {"customer_id": "CUST-MTK", "product_id": "CSP-MEM", "special_price": 11.0, "quality_level": "标准"},
+    
+    # 兆易创新 - 存储、MCU
+    {"customer_id": "CUST-GIGADEVICE", "product_id": "QFN-MCU", "special_price": 8.5, "quality_level": "工规"},
+    {"customer_id": "CUST-GIGADEVICE", "product_id": "SOP-MEM", "special_price": 7.5, "quality_level": "工规"},
+    {"customer_id": "CUST-GIGADEVICE", "product_id": "LGA-MEM", "special_price": 9.0, "quality_level": "工规"},
+    
+    # 德州仪器 - 模拟、PMIC
+    {"customer_id": "CUST-TI", "product_id": "SOP-PMIC", "special_price": 6.5, "quality_level": "车规"},
+    {"customer_id": "CUST-TI", "product_id": "SOT-SENSOR", "special_price": 5.5, "quality_level": "车规"},
+    {"customer_id": "CUST-TI", "product_id": "QFN-PMIC", "special_price": 8.0, "quality_level": "车规"},
+    
+    # 艾为电子 - 音频
+    {"customer_id": "CUST-AWINIC", "product_id": "QFN-PMIC", "special_price": 7.0, "quality_level": "标准"},
+    {"customer_id": "CUST-AWINIC", "product_id": "SOP-PMIC", "special_price": 6.0, "quality_level": "标准"},
+    
+    # 中科蓝讯 - 蓝牙
+    {"customer_id": "CUST-BLUETEC", "product_id": "QFN-RF", "special_price": 6.5, "quality_level": "标准"},
+    {"customer_id": "CUST-BLUETEC", "product_id": "CSP-RF", "special_price": 7.5, "quality_level": "标准"},
+    
+    # 高通 - 5G、射频
+    {"customer_id": "CUST-QUALCOMM", "product_id": "BGA-RF", "special_price": 15.5, "quality_level": "工规"},
+    {"customer_id": "CUST-QUALCOMM", "product_id": "QFN-RF", "special_price": 11.0, "quality_level": "工规"},
+    {"customer_id": "CUST-QUALCOMM", "product_id": "FANOUT-NET", "special_price": 18.5, "quality_level": "工规"},
+    
+    # 长鑫存储 - DRAM
+    {"customer_id": "CUST-CXMT", "product_id": "BGA-MEM", "special_price": 12.0, "quality_level": "工规"},
+    {"customer_id": "CUST-CXMT", "product_id": "LGA-MEM", "special_price": 10.5, "quality_level": "工规"},
+]
+
+# ============================================================================
 # 通用工序类型定义 (短代码 -> 工作中心, 标准时间小时, 良率)
 # 修正：改为Lot批量加工时间（lot_size=25），贴合OSAT真实生产模式
 PT = {

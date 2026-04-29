@@ -91,6 +91,20 @@ def execute_calculate_ctp(parameters):
         # 使用订单数量或参数指定数量
         qty = quantity if quantity else order.quantity
         
+        # 【新增】获取客户信息，用于优先级加权
+        customer_level = "普通"
+        customer_weight = 1.0
+        if hasattr(order, 'customer_id') and order.customer_id:
+            customer = client.models.Customer.get(order.customer_id)
+            if customer:
+                customer_level = customer.customer_level or "普通"
+                # 客户等级加权：VIP=2.0, 重要=1.5, 普通=1.0
+                customer_weight = {
+                    "VIP": 2.0,
+                    "重要": 1.5,
+                    "普通": 1.0
+                }.get(customer_level, 1.0)
+        
         # 4. 获取产品信息和工艺路线
         product = client.models.Product.get(order.product_id)
         if not product:
@@ -211,7 +225,7 @@ def execute_calculate_ctp(parameters):
             if valid_vars:
                 solver.Add(sum(valid_vars) == 1)
         
-        # 11. 目标函数：最小化延迟
+        # 11. 目标函数：最小化延迟（考虑客户加权）
         # 计算要求交期（小时）
         if order.required_date:
             required_date = datetime.fromisoformat(order.required_date) if isinstance(order.required_date, str) else order.required_date
@@ -224,9 +238,22 @@ def execute_calculate_ctp(parameters):
         solver.Add(Delay >= E[last_step.step_id] - required_hours)
         solver.Add(Delay >= 0)
         
+        # 目标函数：最小化加权延迟（客户等级 * 订单优先级）
         objective = solver.Objective()
-        objective.SetCoefficient(Delay, 1)
+        
+        # 订单优先级权重：P1(紧急)=10, P3(普通)=5, P5(宽松)=1
+        order_priority = order.priority or 3
+        order_priority_weight = {1: 10, 3: 5, 5: 1}.get(order_priority, 5)
+        
+        # 综合权重 = 客户等级权重 × 订单优先级权重
+        total_weight = customer_weight * order_priority_weight
+        
+        objective.SetCoefficient(Delay, total_weight)
         objective.SetMinimization()
+        
+        print(f"[CTP计算] 客户等级: {customer_level} (权重: {customer_weight}x)")
+        print(f"[CTP计算] 订单优先级: P{order_priority} (权重: {order_priority_weight}x)")
+        print(f"[CTP计算] 综合权重: {total_weight}x")
         
         # 12. 求解
         solver.SetTimeLimit(30000)  # 30秒
@@ -251,6 +278,10 @@ def execute_calculate_ctp(parameters):
             
             result = {
                 "order_id": order_id,
+                "customer_id": getattr(order, 'customer_id', None),
+                "customer_name": order.customer_name,
+                "customer_level": customer_level,
+                "customer_weight": customer_weight,
                 "product_id": order.product_id,
                 "quantity": qty,
                 "committed_date": committed_date.isoformat(),
@@ -258,7 +289,14 @@ def execute_calculate_ctp(parameters):
                 "confidence": round(confidence, 2),
                 "bottleneck_step": bottleneck,
                 "schedule": schedule,
-                "material_risks": material_check.get("shortages", [])
+                "material_risks": material_check.get("shortages", []),
+                "priority_info": {
+                    "order_priority": f"P{order_priority}",
+                    "order_priority_weight": order_priority_weight,
+                    "customer_level": customer_level,
+                    "customer_weight": customer_weight,
+                    "total_weight": total_weight
+                }
             }
             
             return {
