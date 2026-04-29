@@ -1,6 +1,8 @@
 // 供应链控制塔 - 主页面
 // 深蓝科技风格：顶部导航 + 看板Tab + 预警Tab
 // 支持：拖拽布局（react-grid-layout）、全屏展示、图表筛选+下钻
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import "./index.css";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
