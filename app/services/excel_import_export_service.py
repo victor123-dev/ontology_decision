@@ -148,8 +148,8 @@ class ExcelImportExportService:
         """导出对象字段页签"""
         ws = wb.create_sheet("对象字段")
         
-        # 表头
-        headers = ["ID", "模型ID", "字段ID", "数据类型", "中文名称", "中文说明"]
+        # 表头 - 新增“是否必填”列
+        headers = ["ID", "模型ID", "字段ID", "数据类型", "中文名称", "中文说明", "是否必填"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
             cell.font = Font(bold=True)
@@ -164,6 +164,7 @@ class ExcelImportExportService:
             ws.cell(row=row, column=4, value=field.data_type)
             ws.cell(row=row, column=5, value=field.name)
             ws.cell(row=row, column=6, value=field.description)
+            ws.cell(row=row, column=7, value=field.required if field.required is not None else True)  # 新增：导出required字段
         
         # 自动调整列宽
         for col in range(1, len(headers) + 1):
@@ -458,6 +459,7 @@ class ExcelImportExportService:
             data_type_col = self._find_column_index(headers, "数据类型")
             name_col = self._find_column_index(headers, "中文名称")
             description_col = self._find_column_index(headers, "中文说明")
+            required_col = self._find_column_index(headers, "是否必填")  # 新增：是否必填列
             
             if model_id_col is None or field_id_col is None or name_col is None:
                 result_detail["errors"].append("Missing required columns in business model fields sheet")
@@ -488,6 +490,9 @@ class ExcelImportExportService:
                         existing.data_type = row[data_type_col] if data_type_col is not None else existing.data_type
                         existing.name = row[name_col]
                         existing.description = row[description_col] if description_col is not None else existing.description
+                        # 新增：更新required字段
+                        if required_col is not None and row[required_col] is not None:
+                            existing.required = bool(row[required_col])
                     else:
                         # 创建新记录
                         new_field = BusinessModelField(
@@ -495,7 +500,8 @@ class ExcelImportExportService:
                             field_id=row[field_id_col],
                             data_type=row[data_type_col] if data_type_col is not None else "TEXT",
                             name=row[name_col],
-                            description=row[description_col] if description_col is not None else None
+                            description=row[description_col] if description_col is not None else None,
+                            required=row[required_col] if required_col is not None and row[required_col] is not None else False  # 新增：默认为False
                         )
                         db.add(new_field)
                     

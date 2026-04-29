@@ -91,7 +91,8 @@ def create_business_model_field(model_id: str, field_data: dict, db: Session = D
         field_id=field_data.get("field_id"),
         name=field_data.get("name", field_data.get("field_id")),
         description=field_data.get("description", ""),
-        data_type=field_data.get("data_type", "string")
+        data_type=field_data.get("data_type", "string"),
+        required=field_data.get("required", False)  # 新增：支持required字段，默认False
     )
     db.add(field)
     db.commit()
@@ -118,6 +119,10 @@ def update_business_model_field(model_id: str, field_id: str, field_data: dict, 
         field.name = field_data["name"]
     if "description" in field_data:
         field.description = field_data["description"]
+    if "required" in field_data:
+        field.required = field_data["required"]  # 新增：支持required字段更新
+    if "data_type" in field_data:
+        field.data_type = field_data["data_type"]
     
     db.commit()
     db.refresh(field)
@@ -223,7 +228,8 @@ def import_model(data: dict, db: Session = Depends(get_db)):
                     field_id=field_id,
                     data_type=str(column['type']),
                     name=field_name,
-                    description=field_description
+                    description=field_description,
+                    required=False  # 默认可选
                 )
                 db.add(field)
         
@@ -309,7 +315,8 @@ def import_model(data: dict, db: Session = Depends(get_db)):
                             field_id=col['name'],
                             data_type=str(col['type']),
                             name=source_field_names.get(col['name'], col['name']),
-                            description=source_field_descriptions.get(col['name'], '')
+                            description=source_field_descriptions.get(col['name'], ''),
+                            required=False  # 默认可选
                         )
                         db.add(field)
                 
@@ -337,7 +344,8 @@ def import_model(data: dict, db: Session = Depends(get_db)):
                             field_id=col['name'],
                             data_type=str(col['type']),
                             name=target_field_names.get(col['name'], col['name']),
-                            description=target_field_descriptions.get(col['name'], '')
+                            description=target_field_descriptions.get(col['name'], ''),
+                            required=False  # 默认可选
                         )
                         db.add(field)
                 

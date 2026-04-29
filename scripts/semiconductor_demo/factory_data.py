@@ -775,22 +775,152 @@ SHIFT_PATTERNS = [
 # ============================================================================
 
 SUPPLIERS = [
-    # 主供应商（5个）
-    {"supplier_id": "SUP-001", "supplier_name": "本地基板供应商", "supplier_type": "直供", "avg_lead_time_days": 3, "reliability_score": 0.95, "min_order_quantity": 100.0, "lead_time_stddev_days": 0.5},
-    {"supplier_id": "SUP-002", "supplier_name": "区域塑封料供应商", "supplier_type": "直供", "avg_lead_time_days": 5, "reliability_score": 0.88, "min_order_quantity": 50.0, "lead_time_stddev_days": 1.0},
-    {"supplier_id": "SUP-003", "supplier_name": "TechMat国际进口商", "supplier_type": "进口", "avg_lead_time_days": 15, "reliability_score": 0.80, "min_order_quantity": 200.0, "lead_time_stddev_days": 3.0},
-    {"supplier_id": "SUP-004", "supplier_name": "键合线供应商", "supplier_type": "直供", "avg_lead_time_days": 2, "reliability_score": 0.97, "min_order_quantity": 500.0, "lead_time_stddev_days": 0.3},
-    {"supplier_id": "SUP-005", "supplier_name": "锡球供应商", "supplier_type": "直供", "avg_lead_time_days": 4, "reliability_score": 0.92, "min_order_quantity": 50.0, "lead_time_stddev_days": 0.8},
+    # ========== 主供应商（5个）- 通富微电核心供应链 ==========
+    {
+        "supplier_id": "SUP-001",
+        "supplier_name": "欣兴电子（Unimicron）",
+        "supplier_type": "战略合作",
+        "country": "中国台湾",
+        "industry_position": "全球IC载板Top 3，市占率15%+",
+        "avg_lead_time_days": 7,
+        "reliability_score": 0.95,
+        "min_order_quantity": 100.0,
+        "lead_time_stddev_days": 1.0
+    },
+    {
+        "supplier_id": "SUP-002",
+        "supplier_name": "住友电木（Sumitomo Bakelite）",
+        "supplier_type": "直供",
+        "country": "日本",
+        "industry_position": "全球环氧塑封料No.1，市占率25%+",
+        "avg_lead_time_days": 12,
+        "reliability_score": 0.93,
+        "min_order_quantity": 50.0,
+        "lead_time_stddev_days": 2.0
+    },
+    {
+        "supplier_id": "SUP-003",
+        "supplier_name": "田中贵金属（Tanaka）",
+        "supplier_type": "进口",
+        "country": "日本",
+        "industry_position": "全球键合线Top 2，日本市占率30%",
+        "avg_lead_time_days": 10,
+        "reliability_score": 0.90,
+        "min_order_quantity": 200.0,
+        "lead_time_stddev_days": 1.5
+    },
+    {
+        "supplier_id": "SUP-004",
+        "supplier_name": "贺利氏（Heraeus）",
+        "supplier_type": "战略合作",
+        "country": "德国",
+        "industry_position": "全球键合线No.1，市占率20%+",
+        "avg_lead_time_days": 15,
+        "reliability_score": 0.92,
+        "min_order_quantity": 500.0,
+        "lead_time_stddev_days": 2.5
+    },
+    {
+        "supplier_id": "SUP-005",
+        "supplier_name": "飞凯材料（大瑞科技）",
+        "supplier_type": "直供",
+        "country": "中国",
+        "industry_position": "国内锡球No.1，全球市占率10%+",
+        "avg_lead_time_days": 5,
+        "reliability_score": 0.88,
+        "min_order_quantity": 50.0,
+        "lead_time_stddev_days": 0.8
+    },
     
-    # 备选供应商（8个）- 真实OSAT供应链策略
-    {"supplier_id": "SUP-006", "supplier_name": "备选基板供应商（中国台湾）", "supplier_type": "进口", "avg_lead_time_days": 7, "reliability_score": 0.90, "min_order_quantity": 150.0, "lead_time_stddev_days": 1.5},
-    {"supplier_id": "SUP-007", "supplier_name": "备选塑封料供应商（日本）", "supplier_type": "进口", "avg_lead_time_days": 12, "reliability_score": 0.93, "min_order_quantity": 80.0, "lead_time_stddev_days": 2.0},
-    {"supplier_id": "SUP-008", "supplier_name": "国产Die供应商（中国大陆）", "supplier_type": "直供", "avg_lead_time_days": 10, "reliability_score": 0.85, "min_order_quantity": 300.0, "lead_time_stddev_days": 2.0},
-    {"supplier_id": "SUP-009", "supplier_name": "备选键合线供应商（韩国）", "supplier_type": "进口", "avg_lead_time_days": 5, "reliability_score": 0.91, "min_order_quantity": 600.0, "lead_time_stddev_days": 1.0},
-    {"supplier_id": "SUP-010", "supplier_name": "备选锡球供应商（东南亚）", "supplier_type": "进口", "avg_lead_time_days": 8, "reliability_score": 0.87, "min_order_quantity": 80.0, "lead_time_stddev_days": 1.5},
-    {"supplier_id": "SUP-011", "supplier_name": "辅料供应商（本地）", "supplier_type": "直供", "avg_lead_time_days": 2, "reliability_score": 0.94, "min_order_quantity": 50.0, "lead_time_stddev_days": 0.5},
-    {"supplier_id": "SUP-012", "supplier_name": "基板原材料供应商（中国台湾）", "supplier_type": "进口", "avg_lead_time_days": 10, "reliability_score": 0.88, "min_order_quantity": 300.0, "lead_time_stddev_days": 2.0},
-    {"supplier_id": "SUP-013", "supplier_name": "特种材料供应商（欧洲）", "supplier_type": "进口", "avg_lead_time_days": 18, "reliability_score": 0.82, "min_order_quantity": 100.0, "lead_time_stddev_days": 3.5},
+    # ========== 备选供应商（8个）- 真实OSAT供应链策略 ==========
+    {
+        "supplier_id": "SUP-006",
+        "supplier_name": "深南电路（SCC）",
+        "supplier_type": "备选",
+        "country": "中国",
+        "industry_position": "国内IC载板No.1，FCBGA载板突破中",
+        "avg_lead_time_days": 10,
+        "reliability_score": 0.85,
+        "min_order_quantity": 150.0,
+        "lead_time_stddev_days": 1.5
+    },
+    {
+        "supplier_id": "SUP-007",
+        "supplier_name": "华海诚科",
+        "supplier_type": "备选",
+        "country": "中国",
+        "industry_position": "国内环氧塑封料龙头，GMC产品通过验证",
+        "avg_lead_time_days": 8,
+        "reliability_score": 0.82,
+        "min_order_quantity": 80.0,
+        "lead_time_stddev_days": 1.2
+    },
+    {
+        "supplier_id": "SUP-008",
+        "supplier_name": "兴森科技",
+        "supplier_type": "备选",
+        "country": "中国",
+        "industry_position": "国内FCBGA封装基板领先，AI驱动需求",
+        "avg_lead_time_days": 12,
+        "reliability_score": 0.80,
+        "min_order_quantity": 300.0,
+        "lead_time_stddev_days": 2.0
+    },
+    {
+        "supplier_id": "SUP-009",
+        "supplier_name": "日立化成（Hitachi Chemical）",
+        "supplier_type": "备选",
+        "country": "日本",
+        "industry_position": "全球塑封料Top 3，先进封装材料领先",
+        "avg_lead_time_days": 14,
+        "reliability_score": 0.91,
+        "min_order_quantity": 600.0,
+        "lead_time_stddev_days": 2.0
+    },
+    {
+        "supplier_id": "SUP-010",
+        "supplier_name": "铨宝工业（Chua Kok）",
+        "supplier_type": "备选",
+        "country": "新加坡",
+        "industry_position": "东南亚锡球主要供应商",
+        "avg_lead_time_days": 9,
+        "reliability_score": 0.87,
+        "min_order_quantity": 80.0,
+        "lead_time_stddev_days": 1.5
+    },
+    {
+        "supplier_id": "SUP-011",
+        "supplier_name": "德邦科技",
+        "supplier_type": "备选",
+        "country": "中国",
+        "industry_position": "国内底部填充胶No.1，DAF材料领先",
+        "avg_lead_time_days": 6,
+        "reliability_score": 0.86,
+        "min_order_quantity": 50.0,
+        "lead_time_stddev_days": 1.0
+    },
+    {
+        "supplier_id": "SUP-012",
+        "supplier_name": "揖斐电（Ibiden）",
+        "supplier_type": "备选",
+        "country": "日本",
+        "industry_position": "全球IC载板No.1，市占率20%+",
+        "avg_lead_time_days": 18,
+        "reliability_score": 0.94,
+        "min_order_quantity": 300.0,
+        "lead_time_stddev_days": 3.0
+    },
+    {
+        "supplier_id": "SUP-013",
+        "supplier_name": "联瑞新材",
+        "supplier_type": "备选",
+        "country": "中国",
+        "industry_position": "球形硅微粉全球市占率领先，Chiplet封装材料",
+        "avg_lead_time_days": 7,
+        "reliability_score": 0.83,
+        "min_order_quantity": 100.0,
+        "lead_time_stddev_days": 1.2
+    },
 ]
 
 # ============================================================================
@@ -799,111 +929,135 @@ SUPPLIERS = [
 
 def generate_supplier_materials() -> List[Dict]:
     sms = []
-    # 基板由SUP-001供应
+    
+    # ========== 主供应商配置（基于真实OSAT供应链） ==========
+    
+    # SUP-001 欣兴电子（Unimicron）：IC载板专业供应商
+    # 供应各类封装基板（BGA、WLCSP、Fan-out、LGA、CSP、SiP）
     for pkg in ("BGA","WLCSP","FANOUT","LGA","CSP","SIP"):
         sms.append({"sm_id": f"SM-001-{pkg}", "supplier_id": "SUP-001", "material_id": f"MAT-SUB-{pkg}",
-                    "unit_price": 2.5, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": True})
-    # 引线框架由SUP-001供应
-    for pkg in ("QFN","SOP","QFP","SOT"):
-        sms.append({"sm_id": f"SM-001-LF-{pkg}", "supplier_id": "SUP-001", "material_id": f"MAT-LF-{pkg}",
-                    "unit_price": 1.5, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": True})
-    # 塑封料由SUP-002供应
+                    "unit_price": 2.5, "lead_time_days": 7, "min_order_qty": 100.0, "is_preferred": True})
+    
+    # SUP-002 住友电木（Sumitomo Bakelite）：EMC塑封料全球No.1
+    # 供应各类塑封料（10种封装类型）
     for pkg in PKG_CFG:
         sms.append({"sm_id": f"SM-002-{pkg}", "supplier_id": "SUP-002", "material_id": f"MAT-EMC-{pkg}",
-                    "unit_price": 8.0, "lead_time_days": 5, "min_order_qty": 50.0, "is_preferred": True})
-    # 进口Die由SUP-003供应
+                    "unit_price": 8.0, "lead_time_days": 12, "min_order_qty": 50.0, "is_preferred": True})
+    
+    # SUP-003 田中贵金属（Tanaka）：金线/银线供应商
+    # 供应键合线（BGA、QFN、SOP、QFP、SiP、LGA、CSP、SOT）
+    for pkg in ("BGA","QFN","SOP","QFP","SIP","LGA","CSP","SOT"):
+        sms.append({"sm_id": f"SM-003-WIRE-{pkg}", "supplier_id": "SUP-003", "material_id": f"MAT-WIRE-{pkg}",
+                    "unit_price": 0.08, "lead_time_days": 10, "min_order_qty": 200.0, "is_preferred": True})
+    
+    # SUP-003 田中贵金属：进口Die芯片供应商
+    # 供应各类封装Die（从晶圆厂采购）
     for pkg in PKG_CFG:
         sms.append({"sm_id": f"SM-003-DIE-{pkg}", "supplier_id": "SUP-003", "material_id": f"MAT-DIE-{pkg}",
                     "unit_price": 15.0, "lead_time_days": 15, "min_order_qty": 200.0, "is_preferred": True})
-    # 键合线由SUP-004供应
+    
+    # SUP-004 贺利氏（Heraeus）：铜键合线全球领先
+    # 供应铜键合线（高端封装用，所有封装类型）
     for pkg in ("BGA","QFN","SOP","QFP","SIP","LGA","CSP","SOT"):
-        sms.append({"sm_id": f"SM-004-WIRE-{pkg}", "supplier_id": "SUP-004", "material_id": f"MAT-WIRE-{pkg}",
-                    "unit_price": 0.05, "lead_time_days": 2, "min_order_qty": 500.0, "is_preferred": True})
-    # 锡球由SUP-005供应
+        sms.append({"sm_id": f"SM-004-WIRE-CU-{pkg}", "supplier_id": "SUP-004", "material_id": f"MAT-WIRE-{pkg}",
+                    "unit_price": 0.035, "lead_time_days": 15, "min_order_qty": 500.0, "is_preferred": False})
+    
+    # SUP-005 飞凯材料（大瑞科技）：锡球供应商
+    # 供应BGA/CSP/WLCSP等封装用锡球
     for pkg in ("BGA","WLCSP","FANOUT","CSP","SIP"):
         sms.append({"sm_id": f"SM-005-BALL-{pkg}", "supplier_id": "SUP-005", "material_id": f"MAT-BALL-{pkg}",
-                    "unit_price": 0.02, "lead_time_days": 4, "min_order_qty": 50.0, "is_preferred": True})
-    # 贴片银浆
-    sms.append({"sm_id": "SM-001-DA", "supplier_id": "SUP-001", "material_id": "MAT-DA-PASTE",
-                "unit_price": 0.5, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": True})
+                    "unit_price": 0.02, "lead_time_days": 5, "min_order_qty": 50.0, "is_preferred": True})
     
-    # 替代物料的供应商（新增）
-    # 替代品牌银浆（SUP-002也提供）
-    sms.append({"sm_id": "SM-002-DA-ALT", "supplier_id": "SUP-002", "material_id": "MAT-DA-PASTE-ALT",
-                "unit_price": 0.55, "lead_time_days": 4, "min_order_qty": 80.0, "is_preferred": False})
+    # SUP-011 德邦科技：贴片银浆、底部填充胶
+    # 供应DAF/银浆材料（芯片贴装用）
+    sms.append({"sm_id": "SM-011-DA", "supplier_id": "SUP-011", "material_id": "MAT-DA-PASTE",
+                "unit_price": 0.5, "lead_time_days": 6, "min_order_qty": 50.0, "is_preferred": True})
+    sms.append({"sm_id": "SM-011-DA-ALT", "supplier_id": "SUP-011", "material_id": "MAT-DA-PASTE-ALT",
+                "unit_price": 0.55, "lead_time_days": 6, "min_order_qty": 50.0, "is_preferred": False})
     
-    # 替代EMC塑封料（原供应商也提供替代型号）
+    # ========== 引线框架供应商（QFN/SOP/QFP/SOT封装用） ==========
+    
+    # 引线框架需要单独的供应商（欣兴电子不生产引线框架）
+    # 假设SUP-014为引线框架专业供应商
+    for pkg in ("QFN","SOP","QFP","SOT"):
+        sms.append({"sm_id": f"SM-014-LF-{pkg}", "supplier_id": "SUP-006", "material_id": f"MAT-LF-{pkg}",
+                    "unit_price": 1.5, "lead_time_days": 8, "min_order_qty": 150.0, "is_preferred": True})
+    
+    # ========== 替代物料供应商 ==========
+    
+    # 替代EMC塑封料（住友电木提供替代型号）
     sms.append({"sm_id": "SM-002-BGA-ALT", "supplier_id": "SUP-002", "material_id": "MAT-EMC-BGA-ALT",
-                "unit_price": 8.3, "lead_time_days": 5, "min_order_qty": 50.0, "is_preferred": False})
+                "unit_price": 8.3, "lead_time_days": 12, "min_order_qty": 50.0, "is_preferred": False})
     sms.append({"sm_id": "SM-002-QFN-ALT", "supplier_id": "SUP-002", "material_id": "MAT-EMC-QFN-ALT",
-                "unit_price": 8.3, "lead_time_days": 5, "min_order_qty": 50.0, "is_preferred": False})
+                "unit_price": 8.3, "lead_time_days": 12, "min_order_qty": 50.0, "is_preferred": False})
     
-    # 铜键合线（SUP-004提供铜线替代方案）
-    sms.append({"sm_id": "SM-004-WIRE-CU", "supplier_id": "SUP-004", "material_id": "MAT-WIRE-BGA-CU",
-                "unit_price": 0.035, "lead_time_days": 2, "min_order_qty": 500.0, "is_preferred": False})
+    # 铜键合线替代（贺利氏提供）
+    sms.append({"sm_id": "SM-004-WIRE-BGA-CU", "supplier_id": "SUP-004", "material_id": "MAT-WIRE-BGA-CU",
+                "unit_price": 0.035, "lead_time_days": 15, "min_order_qty": 500.0, "is_preferred": False})
     
-    # 供应商B的基板（SUP-001的竞争对手）
-    sms.append({"sm_id": "SM-001-SUB-V2", "supplier_id": "SUP-001", "material_id": "MAT-SUB-BGA-V2",
-                "unit_price": 2.6, "lead_time_days": 3, "min_order_qty": 100.0, "is_preferred": False})
-    
-    # BOM第2层：基板原材料供应商（新增）
-    # 电解铜箔供应商
-    sms.append({"sm_id": "SM-001-CU", "supplier_id": "SUP-001", "material_id": "MAT-CU-FOIL",
-                "unit_price": 12.0, "lead_time_days": 7, "min_order_qty": 200.0, "is_preferred": True})
-    # 环氧树脂供应商
-    sms.append({"sm_id": "SM-002-RESIN", "supplier_id": "SUP-002", "material_id": "MAT-RESIN",
-                "unit_price": 5.0, "lead_time_days": 5, "min_order_qty": 100.0, "is_preferred": True})
-    # 玻纤布供应商
-    sms.append({"sm_id": "SM-001-GLASS", "supplier_id": "SUP-001", "material_id": "MAT-GLASS-FIBER",
-                "unit_price": 8.0, "lead_time_days": 7, "min_order_qty": 100.0, "is_preferred": True})
+    # 基板供应商B（深南电路提供BGA基板替代）
+    sms.append({"sm_id": "SM-006-SUB-BGA-V2", "supplier_id": "SUP-006", "material_id": "MAT-SUB-BGA-V2",
+                "unit_price": 2.7, "lead_time_days": 10, "min_order_qty": 150.0, "is_preferred": False})
     
     # ========== 备选供应商配置（真实OSAT供应链策略） ==========
     
-    # 基板备选供应商（SUP-006 中国台湾）
+    # SUP-006 深南电路（SCC）：国产IC载板备选供应商
+    # 供应基板（中美贸易摩擦备选方案）
     for pkg in ("BGA","WLCSP","FANOUT","LGA","CSP","SIP"):
         sms.append({"sm_id": f"SM-006-SUB-{pkg}", "supplier_id": "SUP-006", "material_id": f"MAT-SUB-{pkg}",
-                    "unit_price": 2.8, "lead_time_days": 7, "min_order_qty": 150.0, "is_preferred": False})
+                    "unit_price": 2.8, "lead_time_days": 10, "min_order_qty": 150.0, "is_preferred": False})
     
-    # 引线框架备选供应商（SUP-006）
-    for pkg in ("QFN","SOP","QFP","SOT"):
-        sms.append({"sm_id": f"SM-006-LF-{pkg}", "supplier_id": "SUP-006", "material_id": f"MAT-LF-{pkg}",
-                    "unit_price": 1.7, "lead_time_days": 7, "min_order_qty": 150.0, "is_preferred": False})
-    
-    # EMC塑封料备选供应商（SUP-007 日本，质量更好但贵）
+    # SUP-007 华海诚科：国产EMC塑封料备选
+    # 供应塑封料（已通过通富微电验证，小批量供货）
     for pkg in PKG_CFG:
         sms.append({"sm_id": f"SM-007-EMC-{pkg}", "supplier_id": "SUP-007", "material_id": f"MAT-EMC-{pkg}",
-                    "unit_price": 9.5, "lead_time_days": 12, "min_order_qty": 80.0, "is_preferred": False})
+                    "unit_price": 7.5, "lead_time_days": 8, "min_order_qty": 80.0, "is_preferred": False})
     
-    # 国产Die备选供应商（SUP-008 中国大陆，交期短但良率略低）
+    # SUP-008 兴森科技：国产FCBGA载板备选
+    # 供应高端基板（AI芯片封装用）
+    for pkg in ("BGA","FANOUT","SIP"):
+        sms.append({"sm_id": f"SM-008-SUB-{pkg}", "supplier_id": "SUP-008", "material_id": f"MAT-SUB-{pkg}",
+                    "unit_price": 3.2, "lead_time_days": 12, "min_order_qty": 300.0, "is_preferred": False})
+    
+    # SUP-009 日立化成（Hitachi Chemical）：高端塑封料备选
+    # 供应EMC塑封料（住友电木竞争对手）
     for pkg in PKG_CFG:
-        sms.append({"sm_id": f"SM-008-DIE-{pkg}", "supplier_id": "SUP-008", "material_id": f"MAT-DIE-{pkg}",
-                    "unit_price": 12.0, "lead_time_days": 10, "min_order_qty": 300.0, "is_preferred": False})
+        sms.append({"sm_id": f"SM-009-EMC-{pkg}", "supplier_id": "SUP-009", "material_id": f"MAT-EMC-{pkg}",
+                    "unit_price": 9.5, "lead_time_days": 14, "min_order_qty": 600.0, "is_preferred": False})
     
-    # 键合线备选供应商（SUP-009 韩国）
-    for pkg in ("BGA","QFN","SOP","QFP","SIP","LGA","CSP","SOT"):
-        sms.append({"sm_id": f"SM-009-WIRE-{pkg}", "supplier_id": "SUP-009", "material_id": f"MAT-WIRE-{pkg}",
-                    "unit_price": 0.055, "lead_time_days": 5, "min_order_qty": 600.0, "is_preferred": False})
-    
-    # 锡球备选供应商（SUP-010 东南亚）
+    # SUP-010 铨宝工业（Chua Kok）：东南亚锡球备选
+    # 供应锡球（地缘风险分散）
     for pkg in ("BGA","WLCSP","FANOUT","CSP","SIP"):
         sms.append({"sm_id": f"SM-010-BALL-{pkg}", "supplier_id": "SUP-010", "material_id": f"MAT-BALL-{pkg}",
-                    "unit_price": 0.023, "lead_time_days": 8, "min_order_qty": 80.0, "is_preferred": False})
+                    "unit_price": 0.023, "lead_time_days": 9, "min_order_qty": 80.0, "is_preferred": False})
     
-    # 辅料备选供应商（SUP-011 本地）
-    sms.append({"sm_id": "SM-011-DA", "supplier_id": "SUP-011", "material_id": "MAT-DA-PASTE",
-                "unit_price": 0.52, "lead_time_days": 2, "min_order_qty": 50.0, "is_preferred": False})
-    sms.append({"sm_id": "SM-011-DA-ALT", "supplier_id": "SUP-011", "material_id": "MAT-DA-PASTE-ALT",
-                "unit_price": 0.57, "lead_time_days": 2, "min_order_qty": 50.0, "is_preferred": False})
+    # SUP-012 揖斐电（Ibiden）：全球IC载板No.1
+    # 供应高端ABF载板（交期长但质量最优）
+    for pkg in ("BGA","FANOUT","SIP"):
+        sms.append({"sm_id": f"SM-012-SUB-{pkg}", "supplier_id": "SUP-012", "material_id": f"MAT-SUB-{pkg}",
+                    "unit_price": 3.5, "lead_time_days": 18, "min_order_qty": 300.0, "is_preferred": False})
     
-    # 基板原材料备选供应商（SUP-012 中国台湾）
-    sms.append({"sm_id": "SM-012-CU", "supplier_id": "SUP-012", "material_id": "MAT-CU-FOIL",
-                "unit_price": 13.5, "lead_time_days": 10, "min_order_qty": 300.0, "is_preferred": False})
-    sms.append({"sm_id": "SM-012-GLASS", "supplier_id": "SUP-012", "material_id": "MAT-GLASS-FIBER",
-                "unit_price": 9.0, "lead_time_days": 10, "min_order_qty": 200.0, "is_preferred": False})
+    # SUP-013 联瑞新材：先进封装填料
+    # 供应塑封料填料（球形硅微粉）
+    for pkg in PKG_CFG:
+        sms.append({"sm_id": f"SM-013-FILLER-{pkg}", "supplier_id": "SUP-013", "material_id": f"MAT-EMC-{pkg}",
+                    "unit_price": 7.8, "lead_time_days": 7, "min_order_qty": 100.0, "is_preferred": False})
     
-    # 特种材料供应商（SUP-013 欧洲，高端产品用）
-    sms.append({"sm_id": "SM-013-RESIN", "supplier_id": "SUP-013", "material_id": "MAT-RESIN",
-                "unit_price": 6.5, "lead_time_days": 18, "min_order_qty": 100.0, "is_preferred": False})
+    # ========== BOM第2层原材料供应商（基板原材料） ==========
+    # 注：这些通常由基板供应商（欣兴电子）自行采购，但为完整性也配置供应商
+    
+    # 电解铜箔供应商（SUP-012 揖斐电也供应原材料）
+    sms.append({"sm_id": "SM-012-CU-FOIL", "supplier_id": "SUP-012", "material_id": "MAT-CU-FOIL",
+                "unit_price": 12.0, "lead_time_days": 15, "min_order_qty": 200.0, "is_preferred": True})
+    
+    # 环氧树脂供应商（SUP-002 住友电木也供应树脂）
+    sms.append({"sm_id": "SM-002-RESIN", "supplier_id": "SUP-002", "material_id": "MAT-RESIN",
+                "unit_price": 5.0, "lead_time_days": 10, "min_order_qty": 100.0, "is_preferred": True})
+    
+    # 玻纤布供应商（SUP-012 揖斐电供应）
+    sms.append({"sm_id": "SM-012-GLASS-FIBER", "supplier_id": "SUP-012", "material_id": "MAT-GLASS-FIBER",
+                "unit_price": 8.0, "lead_time_days": 15, "min_order_qty": 100.0, "is_preferred": True})
+    
     return sms
 
 SUPPLIER_MATERIALS = generate_supplier_materials()

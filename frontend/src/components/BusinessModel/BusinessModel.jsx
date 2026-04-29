@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Table, Button, Modal, Form, Input, Select, Radio, message, List, Popconfirm, Card, Divider, Tabs } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Radio, message, List, Popconfirm, Card, Divider, Tabs, Switch } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, LinkOutlined, PlusCircleOutlined } from '@ant-design/icons'
 import { businessModelApi, businessModelLinkApi, dataSourceApi } from '../../services/api'
 import OntologyView from './OntologyView/OntologyView'
@@ -510,6 +510,7 @@ function BusinessModel() {
                 backgroundColor: 'white'
               }}>
                 <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                  {field.required && <span style={{ color: 'red', marginRight: '4px' }}>*</span>}
                   {field.name}
                   {field.field_id === record.primary_key_id && (
                     <span style={{ 
@@ -973,6 +974,14 @@ function BusinessModel() {
               <Option value="date">日期</Option>
               <Option value="datetime">日期时间</Option>
             </Select>
+          </Form.Item>
+          <Form.Item 
+            name="required" 
+            label="是否必填" 
+            valuePropName="checked"
+            initialValue={false}
+          >
+            <Switch checkedChildren="必填" unCheckedChildren="可选" />
           </Form.Item>
           <Form.Item name="description" label="中文说明">
             <Input.TextArea />

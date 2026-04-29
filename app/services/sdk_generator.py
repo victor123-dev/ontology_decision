@@ -41,7 +41,8 @@ class SDKGenerator:
                         "field_id": field.field_id,
                         "name": field.name,
                         "data_type": field.data_type,
-                        "description": field.description
+                        "description": field.description,
+                        "required": field.required  # 新增：包含required字段
                     }
                     for field in model.fields
                 ]
@@ -602,7 +603,8 @@ class SDKGenerator:
                         "field_id": field.field_id,
                         "name": field.name,
                         "data_type": field.data_type,
-                        "description": field.description
+                        "description": field.description,
+                        "required": field.required  # 新增：包含required字段
                     }
                     for field in model.fields
                 ]
@@ -642,7 +644,8 @@ class SDKGenerator:
                             "field_id": field.field_id,
                             "name": field.name,
                             "data_type": field.data_type,
-                            "description": field.description
+                            "description": field.description,
+                            "required": field.required  # 新增：包含required字段
                         }
                         for field in source_model.fields
                     ]
@@ -660,7 +663,8 @@ class SDKGenerator:
                             "field_id": field.field_id,
                             "name": field.name,
                             "data_type": field.data_type,
-                            "description": field.description
+                            "description": field.description,
+                            "required": field.required  # 新增：包含required字段
                         }
                         for field in target_model.fields
                     ]

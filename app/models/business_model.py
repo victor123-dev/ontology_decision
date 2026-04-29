@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.utils.db_client import Base
@@ -26,6 +26,7 @@ class BusinessModelField(Base):
     data_type = Column(String(100), nullable=False)  # 通用数据类型
     name = Column(String(255), nullable=False)  # 中文名称
     description = Column(Text)  # 中文说明
+    required = Column(Boolean, default=False)  # 是否必填，默认False
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

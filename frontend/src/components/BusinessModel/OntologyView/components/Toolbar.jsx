@@ -106,11 +106,11 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
         };
       });
     } else {
-      // 创建操作包含所有字段（都可选）
+      // 创建操作包含所有字段，使用字段的required值
       return model.fields.map(field => ({
         name: field.field_id,
         type: mapDataTypeToParamType(field.data_type),
-        required: false,
+        required: field.required || false,  // 使用字段的required值
         default_value: '',
         description: field.description || field.name
       }));

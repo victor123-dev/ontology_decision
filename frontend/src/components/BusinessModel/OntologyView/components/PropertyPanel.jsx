@@ -623,7 +623,10 @@ result = {
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
-                            <strong>{field.name}</strong>
+                            <strong>
+                              {field.required && <span style={{ color: 'red', marginRight: '4px' }}>*</span>}
+                              {field.name}
+                            </strong>
                             {field.field_id === primaryKeyId && (
                               <span style={{ 
                                 marginLeft: '8px', 

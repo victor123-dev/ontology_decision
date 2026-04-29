@@ -75,6 +75,8 @@ class Supplier(Base):
     supplier_id = Column(String(50), primary_key=True)
     supplier_name = Column(String(100), nullable=False)
     supplier_type = Column(String(50), default="直供")
+    country = Column(String(50), default="中国")
+    industry_position = Column(String(200), default="")
     avg_lead_time_days = Column(Integer, default=3)
     reliability_score = Column(Float, default=0.95)
     min_order_quantity = Column(Float, default=50.0)
@@ -303,6 +305,7 @@ class WorkOrder(Base):
     work_order_id = Column(String(50), primary_key=True)
     customer_order_id = Column(String(50), ForeignKey("customer_order.order_id"), nullable=True)
     product_id = Column(String(50), ForeignKey("product.product_id"), nullable=False)
+    work_order_type = Column(String(50), default="正常", comment="工单类型：正常/重工")
     planned_quantity = Column(Float, nullable=False)  # 计划投入量（含过量）
     expected_output_qty = Column(Float, nullable=True)  # 预期产出量（订单数量）
     planned_start_date = Column(DateTime, nullable=True)
@@ -338,6 +341,7 @@ class WorkOrderOperation(Base):
     scrapped_qty = Column(Float, default=0.0)
     assigned_machine_id = Column(String(50), ForeignKey("machine.machine_id"), nullable=True)
     status = Column(String(50), default="待开工")
+    is_rework = Column(Boolean, default=False, comment="是否重工序")
     setup_completed = Column(Boolean, default=False)
     material_issued = Column(Boolean, default=False)
 
@@ -406,6 +410,7 @@ class WIPLot(Base):
     lot_id = Column(String(50), primary_key=True)
     work_order_id = Column(String(50), ForeignKey("work_order.work_order_id"), nullable=False)
     product_id = Column(String(50), ForeignKey("product.product_id"), nullable=False)
+    lot_size = Column(Float, default=25, comment="批次大小（标准25片/批）")
     current_step_id = Column(String(50), ForeignKey("route_step.step_id"), nullable=True)
     current_machine_id = Column(String(50), ForeignKey("machine.machine_id"), nullable=True)
     lot_quantity = Column(Float, nullable=False)
@@ -601,6 +606,93 @@ class QualityInspection(Base):
     is_hold = Column(Boolean, default=False)     # 是否处于Hold状态
     inspector = Column(String(50), default="QC-AUTO")
     note = Column(String(500), nullable=True)
+
+
+# ============================================================================
+# 外部供应链风险（舆情监控）
+# ============================================================================
+
+class ExternalSupplyChainRisk(Base):
+    """外部供应链风险事件（通过舆情监控获取）
+    
+    设计说明：
+    - supplier_id字段：记录风险事件的“主要受影响方”或“直接责任方”（1个）
+    - 如需记录多个关联供应商及其影响程度，使用SupplierRiskAssociation表
+    - 例如：台湾地震主要影响欣兴电子（SUP-001），但也会间接影响深南电路（SUP-006）
+    """
+    __tablename__ = "external_supply_chain_risk"
+    __table_args__ = (
+        Index('idx_risk_supplier', 'supplier_id'),
+        Index('idx_risk_customer', 'customer_id'),
+        Index('idx_risk_level', 'risk_level'),
+        Index('idx_risk_status', 'status'),
+        Index('idx_risk_detected_at', 'detected_at'),
+    )
+    
+    risk_id = Column(String(50), primary_key=True)  # 风险事件ID
+    
+    # 关联对象
+    supplier_id = Column(String(50), ForeignKey("supplier.supplier_id"), nullable=True)  # 关联供应商
+    customer_id = Column(String(50), ForeignKey("customer.customer_id"), nullable=True)  # 关联客户
+    material_id = Column(String(50), ForeignKey("material.material_id"), nullable=True)  # 关联物料
+    
+    # 风险分类
+    risk_category = Column(String(50), nullable=False)  # 风险类别：natural_disaster, geopolitical, financial, quality, legal, operational
+    risk_level = Column(String(20), nullable=False)  # 风险等级：critical, high, medium, low
+    
+    # 风险详情
+    title = Column(String(200), nullable=False)  # 风险事件标题
+    description = Column(Text, nullable=False)  # 风险事件描述
+    source_url = Column(String(500), nullable=True)  # 信息来源URL
+    source_name = Column(String(100), nullable=True)  # 信息来源名称（如：Reuters, Bloomberg）
+    
+    # 影响评估
+    impact_scope = Column(String(50), nullable=True)  # 影响范围：global, regional, local
+    estimated_impact_days = Column(Integer, nullable=True)  # 预估影响天数
+    affected_materials = Column(Text, nullable=True)  # 受影响的物料（JSON数组）
+    affected_products = Column(Text, nullable=True)  # 受影响的产品（JSON数组）
+    
+    # 时间信息
+    event_date = Column(Date, nullable=True)  # 事件发生日期
+    detected_at = Column(DateTime, default=datetime.utcnow)  # 检测时间
+    
+    # 处理状态
+    status = Column(String(20), default="new")  # 状态：new, analyzing, mitigating, resolved, ignored
+    assigned_to = Column(String(50), nullable=True)  # 负责人
+    mitigation_plan = Column(Text, nullable=True)  # 缓解计划
+    resolved_at = Column(DateTime, nullable=True)  # 解决时间
+    
+    # 元数据
+    confidence_score = Column(Float, nullable=True)  # AI分析置信度（0-1）
+    keywords = Column(Text, nullable=True)  # 关键词（JSON数组）
+    raw_content = Column(Text, nullable=True)  # 原始舆情内容
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SupplierRiskAssociation(Base):
+    """供应商-风险关联表（多对多关系）
+    
+    设计说明：
+    - 用于记录风险事件的“波及影响链”，支持1个风险事件关联N个供应商
+    - association_type区分关联性质：direct（直接受影响）、indirect（间接影响）、potential（潜在影响）
+    - impact_level记录对该供应商的具体影响程度，可与风险整体等级（risk_level）不同
+    - 例如：台湾地震（RISK-001）直接打击SUP-001（critical），但给SUP-006带来转单机会（medium）
+    """
+    __tablename__ = "supplier_risk_association"
+    __table_args__ = (
+        Index('idx_sra_supplier', 'supplier_id'),
+        Index('idx_sra_risk', 'risk_id'),
+    )
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    supplier_id = Column(String(50), ForeignKey("supplier.supplier_id"), nullable=False)
+    risk_id = Column(String(50), ForeignKey("external_supply_chain_risk.risk_id"), nullable=False)
+    association_type = Column(String(50), default="direct")  # 关联类型：direct（直接）, indirect（间接）, potential（潜在）
+    impact_level = Column(String(20), nullable=True)  # 对该供应商的影响程度：critical, high, medium, low
+    note = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # ============================================================================
