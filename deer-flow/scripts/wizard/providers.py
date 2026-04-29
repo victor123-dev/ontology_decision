@@ -215,6 +215,15 @@ SEARCH_PROVIDERS: list[SearchProvider] = [
 
 WEB_FETCH_PROVIDERS: list[WebProvider] = [
     WebProvider(
+        name="local",
+        display_name="Local Fetch (No API Key)",
+        description="Completely local, no API key required, uses Readability",
+        use="deerflow.community.local_fetch.tools:web_fetch_tool",
+        env_var=None,
+        tool_name="web_fetch",
+        extra_config={"timeout": 15, "max_chars": 4096},
+    ),
+    WebProvider(
         name="jina_ai",
         display_name="Jina AI Reader",
         description="Good default reader, no API key required",

@@ -423,6 +423,13 @@ tools:
   #   # Timeout for navigating to the page (in seconds). Set to positive value to enable, -1 to disable
   #   navigation_timeout: 30
 
+  # Web fetch tool (uses Local Fetch - 完全本地，无需 API Key)
+  # - name: web_fetch
+  #   group: web
+  #   use: deerflow.community.local_fetch.tools:web_fetch_tool
+  #   timeout: 15          # HTTP 请求超时时间（秒）
+  #   max_chars: 4096      # 返回内容最大字符数
+
   # Web fetch tool (uses Firecrawl, requires FIRECRAWL_API_KEY)
   # - name: web_fetch
   #   group: web
