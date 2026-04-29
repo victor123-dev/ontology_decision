@@ -637,8 +637,8 @@ class ExternalSupplyChainRisk(Base):
     material_id = Column(String(50), ForeignKey("material.material_id"), nullable=True)  # 关联物料
     
     # 风险分类
-    risk_category = Column(String(50), nullable=False)  # 风险类别：natural_disaster, geopolitical, financial, quality, legal, operational
-    risk_level = Column(String(20), nullable=False)  # 风险等级：critical, high, medium, low
+    risk_category = Column(String(50), nullable=False)  # 风险类别：自然灾害，政治事件，财务风险，质量风险，法律风险，运营风险
+    risk_level = Column(String(20), nullable=False)  # 风险等级： 严重，高，中，低
     
     # 风险详情
     title = Column(String(200), nullable=False)  # 风险事件标题
@@ -647,7 +647,7 @@ class ExternalSupplyChainRisk(Base):
     source_name = Column(String(100), nullable=True)  # 信息来源名称（如：Reuters, Bloomberg）
     
     # 影响评估
-    impact_scope = Column(String(50), nullable=True)  # 影响范围：global, regional, local
+    impact_scope = Column(String(50), nullable=True)  # 影响范围：全球，区域，局部
     estimated_impact_days = Column(Integer, nullable=True)  # 预估影响天数
     affected_materials = Column(Text, nullable=True)  # 受影响的物料（JSON数组）
     affected_products = Column(Text, nullable=True)  # 受影响的产品（JSON数组）
@@ -657,7 +657,7 @@ class ExternalSupplyChainRisk(Base):
     detected_at = Column(DateTime, default=datetime.utcnow)  # 检测时间
     
     # 处理状态
-    status = Column(String(20), default="new")  # 状态：new, analyzing, mitigating, resolved, ignored
+    status = Column(String(20), default="new")  # 状态：新发现，分析中，缓解中，已解决，已忽略
     assigned_to = Column(String(50), nullable=True)  # 负责人
     mitigation_plan = Column(Text, nullable=True)  # 缓解计划
     resolved_at = Column(DateTime, nullable=True)  # 解决时间
@@ -689,8 +689,8 @@ class SupplierRiskAssociation(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     supplier_id = Column(String(50), ForeignKey("supplier.supplier_id"), nullable=False)
     risk_id = Column(String(50), ForeignKey("external_supply_chain_risk.risk_id"), nullable=False)
-    association_type = Column(String(50), default="direct")  # 关联类型：direct（直接）, indirect（间接）, potential（潜在）
-    impact_level = Column(String(20), nullable=True)  # 对该供应商的影响程度：critical, high, medium, low
+    association_type = Column(String(50), default="direct")  # 关联类型：直接, 间接, 潜在
+    impact_level = Column(String(20), nullable=True)  # 对该供应商的影响程度：严重, 高, 中, 低
     note = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

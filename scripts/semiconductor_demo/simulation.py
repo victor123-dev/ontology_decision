@@ -1609,6 +1609,7 @@ class FactorySimulation:
                 "po_id": po_id,
                 "material_id": material_id,
                 "quantity": po_qty,
+                "status": "待收货",
                 "unit_price": mat_supplier.get("unit_price", 1.0),
                 "related_work_order_id": wo_id,
                 "related_wom_id": wom_id
@@ -1730,6 +1731,8 @@ class FactorySimulation:
             "inspection_type": "IQC入料",
             "po_id": po_id,
             "material_id": material_id,
+            "related_doc_type": "PurchaseOrder",
+            "related_doc_id": po_id,
             "inspection_time": now_dt,
             "inspect_qty": qty,
             "pass_qty": accepted_qty,
@@ -1921,6 +1924,7 @@ class FactorySimulation:
                         "po_id": po_id,
                         "material_id": material_id,
                         "quantity": po_qty,
+                        "status": "待收货",
                         "unit_price": supplier.get("unit_price", 1.0),
                         "related_work_order_id": None,
                         "related_wom_id": None
@@ -2861,6 +2865,8 @@ class FactorySimulation:
                 "wo_op_id": wo_op_id,
                 "lot_id": lot_id,
                 "machine_id": machine_id,
+                "related_doc_type": "WorkOrderOperation",
+                "related_doc_id": wo_op_id,
                 "inspection_time": self.sim_time_to_datetime(self.env.now),
                 "inspect_qty": inspect_qty,
                 "pass_qty": inspect_qty,
@@ -2894,6 +2900,8 @@ class FactorySimulation:
             "wo_op_id": wo_op_id,
             "lot_id": lot_id,
             "machine_id": machine_id,
+            "related_doc_type": "WorkOrderOperation",
+            "related_doc_id": wo_op_id,
             "inspection_time": self.sim_time_to_datetime(self.env.now),
             "inspect_qty": inspect_qty + scrap_qty,
             "pass_qty": inspect_qty,
@@ -3297,7 +3305,7 @@ class FactorySimulation:
                                    {"status": "已取消"})
 
                 # 更新工单和订单状态
-                self.db.update("work_order", {"work_order_id": wo_id}, {"status": "取消"})
+                self.db.update("work_order", {"work_order_id": wo_id}, {"status": "已取消"})
                 self.db.update("customer_order", {"order_id": order_id}, {
                     "status": "已取消",
                     "note": f"Day{self.get_sim_day()} 客户主动取消"
@@ -3305,7 +3313,7 @@ class FactorySimulation:
 
                 # 更新内存状态
                 if wo_id in self.work_order_state:
-                    self.work_order_state[wo_id]["status"] = "取消"
+                    self.work_order_state[wo_id]["status"] = "已取消"
                 cancelled_this_round += 1
 
     # ========================================================================

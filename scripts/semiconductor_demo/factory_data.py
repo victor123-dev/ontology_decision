@@ -71,7 +71,7 @@ CUSTOMERS = [
         "contact_phone": "+886-3-xxx-xxxx",
         "contact_email": "supply@mediatek.com",
         "address": "台湾新竹",
-        "country": "中国",
+        "country": "台湾",
         "region": "台湾",
         "status": "活跃",
         "note": "手机SoC封测"
@@ -177,52 +177,52 @@ CUSTOMERS = [
 # 客户-产品关系（哪些客户购买哪些产品）
 CUSTOMER_PRODUCTS = [
     # AMD - 高性能计算、AI芯片
-    {"customer_id": "CUST-AMD", "product_id": "SOP-FPGA", "special_price": 15.0, "quality_level": "工规"},
-    {"customer_id": "CUST-AMD", "product_id": "QFN-GPU", "special_price": 12.5, "quality_level": "工规"},
-    {"customer_id": "CUST-AMD", "product_id": "BGA-CPU", "special_price": 18.0, "quality_level": "工规"},
-    {"customer_id": "CUST-AMD", "product_id": "FANOUT-ASIC", "special_price": 16.5, "quality_level": "工规"},
+    {"customer_id": "CUST-AMD", "product_id": "SOP-FPGA", "special_price": 15.0, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-AMD", "product_id": "QFN-GPU", "special_price": 12.5, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-AMD", "product_id": "BGA-CPU", "special_price": 18.0, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-AMD", "product_id": "FANOUT-ASIC", "special_price": 16.5, "quality_level": "工规", "status": "有效"},
     
     # NVIDIA - AI芯片、GPU
-    {"customer_id": "CUST-NVIDIA", "product_id": "BGA-GPU", "special_price": 20.0, "quality_level": "工规"},
-    {"customer_id": "CUST-NVIDIA", "product_id": "SIP-GPU", "special_price": 25.0, "quality_level": "工规"},
-    {"customer_id": "CUST-NVIDIA", "product_id": "FANOUT-ASIC", "special_price": 17.0, "quality_level": "工规"},
+    {"customer_id": "CUST-NVIDIA", "product_id": "BGA-GPU", "special_price": 20.0, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-NVIDIA", "product_id": "SIP-GPU", "special_price": 25.0, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-NVIDIA", "product_id": "FANOUT-ASIC", "special_price": 17.0, "quality_level": "工规", "status": "有效"},
     
     # 华为海思 - 通信、手机芯片
-    {"customer_id": "CUST-HISI", "product_id": "BGA-CPU", "special_price": 16.0, "quality_level": "工规"},
-    {"customer_id": "CUST-HISI", "product_id": "QFN-RF", "special_price": 10.5, "quality_level": "工规"},
-    {"customer_id": "CUST-HISI", "product_id": "WLCSP-PMIC", "special_price": 8.0, "quality_level": "工规"},
+    {"customer_id": "CUST-HISI", "product_id": "BGA-CPU", "special_price": 16.0, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-HISI", "product_id": "QFN-RF", "special_price": 10.5, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-HISI", "product_id": "WLCSP-PMIC", "special_price": 8.0, "quality_level": "工规", "status": "有效"},
     
     # 联发科 - 移动通信
-    {"customer_id": "CUST-MTK", "product_id": "BGA-ASIC", "special_price": 14.0, "quality_level": "标准"},
-    {"customer_id": "CUST-MTK", "product_id": "QFN-MCU", "special_price": 9.5, "quality_level": "标准"},
-    {"customer_id": "CUST-MTK", "product_id": "CSP-MEM", "special_price": 11.0, "quality_level": "标准"},
+    {"customer_id": "CUST-MTK", "product_id": "BGA-ASIC", "special_price": 14.0, "quality_level": "标准", "status": "有效"},
+    {"customer_id": "CUST-MTK", "product_id": "QFN-MCU", "special_price": 9.5, "quality_level": "标准", "status": "有效"},
+    {"customer_id": "CUST-MTK", "product_id": "CSP-MEM", "special_price": 11.0, "quality_level": "标准", "status": "有效"},
     
     # 兆易创新 - 存储、MCU
-    {"customer_id": "CUST-GIGADEVICE", "product_id": "QFN-MCU", "special_price": 8.5, "quality_level": "工规"},
-    {"customer_id": "CUST-GIGADEVICE", "product_id": "SOP-MEM", "special_price": 7.5, "quality_level": "工规"},
-    {"customer_id": "CUST-GIGADEVICE", "product_id": "LGA-MEM", "special_price": 9.0, "quality_level": "工规"},
+    {"customer_id": "CUST-GIGADEVICE", "product_id": "QFN-MCU", "special_price": 8.5, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-GIGADEVICE", "product_id": "SOP-MEM", "special_price": 7.5, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-GIGADEVICE", "product_id": "LGA-MEM", "special_price": 9.0, "quality_level": "工规", "status": "有效"},
     
     # 德州仪器 - 模拟、PMIC
-    {"customer_id": "CUST-TI", "product_id": "SOP-PMIC", "special_price": 6.5, "quality_level": "车规"},
-    {"customer_id": "CUST-TI", "product_id": "SOT-SENSOR", "special_price": 5.5, "quality_level": "车规"},
-    {"customer_id": "CUST-TI", "product_id": "QFN-PMIC", "special_price": 8.0, "quality_level": "车规"},
+    {"customer_id": "CUST-TI", "product_id": "SOP-PMIC", "special_price": 6.5, "quality_level": "车规", "status": "有效"},
+    {"customer_id": "CUST-TI", "product_id": "SOT-SENSOR", "special_price": 5.5, "quality_level": "车规", "status": "有效"},
+    {"customer_id": "CUST-TI", "product_id": "QFN-PMIC", "special_price": 8.0, "quality_level": "车规", "status": "有效"},
     
     # 艾为电子 - 音频
-    {"customer_id": "CUST-AWINIC", "product_id": "QFN-PMIC", "special_price": 7.0, "quality_level": "标准"},
-    {"customer_id": "CUST-AWINIC", "product_id": "SOP-PMIC", "special_price": 6.0, "quality_level": "标准"},
+    {"customer_id": "CUST-AWINIC", "product_id": "QFN-PMIC", "special_price": 7.0, "quality_level": "标准", "status": "有效"},
+    {"customer_id": "CUST-AWINIC", "product_id": "SOP-PMIC", "special_price": 6.0, "quality_level": "标准", "status": "有效"},
     
     # 中科蓝讯 - 蓝牙
-    {"customer_id": "CUST-BLUETEC", "product_id": "QFN-RF", "special_price": 6.5, "quality_level": "标准"},
-    {"customer_id": "CUST-BLUETEC", "product_id": "CSP-RF", "special_price": 7.5, "quality_level": "标准"},
+    {"customer_id": "CUST-BLUETEC", "product_id": "QFN-RF", "special_price": 6.5, "quality_level": "标准", "status": "有效"},
+    {"customer_id": "CUST-BLUETEC", "product_id": "CSP-RF", "special_price": 7.5, "quality_level": "标准", "status": "有效"},
     
     # 高通 - 5G、射频
-    {"customer_id": "CUST-QUALCOMM", "product_id": "BGA-RF", "special_price": 15.5, "quality_level": "工规"},
-    {"customer_id": "CUST-QUALCOMM", "product_id": "QFN-RF", "special_price": 11.0, "quality_level": "工规"},
-    {"customer_id": "CUST-QUALCOMM", "product_id": "FANOUT-NET", "special_price": 18.5, "quality_level": "工规"},
+    {"customer_id": "CUST-QUALCOMM", "product_id": "BGA-RF", "special_price": 15.5, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-QUALCOMM", "product_id": "QFN-RF", "special_price": 11.0, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-QUALCOMM", "product_id": "FANOUT-NET", "special_price": 18.5, "quality_level": "工规", "status": "有效"},
     
     # 长鑫存储 - DRAM
-    {"customer_id": "CUST-CXMT", "product_id": "BGA-MEM", "special_price": 12.0, "quality_level": "工规"},
-    {"customer_id": "CUST-CXMT", "product_id": "LGA-MEM", "special_price": 10.5, "quality_level": "工规"},
+    {"customer_id": "CUST-CXMT", "product_id": "BGA-MEM", "special_price": 12.0, "quality_level": "工规", "status": "有效"},
+    {"customer_id": "CUST-CXMT", "product_id": "LGA-MEM", "special_price": 10.5, "quality_level": "工规", "status": "有效"},
 ]
 
 # ============================================================================
