@@ -36,18 +36,16 @@ import { useWindowSize } from "./hooks/useWindowSize";
 // 物流/预测行：h=29 → 232+28=260px（匹配线上版本约230px）
 // 预警概览行：h=14 → 112+13=125px（匹配线上版本约110px）
 const INITIAL_LAYOUT = [
-  // 第一行: 风险列表(左) + 采购执行(中) + 风险统计(右)
+  // 第一行: 风险列表(左) + 采购执行(中) + 风险统计(右上) - 风险供应商(右下)
   { i: 'riskList', x: 0, y: 0, w: 10, h: 28, minH: 20, minW: 8 },
   { i: 'purchaseMonitoring', x: 10, y: 0, w: 8, h: 28, minH: 20, minW: 6 },
   { i: 'riskCharts', x: 18, y: 0, w: 6, h: 14, minH: 10, minW: 4 },
-  
-  // 第二行: 库存健康(左) + 生产交付(中) + 风险供应商(右)
-  { i: 'inventoryHealth', x: 0, y: 28, w: 8, h: 22, minH: 16, minW: 6 },
-  { i: 'productionTracking', x: 8, y: 28, w: 10, h: 22, minH: 16, minW: 8 },
   { i: 'topRiskSuppliers', x: 18, y: 28, w: 6, h: 14, minH: 10, minW: 4 },
   
-  // 第三行: 客户订单趋势(右) - 在topRiskSuppliers下方
-  { i: 'customerOrderTrend', x: 18, y: 36, w: 6, h: 14, minH: 10, minW: 4 },
+  // 第二行: 库存健康(左) + 客户订单趋势(中) + 生产交付(右)
+  { i: 'inventoryHealth', x: 0, y: 28, w: 8, h: 22, minH: 16, minW: 6 },
+  { i: 'customerOrderTrend', x: 8, y: 28, w: 8, h: 22, minH: 16, minW: 4 },
+  { i: 'productionTracking', x: 18, y: 36, w: 8, h: 22, minH: 16, minW: 8 },
   
   // 第四行: 销售订单概览(全宽)
   { i: 'salesOverview', x: 0, y: 50, w: 24, h: 18, minH: 14, minW: 12 },
