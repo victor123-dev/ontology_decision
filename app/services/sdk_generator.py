@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 import os
 import shutil
+import tempfile
 import jinja2
 from sqlalchemy.orm import Session
 from app.models.business_model import BusinessModel, BusinessModelField
@@ -75,10 +76,27 @@ class SDKGenerator:
             "actions": actions
         }
     
-    def generate(self, db: Session, output_path: str, package_name: str, version: str) -> Dict[str, Any]:
+    def generate(self, db: Session, output_path: str, package_name: str, version: str, trigger_reload: bool = True) -> Dict[str, Any]:
         """
         生成SDK代码
+        
+        Args:
+            db: 数据库会话
+            output_path: SDK输出路径
+            package_name: 包名
+            version: 版本号
+            trigger_reload: 是否在生成完成后触发reload（通过移动文件到app目录）
         """
+        # 如果需要在app目录生成MCP文件，先使用临时目录
+        mcp_temp_dir = None
+        mcp_target_dir = None
+        
+        if trigger_reload:
+            # 创建临时目录用于生成MCP文件
+            mcp_temp_dir = tempfile.mkdtemp(prefix="sdk_mcp_")
+            mcp_target_dir = os.path.join(os.path.dirname(__file__), "..", "api", "dynamic_mcp")
+            mcp_target_dir = os.path.abspath(mcp_target_dir)
+        
         # 清理输出目录
         if os.path.exists(output_path):
             shutil.rmtree(output_path)
@@ -105,8 +123,9 @@ class SDKGenerator:
         # 生成行动模块
         self._generate_action_files(package_dir, actions)
         
-        # 生成MCP服务文件
-        self._generate_mcp_files(db, actions)
+        # 生成MCP服务文件（到临时目录或目标目录）
+        mcp_output_dir = mcp_temp_dir if trigger_reload else mcp_target_dir
+        self._generate_mcp_files(db, actions, mcp_output_dir)
         
         # 生成配置文件
         self._generate_config_file(package_dir, version)
@@ -117,13 +136,37 @@ class SDKGenerator:
         # 构建SDK包
         build_result = self.build(output_path)
         
+        # 如果使用了临时目录，在返回前移动到目标位置（触发reload）
+        reload_triggered = False
+        if trigger_reload and mcp_temp_dir and mcp_target_dir:
+            try:
+                # 确保目标目录存在
+                os.makedirs(mcp_target_dir, exist_ok=True)
+                
+                # 移动所有文件到目标目录
+                for item in os.listdir(mcp_temp_dir):
+                    source = os.path.join(mcp_temp_dir, item)
+                    dest = os.path.join(mcp_target_dir, item)
+                    if os.path.isfile(source):
+                        shutil.move(source, dest)
+                
+                reload_triggered = True
+                logger.info(f"MCP文件已移动到 {mcp_target_dir}，将触发reload")
+            except Exception as e:
+                logger.error(f"移动MCP文件失败: {e}")
+            finally:
+                # 清理临时目录
+                if os.path.exists(mcp_temp_dir):
+                    shutil.rmtree(mcp_temp_dir, ignore_errors=True)
+        
         return {
             "output_path": output_path,
             "package_name": package_name,
             "version": version,
             "models_generated": len(model_files),
             "actions_generated": len(actions),
-            "build": build_result
+            "build": build_result,
+            "reload_triggered": reload_triggered
         }
     
     def _generate_core_files(self, output_path: str, package_name: str, business_models):
@@ -487,10 +530,15 @@ class SDKGenerator:
             prepared_fields.append(prepared_field)
         return prepared_fields
 
-    def _generate_mcp_files(self, db: Session, actions: List[Dict[str, Any]]):
+    def _generate_mcp_files(self, db: Session, actions: List[Dict[str, Any]], mcp_dir: str = None):
         """
-        生成MCP服务文件到app/api目录下的dynamic_mcp目录
+        生成MCP服务文件到指定目录
         使用静态代码生成方式，为每个action和object生成独立的函数
+        
+        Args:
+            db: 数据库会话
+            actions: 行动列表
+            mcp_dir: MCP文件输出目录（如果为None，则使用默认的dynamic_mcp目录）
         """
         import os
         
@@ -498,22 +546,23 @@ class SDKGenerator:
         api_dir = os.path.join(os.path.dirname(__file__), "..", "api")
         api_dir = os.path.abspath(api_dir)
         
-        # 直接使用api目录下的dynamic_mcp
-        dynamic_mcp_dir = os.path.join(api_dir, "dynamic_mcp")
+        # 确定MCP目录
+        if mcp_dir is None:
+            mcp_dir = os.path.join(api_dir, "dynamic_mcp")
         
         # 确保目录存在
-        os.makedirs(dynamic_mcp_dir, exist_ok=True)
+        os.makedirs(mcp_dir, exist_ok=True)
         
-        # 生成Action MCP文件（到dynamic_mcp目录）
-        self._generate_action_mcp_files(dynamic_mcp_dir, actions)
+        # 生成Action MCP文件
+        self._generate_action_mcp_files(mcp_dir, actions)
         
-        # 生成Object MCP文件（到dynamic_mcp目录）
+        # 生成Object MCP文件
         # TODO 这里先不生成了吧，先使用通用的，生成以后工具太多直接上下文溢出了
-        # self._generate_object_mcp_files(dynamic_mcp_dir, db)
+        # self._generate_object_mcp_files(mcp_dir, db)
         
-        # 生成Link Query MCP文件（到dynamic_mcp目录）
+        # 生成Link Query MCP文件
         # TODO 这里先不生成了吧，先使用通用的，生成以后工具太多直接上下文溢出了
-        # self._generate_link_query_mcp_files(dynamic_mcp_dir, db)
+        # self._generate_link_query_mcp_files(mcp_dir, db)
 
     def _generate_action_mcp_files(self, mcp_dir: str, actions: List[Dict[str, Any]]):
         """生成Action MCP文件"""
