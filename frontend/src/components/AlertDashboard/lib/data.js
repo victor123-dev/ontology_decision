@@ -1,4 +1,4 @@
-// 供应链控制塔 - API 服务层
+// 供应链运营监控看板 - API 服务层
 import axios from 'axios';
 
 const API_BASE_URL = '/api/v1/alert-dashboard';
@@ -11,37 +11,34 @@ const api = axios.create({
   },
 });
 
-// 预警看板数据接口
+// 看板数据接口
 export const alertDashboardApi = {
-  // KPI 数据 - 单个指标API
-  getPurchaseOnTimeRate: () => api.get('/kpi/purchase-on-time-rate'),
-  getMonthlySales: () => api.get('/kpi/monthly-sales'),
-  getAlertCount: () => api.get('/kpi/alert-count'),
-  getUrgentRequistionCount: () => api.get('/kpi/urgent-requistion-count'),
+  // ==================== 供应链运营KPI ====================
+  getPOExecutionRate: () => api.get('/kpi/po-execution-rate'),
+  getInventoryHealthRate: () => api.get('/kpi/inventory-health-rate'),
+  getWOOnTimeDeliveryRate: () => api.get('/kpi/wo-on-time-delivery-rate'),
+  getMonthlyCustomerOrderAmount: () => api.get('/kpi/monthly-customer-order-amount'),
+  getActiveRiskCount: () => api.get('/kpi/active-risk-count'),
+  getHighRiskSupplierCount: () => api.get('/kpi/high-risk-supplier-count'),
 
-  // KPI 数据 - 整体API（保留以兼容）
-  getKpiData: () => api.get('/kpi'),
+  // ==================== 采购执行 API ====================
+  getDelayedPurchaseOrders: () => api.get('/purchase/delayed-orders'),
+  getSupplierPerformance: () => api.get('/purchase/supplier-performance'),
 
-  // 图表数据
-  getChartData: () => api.get('/chart'),
+  // ==================== 库存健康 API ====================
+  getLowInventoryAlerts: () => api.get('/inventory/alerts'),
 
-  // 物流动态数据
-  getLogisticsData: () => api.get('/logistics'),
+  // ==================== 工单跟踪 API ====================
+  getDelayedWorkOrders: () => api.get('/work-order/delayed'),
 
-  // 需求预测数据
-  getForecastData: () => api.get('/forecast'),
+  // ==================== 销售订单 API ====================
+  getUpcomingCustomerOrders: () => api.get('/customer-order/upcoming'),
 
-  // 地图数据
-  getMapData: () => api.get('/map'),
-
-  // 预警消息数据
-  getAlertMessages: () => api.get('/alerts'),
-
-  // 人工处理预警
-  processAlertManual: (alertId) => api.post('/alerts/process/manul', { alert_id: alertId }),
-
-  // 自动执行预警
-  processAlertAuto: (alertId) => api.post('/alerts/process/auto', { alert_id: alertId }),
+  // ==================== 风险监控 API ====================
+  getActiveRisks: () => api.get('/risks/active'),
+  getRiskStatistics: () => api.get('/risks/statistics'),
+  getRiskTrend: (days = 30) => api.get(`/risks/trend?days=${days}`),
+  getTopAffectedSuppliers: () => api.get('/risks/top-suppliers'),
 };
 
 // ==================== 工具函数 ====================

@@ -10,12 +10,18 @@ import { LayoutDashboard, Bell, TrendingUp, Package, Truck, Factory,
   ChevronDown, RefreshCw, Settings, User, Search,
   Maximize2, Minimize2, GripHorizontal } from "lucide-react";
 import KpiCard from "./components/KpiCard";
-import SupplyChainMap from "./components/SupplyChainMap";
 
-import AlertDrawer from "./components/AlertDrawer";
-import SalesForecastChart from "./components/SalesForecastChart";
-import ForecastTable from "./components/ForecastTable";
-import { usePurchaseOnTimeRate, useMonthlySales, useAlertCount, useUrgentRequistionCount, useLogisticsData, useAlertMessages, useChartData, useMapData, useForecastData } from "./hooks/useApiData";
+// 供应链运营监控组件
+import RiskList from './components/RiskList';
+import PurchaseMonitoring from './components/PurchaseMonitoring';
+import InventoryHealth from './components/InventoryHealth';
+import ProductionTracking from './components/ProductionTracking';
+import SalesOverview from './components/SalesOverview';
+import RiskCharts from './components/RiskCharts';
+
+// 运营和风险数据hooks
+import { usePOExecutionRate, useInventoryHealthRate, useWOOnTimeDeliveryRate, useMonthlyCustomerOrderAmount } from './hooks/useOperationData';
+import { useActiveRiskCount, useHighRiskSupplierCount } from './hooks/useRiskData';
 import { getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "./lib/data";
 import { useWindowSize } from "./hooks/useWindowSize";
 
@@ -27,12 +33,18 @@ import { useWindowSize } from "./hooks/useWindowSize";
 // 物流/预测行：h=29 → 232+28=260px（匹配线上版本约230px）
 // 预警概览行：h=14 → 112+13=125px（匹配线上版本约110px）
 const INITIAL_LAYOUT = [
-  // kpi 行已移出 GridLayout，不再占用 layout 格子
-  { i: 'chart',     x: 0,  y: 0,  w: 14, h: 24,  minH: 18, minW: 8 },
-  { i: 'map',       x: 14, y: 0,  w: 10, h: 24,  minH: 18, minW: 6 },
-  { i: 'logistics', x: 0,  y: 24, w: 10, h: 29,  minH: 20, minW: 5 },
-  { i: 'forecast',  x: 10, y: 24, w: 14, h: 29,  minH: 20, minW: 8 },
-  { i: 'alertsnap', x: 0,  y: 53, w: 24, h: 14,  minH: 12 },
+  // 第一行: 风险列表(左) + 采购执行(中) + 风险统计(右)
+  { i: 'riskList', x: 0, y: 0, w: 10, h: 28, minH: 20, minW: 8 },
+  { i: 'purchaseMonitoring', x: 10, y: 0, w: 8, h: 28, minH: 20, minW: 6 },
+  { i: 'riskCharts', x: 18, y: 0, w: 6, h: 14, minH: 10, minW: 4 },
+  
+  // 第二行: 库存健康(左) + 生产交付(中) + 风险供应商(右)
+  { i: 'inventoryHealth', x: 0, y: 28, w: 8, h: 22, minH: 16, minW: 6 },
+  { i: 'productionTracking', x: 8, y: 28, w: 10, h: 22, minH: 16, minW: 8 },
+  { i: 'topRiskSuppliers', x: 18, y: 14, w: 6, h: 14, minH: 10, minW: 4 },
+  
+  // 第三行: 销售订单概览(全宽)
+  { i: 'salesOverview', x: 0, y: 50, w: 24, h: 18, minH: 14, minW: 12 },
 ];
 
 const ROW_HEIGHT = 8; // px per grid row unit
@@ -162,7 +174,7 @@ function KpiWidget({ children }) {
           letterSpacing: '0.2em', textTransform: 'uppercase' }}>KPI 指标</span>
       </div>
       {/* KPI 卡片网格 */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, padding: '6px 8px', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, padding: '6px 8px', minHeight: 0 }}>
         {children}
       </div>
     </div>
@@ -170,31 +182,19 @@ function KpiWidget({ children }) {
 }
 
 export default function AlertDashboard() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [alertFilter, setAlertFilter] = useState('all');
-  const [riskFilter, setRiskFilter] = useState('all');
-  const [selectedAlert, setSelectedAlert] = useState(null);
-  const [searchText, setSearchText] = useState('');
   const [lastRefresh, setLastRefresh] = useState(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [layout, setLayout] = useState(INITIAL_LAYOUT);
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(1280);
-
-  // 使用 API Hooks 获取数据
-  const { data: purchaseOnTimeRate, loading: purchaseOnTimeRateLoading, refetch: refetchPurchaseOnTimeRate } = usePurchaseOnTimeRate();
-  const { data: monthlySales, loading: monthlySalesLoading, refetch: refetchMonthlySales } = useMonthlySales();
-  const { data: alertCount, loading: alertCountLoading, refetch: refetchAlertCount } = useAlertCount();
-  const { data: urgentRequistionCount, loading: urgentRequistionCountLoading, refetch: refetchUrgentRequistionCount } = useUrgentRequistionCount();
-  const { data: logisticsData, loading: logisticsLoading, refetch: refetchLogistics } = useLogisticsData();
-  const { data: alertsData, loading: alertsLoading, refetch: refetchAlerts } = useAlertMessages();
-  const { data: chartData, loading: chartLoading, refetch: refetchChart } = useChartData();
-  const chartMonths = chartData?.months || [];
-  const { data: mapData, loading: mapLoading, refetch: refetchMap } = useMapData();
-  const { data: forecastData, loading: forecastLoading, refetch: refetchForecast } = useForecastData();
-  const [alerts, setAlerts] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [forecastDrillProduct, setForecastDrillProduct] = useState(null);  // 需求预测下钻状态（与全屏共享）
-  const [salesDrillMonth, setSalesDrillMonth] = useState(null);  // 销售预测下钻状态（与全屏共享）
+
+  // 供应链运营KPI hooks
+  const { data: poExecutionRate, loading: poExecutionRateLoading } = usePOExecutionRate();
+  const { data: inventoryHealthRate, loading: inventoryHealthRateLoading } = useInventoryHealthRate();
+  const { data: woOnTimeDeliveryRate, loading: woOnTimeDeliveryRateLoading } = useWOOnTimeDeliveryRate();
+  const { data: monthlyCustomerOrderAmount, loading: monthlyCustomerOrderAmountLoading } = useMonthlyCustomerOrderAmount();
+  const { data: activeRiskCount, loading: activeRiskCountLoading } = useActiveRiskCount();
+  const { data: highRiskSupplierCount, loading: highRiskSupplierCountLoading } = useHighRiskSupplierCount();
 
   // 监听容器宽度变化
   useEffect(() => {
@@ -208,49 +208,26 @@ export default function AlertDashboard() {
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
-  // 当 API 数据加载完成后更新 alerts
-  useEffect(() => {
-    if (alertsData && alertsData.length > 0) {
-      setAlerts(alertsData);
-    }
-  }, [alertsData]);
+
 
   // 刷新所有页面数据
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
+      // 刷新所有KPI数据
       await Promise.all([
-        refetchPurchaseOnTimeRate(),
-        refetchMonthlySales(),
-        refetchAlertCount(),
-        refetchUrgentRequistionCount(),
-        refetchLogistics(),
-        refetchAlerts(),
-        refetchChart(),
-        refetchMap(),
-        refetchForecast(),
+        poExecutionRate?.refetch?.(),
+        inventoryHealthRate?.refetch?.(),
+        woOnTimeDeliveryRate?.refetch?.(),
+        monthlyCustomerOrderAmount?.refetch?.(),
+        activeRiskCount?.refetch?.(),
+        highRiskSupplierCount?.refetch?.(),
       ]);
     } finally {
       setIsRefreshing(false);
       setLastRefresh(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }
-  }, [refetchPurchaseOnTimeRate, refetchMonthlySales, refetchAlertCount, refetchUrgentRequistionCount, refetchLogistics, refetchAlerts, refetchChart, refetchMap, refetchForecast]);
-
-  const handleStatusChange = (id, status) => {
-    setAlerts(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-    if (selectedAlert?.id === id) {
-      setSelectedAlert(prev => prev ? { ...prev, status } : prev);
-    }
-  };
-
-  const filteredAlerts = alerts.filter(a => {
-    const matchStatus = alertFilter === 'all' || a.status === alertFilter;
-    const matchRisk = riskFilter === 'all' || a.riskLevel === riskFilter;
-    const matchSearch = !searchText || a.title.includes(searchText) || a.supplier.includes(searchText) || a.customer.includes(searchText);
-    return matchStatus && matchRisk && matchSearch;
-  });
-
-  const unhandledCount = alerts.filter(a => a.status === '未处理').length;
+  }, [poExecutionRate, inventoryHealthRate, woOnTimeDeliveryRate, monthlyCustomerOrderAmount, activeRiskCount, highRiskSupplierCount]);
 
   // 根据 layout 中的 h 计算实际像素高度
   const getItemPx = useCallback((id) => {
@@ -289,40 +266,14 @@ export default function AlertDashboard() {
         </div>
 
         <nav style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '0 1 auto', justifyContent: 'center' }}>
-          {[
-            { id: 'dashboard', label: '控制看板', icon: LayoutDashboard },
-            { id: 'alerts', label: `预警中心${unhandledCount > 0 ? ` (${unhandledCount})` : ''}`, icon: Bell },
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '8px 16px', borderRadius: '6px',
-                fontSize: '13px', fontWeight: 500,
-                transition: 'all 0.2s',
-                cursor: 'pointer',
-                ...(activeTab === id
-                  ? { background: 'rgba(59,130,246,0.15)', color: '#60a5fa',
-                      border: '1px solid rgba(59,130,246,0.3)' }
-                  : { color: '#64748b', border: '1px solid transparent',
-                      background: 'transparent' }) }}
-              onMouseOver={e => {
-                if (activeTab !== id) {
-                  e.currentTarget.style.color = '#94a3b8';
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                }
-              }}
-              onMouseOut={e => {
-                if (activeTab !== id) {
-                  e.currentTarget.style.color = '#64748b';
-                  e.currentTarget.style.background = 'transparent';
-                }
-              }}
-            >
-              <Icon size={14} />
-              {label}
-            </button>
-          ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 16px', borderRadius: '6px',
+            fontSize: '13px', fontWeight: 500,
+            background: 'rgba(59,130,246,0.15)', color: '#60a5fa',
+            border: '1px solid rgba(59,130,246,0.3)' }}>
+            <LayoutDashboard size={14} />
+            供应链运营监控看板
+          </div>
         </nav>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '0 0 auto' }}>
@@ -369,17 +320,17 @@ export default function AlertDashboard() {
       {/* 主内容区 */}
       <main style={{ flex: 1, overflow: 'auto', width: '100%', display: 'flex', flexDirection: 'column', paddingTop: '14px' }}>
 
-        {/* ==================== 控制看板 ==================== */}
-        {activeTab === 'dashboard' && (
-          <div ref={containerRef} style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            {/* ── KPI 卡片行：独立于GridLayout，宽度与GridLayout一致 ── */}
+        {/* ==================== 供应链运营监控看板 ==================== */}
+        <div ref={containerRef} style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {/* ── KPI 卡片行：独立于 GridLayout，宽度与 GridLayout 一致 ── */}
             <div style={{ padding: '0px 0 12px 0' }}>
               <KpiWidget>
-                <KpiCard title="采购到货及时率" value={purchaseOnTimeRate?.val ?? 0} format="percent" trend={purchaseOnTimeRate?.trendVal > 0 ? 'up' : 'down'} trendValue={`${purchaseOnTimeRate?.trendVal > 0 ? '+' : ''}${purchaseOnTimeRate?.trendVal?.toFixed(1)}%`} icon={<Truck size={16} />} color="#3b82f6" delay={0} loading={purchaseOnTimeRateLoading} />
-                <KpiCard title="当月销售金额" value={monthlySales?.monthlySalesAmount?.val ?? 0} unit="万元" format="currency" trend={monthlySales?.monthlySalesAmount?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesAmount?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesAmount?.trendVal?.toFixed(1)}%`} icon={<ShoppingCart size={16} />} color="#22c55e" delay={100} loading={monthlySalesLoading} />
-                <KpiCard title="当月销售数量" value={monthlySales?.monthlySalesQty?.val ?? 0} unit="件" format="integer" trend={monthlySales?.monthlySalesQty?.trendVal > 0 ? 'up' : 'down'} trendValue={`${monthlySales?.monthlySalesQty?.trendVal > 0 ? '+' : ''}${monthlySales?.monthlySalesQty?.trendVal?.toFixed(1)}%`} icon={<Package size={16} />} color="#06b6d4" delay={200} loading={monthlySalesLoading} />
-                <KpiCard title="活跃预警消息" value={alertCount?.val ?? 0} unit="条" format="integer" trend={alertCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${alertCount?.trendVal ?? 0}条`} icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={alertCountLoading} />
-                <KpiCard title="紧急采购" value={urgentRequistionCount?.val ?? 0} unit="次" format="integer" trend={urgentRequistionCount?.trendVal > 0 ? 'up' : 'down'} trendValue={`+${urgentRequistionCount?.trendVal ?? 0}次`} icon={<TrendingUp size={16} />} color="#8b5cf6" delay={400} loading={urgentRequistionCountLoading} />
+                <KpiCard title="采购订单执行率" value={poExecutionRate?.val ?? 0} format="percent" icon={<Truck size={16} />} color="#3b82f6" delay={0} loading={poExecutionRateLoading} />
+                <KpiCard title="库存健康度" value={inventoryHealthRate?.val ?? 0} format="percent" icon={<Package size={16} />} color="#10b981" delay={100} loading={inventoryHealthRateLoading} />
+                <KpiCard title="工单准时交付率" value={woOnTimeDeliveryRate?.val ?? 0} format="percent" icon={<Factory size={16} />} color="#f59e0b" delay={200} loading={woOnTimeDeliveryRateLoading} />
+                <KpiCard title="活跃风险事件" value={activeRiskCount?.val ?? 0} unit="个" format="integer" icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={activeRiskCountLoading} />
+                <KpiCard title="本月订单金额" value={monthlyCustomerOrderAmount?.val ?? 0} unit="元" format="currency" icon={<ShoppingCart size={16} />} color="#8b5cf6" delay={400} loading={monthlyCustomerOrderAmountLoading} />
+                <KpiCard title="高风险供应商" value={highRiskSupplierCount?.val ?? 0} unit="个" format="integer" icon={<TrendingUp size={16} />} color="#f97316" delay={500} loading={highRiskSupplierCountLoading} />
               </KpiWidget>
             </div>
 
@@ -395,428 +346,57 @@ export default function AlertDashboard() {
               width={gridWidth}
               onLayoutChange={(newLayout) => setLayout([...newLayout])}
             >
-              {/* ── 销售预测图表 ── */}
-              <div key="chart">
-                <Widget
-                  title="销售预测 vs 实际订单"
-                  subtitle="近12个月 · 点击月份可下钻查看产品明细"
-                  fullscreenContent={<SalesForecastChart height={window.innerHeight - 160} chartData={chartData?.data || []} chartMonths={chartMonths} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />}
-                >
-                  <SalesForecastChart height={getItemPx('chart') - 72} chartData={chartData?.data || []} chartMonths={chartMonths} loading={chartLoading} drillMonth={salesDrillMonth} onDrillMonthChange={setSalesDrillMonth} />
+              {/* ── 外部供应链风险列表 ── */}
+              <div key="riskList">
+                <Widget title="外部供应链风险" subtitle="实时风险监控">
+                  <RiskList />
                 </Widget>
               </div>
 
-              {/* ── 供应链地图 ── */}
-              <div key="map">
-                <Widget
-                  title="供应链地图"
-                  subtitle="实时节点状态"
-                  fullscreenNoPadding
-                  fullscreenContent={ ({ isFullscreen }) => <div
-                      style={{ flex: 1,
-                        minHeight: 0,
-                        backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663439243238/eAaE9FZQc3rqCtqMQX6MhY/china-map-bg-VBnkueTcA3KJzfiArGZZLF.webp)`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        position: 'relative' }}
-                    >
-                      <SupplyChainMap mapData={mapData} loading={mapLoading} isFullscreen={isFullscreen} />
-                    </div> }
-                >
-                  {/* 地图容器：背景图 + SVG节点，无任何蒙层 */}
-                  <div
-                    style={{ width: '100%',
-                      height: getItemPx('map') - 52,
-                      backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663439243238/eAaE9FZQc3rqCtqMQX6MhY/china-map-bg-VBnkueTcA3KJzfiArGZZLF.webp)`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                      position: 'relative' }}
-                  >
-                    <SupplyChainMap mapData={mapData} loading={mapLoading} />
-                  </div>
+              {/* ── 采购执行监控 ── */}
+              <div key="purchaseMonitoring">
+                <Widget title="采购执行监控" subtitle="延迟订单与供应商表现">
+                  <PurchaseMonitoring />
                 </Widget>
               </div>
 
-              {/* ── 物流动态 ── */}
-              <div key="logistics">
-                <Widget title="物流动态" subtitle={logisticsLoading ? '加载中...' : `今日 · ${logisticsData?.length ?? 0} 条`}>
-                  <div style={{ overflow: 'hidden', padding: '0 16px',
-                    height: getItemPx('logistics') - 48 }}>
-                    {logisticsLoading ? (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                        <div style={{
-                          width: '32px', height: '32px',
-                          border: '3px solid rgba(59,130,246,0.2)',
-                          borderTop: '3px solid #3b82f6',
-                          borderRadius: '50%',
-                          animation: 'spin 0.8s linear infinite'
-                        }} />
-                      </div>
-                    ) : (
-                      <div style={{ height: '100%', overflowY: 'hidden' }}>
-                        <div className="sct-scroll-list">
-                          {[...logisticsData, ...logisticsData].map((item, idx) => (
-                            <div
-                              key={`${item.id}-${idx}`}
-                              style={{ padding: '14px 0',
-                                borderBottom: idx === logisticsData.length * 2 - 1 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
-                            >
-                              {/* 状态点 + 物料名称 + 状态标签 */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                <div style={{ width: '6px', height: '6px', borderRadius: '50%',
-                                  background: getLogisticsStatusColor(item.status),
-                                  flexShrink: 0, alignSelf: 'center' }} />
-                                <p style={{ fontSize: '14px', color: '#e2e8f0',
-                                  fontWeight: 500, flex: 1, lineHeight: '1.4',
-                                  margin: 0 }}>
-                                  {item.material}
-                                </p>
-                                <span
-                                  style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
-                                    background: `${getLogisticsStatusColor(item.status)}20`,
-                                    color: getLogisticsStatusColor(item.status),
-                                    border: `1px solid ${getLogisticsStatusColor(item.status)}30`,
-                                    fontWeight: 500, flexShrink: 0 }}
-                                >
-                                  {item.status}
-                                </span>
-                              </div>
-                              {/* 路线信息 */}
-                              <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
-                                {item.from} → {item.to}
-                              </p>
-                              {/* 物流商和时间 */}
-                              <p style={{ fontSize: '11px', color: '#475569' }}>
-                                {item.carrier} · {item.time}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+              {/* ── 风险统计分析 ── */}
+              <div key="riskCharts">
+                <Widget title="风险统计分析" subtitle="等级分布与类别统计">
+                  <RiskCharts />
                 </Widget>
               </div>
 
-              {/* ── 需求预测表 ── */}
-              <div key="forecast">
-                <Widget
-                  title="需求预测（未来6个月）"
-                  subtitle="点击产品可下钻查看月度明细与采购建议"
-                  fullscreenContent={<ForecastTable maxHeight={window.innerHeight - 200} forecastResult={forecastData} loading={forecastLoading} drillProduct={forecastDrillProduct} onDrillProductChange={setForecastDrillProduct} />}
-                >
-                  <ForecastTable maxHeight={getItemPx('forecast') - 56} forecastResult={forecastData} loading={forecastLoading} drillProduct={forecastDrillProduct} onDrillProductChange={setForecastDrillProduct} />
+              {/* ── 库存健康监控 ── */}
+              <div key="inventoryHealth">
+                <Widget title="库存健康监控" subtitle="低库存预警">
+                  <InventoryHealth />
                 </Widget>
               </div>
 
-              {/* ── 预警概览 ── */}
-              <div key="alertsnap">
-                <Widget
-                  title="最新预警"
-                  headerRight={ <button
-                      onMouseDown={e => e.stopPropagation()}
-                      onClick={e => { e.stopPropagation(); setActiveTab('alerts'); }}
-                      style={{ fontSize: '12px', color: '#60a5fa',
-                        transition: 'color 0.2s', display: 'flex',
-                        alignItems: 'center', gap: '4px', cursor: 'pointer',
-                        background: 'transparent', border: 'none' }}
-                      onMouseOver={e => e.currentTarget.style.color = '#93c5fd'}
-                      onMouseOut={e => e.currentTarget.style.color = '#60a5fa'}
-                    >
-                      查看全部 <ChevronDown size={10} style={{ transform: 'rotate(-90deg)' }} />
-                    </button> }
-                >
-                  {alertsLoading ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                      <div style={{
-                        width: '32px', height: '32px',
-                        border: '3px solid rgba(59,130,246,0.2)',
-                        borderTop: '3px solid #3b82f6',
-                        borderRadius: '50%',
-                        animation: 'spin 0.8s linear infinite'
-                      }} />
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-                      gap: '12px', padding: '4px 16px 8px 16px', paddingTop: '4px' }}>
-                      {alerts.filter(a => a.status !== '已处理').slice(0, 4).map(alert => (
-                        <div
-                          key={alert.id}
-                          style={{ padding: '12px', borderRadius: '8px', cursor: 'pointer',
-                            background: 'rgba(255,255,255,0.04)',
-                            border: `1px solid ${getRiskTextColor(alert.riskLevel)}30`,
-                            transition: 'opacity 0.2s' }}
-                          onMouseDown={e => e.stopPropagation()}
-                          onMouseOver={e => e.currentTarget.style.opacity = '0.8'}
-                          onMouseOut={e => e.currentTarget.style.opacity = '1'}
-                          onClick={() => { setSelectedAlert(alert); setActiveTab('alerts'); }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center',
-                            justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '10px', padding: '2px 6px',
-                              borderRadius: '9999px',
-                              background: `${getRiskTextColor(alert.riskLevel)}20`,
-                              color: getRiskTextColor(alert.riskLevel) }}>
-                              {alert.riskLevel}
-                            </span>
-                            <span style={{ fontSize: '10px',
-                              color: getStatusColor(alert.status) }}>
-                              {alert.status}
-                            </span>
-                          </div>
-                          <p style={{ fontSize: '12px', color: '#cbd5e1',
-                            lineHeight: '1.5',
-                            display: '-webkit-box', WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                            {alert.title.replace(/【.*?】/, '')}
-                          </p>
-                          <p style={{ fontSize: '10px', color: '#64748b', marginTop: '6px' }}>
-                            {alert.supplier}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {/* ── 生产交付跟踪 ── */}
+              <div key="productionTracking">
+                <Widget title="生产交付跟踪" subtitle="延期工单监控">
+                  <ProductionTracking />
+                </Widget>
+              </div>
+
+              {/* ── 受影响供应商TOP5 ── */}
+              <div key="topRiskSuppliers">
+                <Widget title="受影响供应商TOP5" subtitle="风险关联分析">
+                  <RiskCharts />
+                </Widget>
+              </div>
+
+              {/* ── 销售订单概览 ── */}
+              <div key="salesOverview">
+                <Widget title="销售订单概览" subtitle="即将到期订单">
+                  <SalesOverview />
                 </Widget>
               </div>
             </GridLayout>
-          </div>
-        )}
-
-        {/* ==================== 预警中心 ==================== */}
-        {activeTab === 'alerts' && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0px', width: '100%', overflow: 'hidden' }}>
-            {/* 统计卡片 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', width: '100%', marginBottom: '8px', flexShrink: 0 }}>
-              {[
-                { label: '全部预警', count: alerts.length, color: '#3b82f6', icon: Bell },
-                { label: '未处理', count: alerts.filter(a => a.status === '未处理').length, color: '#ef4444', icon: AlertTriangle },
-                { label: '处理中', count: alerts.filter(a => a.status === '处理中').length, color: '#f59e0b', icon: Clock },
-                { label: '已处理', count: alerts.filter(a => a.status === '已处理').length, color: '#22c55e', icon: CheckCircle },
-              ].map(({ label, count, color, icon: Icon }) => (
-                <div key={label} style={{
-                  background: '#0b1426', borderRadius: '6px',
-                  border: '1px solid rgba(59,130,246,0.12)',
-                  padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px'
-                }}>
-                  <div style={{
-                    width: '36px', height: '36px', borderRadius: '6px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, background: `${color}12`
-                  }}>
-                    <Icon size={16} style={{ color }} />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <p style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'monospace', color, lineHeight: '1', margin: 0 }}>{count}</p>
-                    <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{label}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* 筛选栏 */}
-            <div style={{
-              background: '#0b1426', borderRadius: '6px',
-              border: '1px solid rgba(59,130,246,0.12)',
-              padding: '8px 12px', display: 'flex', alignItems: 'center',
-              gap: '8px', flexShrink: 0, marginBottom: '8px'
-            }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '6px', flex: 1,
-                minWidth: '200px', borderRadius: '6px', padding: '6px 12px',
-                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)'
-              }}>
-                <Search size={12} style={{ color: '#475569', flexShrink: 0 }} />
-                <input
-                  type="text"
-                  placeholder="搜索预警标题、供应商、客户..."
-                  value={searchText}
-                  onChange={e => setSearchText(e.target.value)}
-                  style={{ flex: 1, background: 'transparent', fontSize: '12px',
-                    color: '#94a3b8', outline: 'none', border: 'none' }}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <Filter size={10} style={{ color: '#475569', marginRight: '4px' }} />
-                {(['all', '未处理', '处理中', '已处理']).map((f, idx) => (
-                  <button key={f} onClick={() => setAlertFilter(f)}
-                    style={{ fontSize: '11px', padding: '4px 10px',
-                      transition: 'all 0.2s', cursor: 'pointer',
-                      borderRadius: idx === 0 ? '4px 0 0 4px' : idx === 3 ? '0 4px 4px 0' : '0',
-                      ...(alertFilter === f
-                        ? { background: 'rgba(59,130,246,0.2)', color: '#60a5fa',
-                            border: '1px solid rgba(59,130,246,0.4)' }
-                        : { color: '#64748b', border: '1px solid rgba(255,255,255,0.06)',
-                            background: 'rgba(255,255,255,0.02)' }) }}
-                    onMouseOver={e => {
-                      if (alertFilter !== f) {
-                        e.currentTarget.style.color = '#cbd5e1';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                      }
-                    }}
-                    onMouseOut={e => {
-                      if (alertFilter !== f) {
-                        e.currentTarget.style.color = '#64748b';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                      }
-                    }}>
-                    {f === 'all' ? '全部状态' : f}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                {(['all', '最高风险', '高风险', '中风险', '低风险']).map((f, idx) => (
-                  <button key={f} onClick={() => setRiskFilter(f)}
-                    style={{ fontSize: '11px', padding: '4px 10px',
-                      transition: 'all 0.2s', cursor: 'pointer',
-                      borderRadius: idx === 0 ? '4px 0 0 4px' : idx === 4 ? '0 4px 4px 0' : '0',
-                      ...(riskFilter === f
-                        ? { background: f === 'all' ? 'rgba(59,130,246,0.2)' : `${getRiskTextColor(f)}20`,
-                            color: f === 'all' ? '#60a5fa' : getRiskTextColor(f),
-                            border: `1px solid ${f === 'all' ? 'rgba(59,130,246,0.4)' : getRiskTextColor(f) + '50'}` }
-                        : { color: '#64748b', border: '1px solid rgba(255,255,255,0.06)',
-                            background: 'rgba(255,255,255,0.02)' }) }}
-                    onMouseOver={e => {
-                      if (riskFilter !== f) {
-                        e.currentTarget.style.color = '#cbd5e1';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                      }
-                    }}
-                    onMouseOut={e => {
-                      if (riskFilter !== f) {
-                        e.currentTarget.style.color = '#64748b';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                      }
-                    }}>
-                    {f === 'all' ? '全部风险' : f}
-                  </button>
-                ))}
-              </div>
-              <span style={{ fontSize: '11px', color: '#475569', marginLeft: 'auto', whiteSpace: 'nowrap' }}>共 {filteredAlerts.length} 条</span>
-            </div>
-
-            {/* 预警列表 */}
-            <div style={{
-              flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-              background: '#0b1426', borderRadius: '6px',
-              border: '1px solid rgba(59,130,246,0.12)'
-            }}>
-              <div style={{ overflow: 'auto', flex: 1 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(59,130,246,0.12)',
-                      background: 'rgba(59,130,246,0.04)', position: 'sticky', top: 0, zIndex: 1 }}>
-                      {['风险等级', '预警标题', '规则编码', '供应商', '关联客户', '创建时间', '状态', '操作'].map((h, idx) => (
-                        <th key={h} style={{
-                          textAlign: 'left', padding: '10px 12px',
-                          fontSize: '11px', fontWeight: 500, color: '#64748b',
-                          whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.04)',
-                          minWidth: h === '预警标题' ? '300px' : 'auto'
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAlerts.map((alert, idx) => (
-                      <tr key={alert.id}
-                        style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.03)',
-                          transition: 'background 0.2s', cursor: 'pointer',
-                          background: 'transparent'
-                        }}
-                        onMouseOver={e => e.currentTarget.style.background = 'rgba(59,130,246,0.04)'}
-                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                        onClick={() => setSelectedAlert(alert)}>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <span style={{
-                            fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
-                            fontWeight: 500, whiteSpace: 'nowrap', display: 'inline-block',
-                            background: `${getRiskTextColor(alert.riskLevel)}15`,
-                            color: getRiskTextColor(alert.riskLevel),
-                            border: `1px solid ${getRiskTextColor(alert.riskLevel)}40`
-                          }}>
-                            {alert.riskLevel}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <p style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: 500,
-                            margin: '0 0 4px 0', lineHeight: '1.4' }}>{alert.title}</p>
-                          <p style={{ fontSize: '10px', color: '#475569', margin: 0,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            maxWidth: '400px' }}>
-                            {alert.content}
-                          </p>
-                        </td>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#64748b' }}>
-                            {alert.ruleCode}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                            {alert.supplier}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                            {alert.customer}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>
-                            {alert.createdAt}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <span style={{
-                            fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
-                            whiteSpace: 'nowrap', display: 'inline-block',
-                            background: `${getStatusColor(alert.status)}15`,
-                            color: getStatusColor(alert.status),
-                            border: `1px solid ${getStatusColor(alert.status)}40`
-                          }}>
-                            {alert.status}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                          <button style={{
-                            fontSize: '11px', padding: '4px 12px', borderRadius: '4px',
-                            transition: 'all 0.2s', cursor: 'pointer',
-                            background: 'rgba(59,130,246,0.1)', color: '#60a5fa',
-                            border: '1px solid rgba(59,130,246,0.3)', whiteSpace: 'nowrap'
-                          }}
-                          onClick={e => { e.stopPropagation(); setSelectedAlert(alert); }}
-                          onMouseOver={e => {
-                            e.currentTarget.style.background = 'rgba(59,130,246,0.2)';
-                            e.currentTarget.style.color = '#93c5fd';
-                          }}
-                          onMouseOut={e => {
-                            e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
-                            e.currentTarget.style.color = '#60a5fa';
-                          }}>
-                            查看详情
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredAlerts.length === 0 && (
-                      <tr><td colSpan={8} style={{ padding: '48px', textAlign: 'center',
-                        color: '#475569', fontSize: '12px' }}>暂无符合条件的预警消息</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </main>
-
-      {/* 预警详情抽屉 */}
-      {selectedAlert && (
-        <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} onStatusChange={handleStatusChange} onRefresh={handleRefresh} />
-      )}
-
-
     </div>
   );
 }

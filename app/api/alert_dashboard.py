@@ -1,219 +1,191 @@
 import traceback
-from datetime import datetime
-
-from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, HTTPException
 
-from app.services.dashbaord.alert_service import AlertService
-from app.services.dashbaord.kpi_service import KpiService
-from app.services.dashbaord.logistics_service import LogistisService
-from app.services.dashbaord.map_service import MapService
-from app.services.dashbaord.report_service import ReportService
+from app.services.dashbaord.operation_service import OperationService
+from app.services.dashbaord.risk_service import RiskService
 from app.utils.logger import get_logger
-from app.vo.alertdashboard.char_vo import CharVO, ChartResponseVO
-from app.vo.alertdashboard.kpi_vo import KpiMetricVO, MonthlySalesMetricsVO
+from app.vo.alertdashboard.kpi_vo import KpiMetricVO
 
 router = APIRouter(prefix="/alert-dashboard", tags=["alert-dashboard"])
 logger = get_logger(__name__)
-kpi_service = KpiService()
-logistics_service = LogistisService()
-alert_service = AlertService()
-map_service = MapService()
-report_service = ReportService()
+operation_service = OperationService()
+risk_service = RiskService()
 
 
-# ==================== API 路由 ====================
+# ==================== 供应链运营KPI API ====================
 
-@router.get("/kpi/purchase-on-time-rate")
-def get_purchase_on_time_rate():
-    """获取采购准时率KPI"""
+# ==================== 供应链运营KPI API ====================
+
+@router.get("/kpi/po-execution-rate")
+def get_po_execution_rate():
+    """获取采购订单执行率"""
     try:
-        current_date = datetime.today()
-        current_month = current_date.strftime("%Y-%m")
-        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
-
-        current_rate = kpi_service.get_purchase_on_time_rate(current_month)
-        last_month_rate = kpi_service.get_purchase_on_time_rate(last_month)
-
-        return KpiMetricVO(
-            val=current_rate,
-            trendVal=((current_rate - last_month_rate) / last_month_rate * 100) if last_month_rate > 0 else 0
-        )
+        rate = operation_service.get_po_execution_rate()
+        return KpiMetricVO(val=rate, trendVal=0)
     except Exception as e:
-        logger.error(f"获取采购准时率失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取采购准时率失败: {str(e)}")
+        logger.error(f"获取采购订单执行率失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取采购订单执行率失败: {str(e)}")
 
 
-@router.get("/kpi/monthly-sales")
-def get_monthly_sales():
-    """获取月销售数据KPI（合并金额和数量）"""
+@router.get("/kpi/inventory-health-rate")
+def get_inventory_health_rate():
+    """获取库存健康度"""
     try:
-        current_date = datetime.today()
-        current_month = current_date.strftime("%Y-%m")
-        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
-
-        # 使用合并后的查询方法，只查询一次数据库
-        current_data = kpi_service.get_monthly_sales_data(current_month)
-        last_month_data = kpi_service.get_monthly_sales_data(last_month)
-
-        return MonthlySalesMetricsVO(
-            monthlySalesAmount=KpiMetricVO(
-                val=round(current_data["amount"] / 10000, 2)
-,
-                trendVal=((current_data["amount"] - last_month_data["amount"]) / last_month_data["amount"] * 100) if last_month_data["amount"] > 0 else 0
-            ),
-            monthlySalesQty=KpiMetricVO(
-                val=current_data["qty"],
-                trendVal=((current_data["qty"] - last_month_data["qty"]) / last_month_data["qty"] * 100) if last_month_data["qty"] > 0 else 0
-            )
-        )
+        rate = operation_service.get_inventory_health_rate()
+        return KpiMetricVO(val=rate, trendVal=0)
     except Exception as e:
-        logger.error(f"获取月销售数据失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取月销售数据失败: {str(e)}")
+        logger.error(f"获取库存健康度失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取库存健康度失败: {str(e)}")
 
-@router.get("/kpi/alert-count")
-def get_alert_count():
-    """获取预警数量KPI"""
+
+@router.get("/kpi/wo-on-time-delivery-rate")
+def get_wo_on_time_delivery_rate():
+    """获取工单准时交付率"""
     try:
-        current_date = datetime.today()
-        current_month = current_date.strftime("%Y-%m")
-        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
-
-        current_count = kpi_service.get_alert_count(current_month)
-        last_month_count = kpi_service.get_alert_count(last_month)
-
-        return KpiMetricVO(
-            val=current_count,
-            trendVal=current_count - last_month_count
-        )
+        rate = operation_service.get_wo_on_time_delivery_rate()
+        return KpiMetricVO(val=rate, trendVal=0)
     except Exception as e:
-        logger.error(f"获取预警数量失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取预警数量失败: {str(e)}")
+        logger.error(f"获取工单准时交付率失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取工单准时交付率失败: {str(e)}")
 
 
-@router.get("/kpi/urgent-requistion-count")
-def get_urgent_requistion_count():
-    """获取紧急采购单数量KPI"""
+@router.get("/kpi/monthly-customer-order-amount")
+def get_monthly_customer_order_amount():
+    """获取本月客户订单金额"""
     try:
-        current_date = datetime.today()
-        current_month = current_date.strftime("%Y-%m")
-        last_month = (current_date - relativedelta(months=1)).strftime("%Y-%m")
-
-        current_count = kpi_service.get_urgent_requistion_count(current_month)
-        last_month_count = kpi_service.get_urgent_requistion_count(last_month)
-
-        return KpiMetricVO(
-            val=current_count,
-            trendVal=current_count - last_month_count
-        )
+        amount = operation_service.get_monthly_customer_order_amount()
+        return KpiMetricVO(val=amount, trendVal=0)
     except Exception as e:
-        logger.error(f"获取紧急采购单数量失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取紧急采购单数量失败: {str(e)}")
+        logger.error(f"获取本月客户订单金额失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取本月客户订单金额失败: {str(e)}")
 
 
-@router.get("/logistics")
-def get_logistics_data() -> list[dict]:
-    """获取物流动态数据"""
+@router.get("/kpi/active-risk-count")
+def get_active_risk_count():
+    """获取活跃风险数"""
     try:
-        logistics_list = logistics_service.get_all_logistics()
-        # 使用 by_alias=True 确保使用别名（from 而不是 from_）
-        return [log.model_dump(by_alias=True) for log in logistics_list]
+        count = risk_service.get_active_risk_count()
+        return KpiMetricVO(val=count, trendVal=0)
     except Exception as e:
-        logger.error(f"获取物流动态数据失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取物流动态数据失败: {str(e)}")
+        logger.error(f"获取活跃风险数失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取活跃风险数失败: {str(e)}")
 
 
-
-@router.get("/forecast")
-def get_forecast_data():
-    """获取需求预测数据（当前下一个月开始的6个月）"""
+@router.get("/kpi/high-risk-supplier-count")
+def get_high_risk_supplier_count():
+    """获取高风险供应商数"""
     try:
-        # 计算当前时间的下一个月和后6个月
-        today = datetime.today()
-        # start_month: 当前下一个月
-        next_month = today + relativedelta(months=1)
-        start_month = next_month.strftime("%Y-%m")
-        # end_month: 当前时间后6个月
-        end_month = (today + relativedelta(months=6)).strftime("%Y-%m")
-        return report_service.get_forecast_data(start_month, end_month)
+        count = risk_service.get_high_risk_supplier_count()
+        return KpiMetricVO(val=count, trendVal=0)
     except Exception as e:
-        logger.error(f"获取需求预测数据失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取需求预测数据失败: {str(e)}")
+        logger.error(f"获取高风险供应商数失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取高风险供应商数失败: {str(e)}")
 
 
-@router.get("/map")
-def get_map_data():
-    """获取地图数据"""
+# ==================== 采购执行 API ====================
+
+@router.get("/purchase/delayed-orders")
+def get_delayed_purchase_orders():
+    """获取延迟采购订单"""
     try:
-        return map_service.get_map_data()
+        orders = operation_service.get_delayed_purchase_orders()
+        return orders
     except Exception as e:
-        logger.error(f"获取地图数据失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取地图数据失败: {str(e)}")
+        logger.error(f"获取延迟采购订单失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取延迟采购订单失败: {str(e)}")
 
 
-@router.get("/alerts")
-def get_alert_messages():
+@router.get("/purchase/supplier-performance")
+def get_supplier_delivery_performance():
+    """获取供应商交付表现"""
     try:
-        """获取预警消息数据"""
-        return alert_service.get_all_alerts()
+        performance = operation_service.get_supplier_delivery_performance()
+        return performance
     except Exception as e:
-        logger.error(f"获取预警消息数据失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取预警消息数据失败: {str(e)}")
+        logger.error(f"获取供应商交付表现失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取供应商交付表现失败: {str(e)}")
 
 
-@router.post("/alerts/process/manul")
-def process_alert(request: dict):
-    """人工处理告警，将指定告警更新为已处理状态"""
+# ==================== 库存健康 API ====================
+
+@router.get("/inventory/alerts")
+def get_low_inventory_alerts():
+    """获取低库存预警"""
     try:
-        alert_id = request.get("alert_id")
-        if not alert_id:
-            raise HTTPException(status_code=400, detail="缺少 alert_id 参数")
-        success = alert_service.mark_alert_as_processed(alert_id, 2)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"告警不存在或处理失败: {alert_id}")
-        return {"message": "处理成功", "alert_id": alert_id}
+        alerts = operation_service.get_low_inventory_alerts()
+        return alerts
     except Exception as e:
-        logger.error(f"处理告警失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"处理告警失败: {str(e)}")
+        logger.error(f"获取低库存预警失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取低库存预警失败: {str(e)}")
 
-@router.post("/alerts/process/auto")
-def process_alert_auto(request: dict):
-    """自动处理告警，将指定告警更新为已处理状态"""
+
+# ==================== 工单跟踪 API ====================
+
+@router.get("/work-order/delayed")
+def get_delayed_work_orders():
+    """获取延期工单"""
     try:
-        alert_id = request.get("alert_id")
-        if not alert_id:
-            raise HTTPException(status_code=400, detail="缺少 alert_id 参数")
-        success = alert_service.mark_alert_as_processed(alert_id, 1)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"告警不存在或处理失败: {alert_id}")
-        return {"message": "处理成功", "alert_id": alert_id}
+        orders = operation_service.get_delayed_work_orders()
+        return orders
     except Exception as e:
-        logger.error(f"处理告警失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"处理告警失败: {str(e)}")
+        logger.error(f"获取延期工单失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取延期工单失败: {str(e)}")
 
-@router.get("/chart")
-def get_chart_data():
-    """获取销售预测 vs 实际订单（当前月前7个月到后4个月）"""
+
+# ==================== 销售订单 API ====================
+
+@router.get("/customer-order/upcoming")
+def get_upcoming_customer_orders():
+    """获取即将到期订单"""
     try:
-        # 计算当前时间前7个月到后4个月（共12个月）
-        today = datetime.today()
-        # 结束月为当前月后4个月
-        end_month = (today + relativedelta(months=4)).strftime("%Y-%m")
-        # 开始月为当前月前7个月
-        start_date = today - relativedelta(months=7)
-        start_month = start_date.strftime("%Y-%m")
-
-        # 获取销售预测、销售订单数据（get_sale_forecast 已返回 CharVO 对象列表）
-        result = report_service.get_sale_forecast(start_month, end_month)
-        
-        # 生成月份列表（前端前7个月到后4个月）
-        months = []
-        current = start_date
-        while current <= today + relativedelta(months=4):
-            months.append(current.strftime("%Y-%m"))
-            current = current + relativedelta(months=1)
-        
-        return ChartResponseVO(months=months, data=result)
+        orders = operation_service.get_upcoming_customer_orders()
+        return orders
     except Exception as e:
-        logger.error(f"获取图表数据失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取图表数据失败: {str(e)}") 
+        logger.error(f"获取即将到期订单失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取即将到期订单失败: {str(e)}")
+
+
+# ==================== 风险监控 API ====================
+
+@router.get("/risks/active")
+def get_active_risks():
+    """获取活跃风险列表"""
+    try:
+        risks = risk_service.get_active_risks()
+        return risks
+    except Exception as e:
+        logger.error(f"获取活跃风险失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取活跃风险失败: {str(e)}")
+
+
+@router.get("/risks/statistics")
+def get_risk_statistics():
+    """获取风险统计数据"""
+    try:
+        stats = risk_service.get_risk_statistics()
+        return stats
+    except Exception as e:
+        logger.error(f"获取风险统计失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取风险统计失败: {str(e)}")
+
+
+@router.get("/risks/trend")
+def get_risk_trend(days: int = 30):
+    """获取风险趋势"""
+    try:
+        trend = risk_service.get_risk_trend(days)
+        return trend
+    except Exception as e:
+        logger.error(f"获取风险趋势失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取风险趋势失败: {str(e)}")
+
+
+@router.get("/risks/top-suppliers")
+def get_top_affected_suppliers():
+    """获取受影响供应商TOP5"""
+    try:
+        suppliers = risk_service.get_top_affected_suppliers()
+        return suppliers
+    except Exception as e:
+        logger.error(f"获取受影响供应商失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取受影响供应商失败: {str(e)}") 

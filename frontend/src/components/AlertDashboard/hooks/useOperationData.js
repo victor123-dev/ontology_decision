@@ -1,9 +1,9 @@
-// 供应链控制塔 - 数据获取 Hooks
+// 供应链运营数据获取 Hooks
 import { useState, useEffect, useCallback, useRef } from "react";
 import { alertDashboardApi } from "../lib/data";
 
-// KPI 单个指标 hooks
-export function usePurchaseOnTimeRate() {
+// 采购订单执行率
+export function usePOExecutionRate() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,18 +13,17 @@ export function usePurchaseOnTimeRate() {
     try {
       setLoading(true);
       setError(null);
-      const response = await alertDashboardApi.getPurchaseOnTimeRate();
+      const response = await alertDashboardApi.getPOExecutionRate();
       setData(response.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching purchase on time rate:', err);
+      console.error('Error fetching PO execution rate:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
     if (!hasLoaded.current) {
       hasLoaded.current = true;
       loadData();
@@ -34,8 +33,8 @@ export function usePurchaseOnTimeRate() {
   return { data, loading, error, refetch: loadData };
 }
 
-// 合并的销售数据 Hook
-export function useMonthlySales() {
+// 库存健康度
+export function useInventoryHealthRate() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -45,18 +44,17 @@ export function useMonthlySales() {
     try {
       setLoading(true);
       setError(null);
-      const response = await alertDashboardApi.getMonthlySales();
+      const response = await alertDashboardApi.getInventoryHealthRate();
       setData(response.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching monthly sales:', err);
+      console.error('Error fetching inventory health rate:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
     if (!hasLoaded.current) {
       hasLoaded.current = true;
       loadData();
@@ -66,7 +64,8 @@ export function useMonthlySales() {
   return { data, loading, error, refetch: loadData };
 }
 
-export function useAlertCount() {
+// 工单准时交付率
+export function useWOOnTimeDeliveryRate() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -76,18 +75,17 @@ export function useAlertCount() {
     try {
       setLoading(true);
       setError(null);
-      const response = await alertDashboardApi.getAlertCount();
+      const response = await alertDashboardApi.getWOOnTimeDeliveryRate();
       setData(response.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching alert count:', err);
+      console.error('Error fetching WO on-time delivery rate:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
     if (!hasLoaded.current) {
       hasLoaded.current = true;
       loadData();
@@ -97,7 +95,8 @@ export function useAlertCount() {
   return { data, loading, error, refetch: loadData };
 }
 
-export function useUrgentRequistionCount() {
+// 本月客户订单金额
+export function useMonthlyCustomerOrderAmount() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -107,18 +106,17 @@ export function useUrgentRequistionCount() {
     try {
       setLoading(true);
       setError(null);
-      const response = await alertDashboardApi.getUrgentRequistionCount();
+      const response = await alertDashboardApi.getMonthlyCustomerOrderAmount();
       setData(response.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching urgent requistion count:', err);
+      console.error('Error fetching monthly customer order amount:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
     if (!hasLoaded.current) {
       hasLoaded.current = true;
       loadData();
@@ -128,70 +126,8 @@ export function useUrgentRequistionCount() {
   return { data, loading, error, refetch: loadData };
 }
 
-// KPI 数据 - 整体API（保留以兼容）
-export function useKpiData() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const hasLoaded = useRef(false);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await alertDashboardApi.getKpiData();
-      setData(response.data);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching KPI data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
-    if (!hasLoaded.current) {
-      hasLoaded.current = true;
-      loadData();
-    }
-  }, [loadData]);
-
-  return { data, loading, error, refetch: loadData };
-}
-
-export function useChartData() {
-  const [data, setData] = useState({ months: [], data: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const hasLoaded = useRef(false);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await alertDashboardApi.getChartData();
-      setData(response.data);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching chart data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
-    if (!hasLoaded.current) {
-      hasLoaded.current = true;
-      loadData();
-    }
-  }, [loadData]);
-
-  return { data, loading, error, refetch: loadData };
-}
-
-export function useLogisticsData() {
+// 延迟采购订单
+export function useDelayedPurchaseOrders() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -201,18 +137,17 @@ export function useLogisticsData() {
     try {
       setLoading(true);
       setError(null);
-      const response = await alertDashboardApi.getLogisticsData();
+      const response = await alertDashboardApi.getDelayedPurchaseOrders();
       setData(response.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching logistics data:', err);
+      console.error('Error fetching delayed purchase orders:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
     if (!hasLoaded.current) {
       hasLoaded.current = true;
       loadData();
@@ -222,69 +157,8 @@ export function useLogisticsData() {
   return { data, loading, error, refetch: loadData };
 }
 
-export function useForecastData() {
-  const [data, setData] = useState({ months: [], data: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const hasLoaded = useRef(false);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await alertDashboardApi.getForecastData();
-      setData(response.data);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching forecast data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
-    if (!hasLoaded.current) {
-      hasLoaded.current = true;
-      loadData();
-    }
-  }, [loadData]);
-
-  return { data, loading, error, refetch: loadData };
-}
-
-export function useMapData() {
-  const [data, setData] = useState({ nodes: [], routes: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const hasLoaded = useRef(false);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await alertDashboardApi.getMapData();
-      setData(response.data);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching map data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
-    if (!hasLoaded.current) {
-      hasLoaded.current = true;
-      loadData();
-    }
-  }, [loadData]);
-
-  return { data, loading, error, refetch: loadData };
-}
-
-export function useAlertMessages() {
+// 供应商交付表现
+export function useSupplierPerformance() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -294,18 +168,110 @@ export function useAlertMessages() {
     try {
       setLoading(true);
       setError(null);
-      const response = await alertDashboardApi.getAlertMessages();
+      const response = await alertDashboardApi.getSupplierPerformance();
       setData(response.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching alert messages:', err);
+      console.error('Error fetching supplier performance:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 避免在 React StrictMode 下重复请求
+    if (!hasLoaded.current) {
+      hasLoaded.current = true;
+      loadData();
+    }
+  }, [loadData]);
+
+  return { data, loading, error, refetch: loadData };
+}
+
+// 低库存预警
+export function useLowInventoryAlerts() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const hasLoaded = useRef(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await alertDashboardApi.getLowInventoryAlerts();
+      setData(response.data);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching low inventory alerts:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoaded.current) {
+      hasLoaded.current = true;
+      loadData();
+    }
+  }, [loadData]);
+
+  return { data, loading, error, refetch: loadData };
+}
+
+// 延期工单
+export function useDelayedWorkOrders() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const hasLoaded = useRef(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await alertDashboardApi.getDelayedWorkOrders();
+      setData(response.data);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching delayed work orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoaded.current) {
+      hasLoaded.current = true;
+      loadData();
+    }
+  }, [loadData]);
+
+  return { data, loading, error, refetch: loadData };
+}
+
+// 即将到期客户订单
+export function useUpcomingCustomerOrders() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const hasLoaded = useRef(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await alertDashboardApi.getUpcomingCustomerOrders();
+      setData(response.data);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching upcoming customer orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!hasLoaded.current) {
       hasLoaded.current = true;
       loadData();
