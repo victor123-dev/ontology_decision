@@ -20,6 +20,7 @@ import InventoryHealth from './components/InventoryHealth';
 import ProductionTracking from './components/ProductionTracking';
 import SalesOverview from './components/SalesOverview';
 import RiskCharts from './components/RiskCharts';
+import CustomerOrderTrend from './components/CustomerOrderTrend';
 
 // 运营和风险数据hooks
 import { usePOExecutionRate, useInventoryHealthRate, useWOOnTimeDeliveryRate, useMonthlyCustomerOrderAmount } from './hooks/useOperationData';
@@ -43,9 +44,12 @@ const INITIAL_LAYOUT = [
   // 第二行: 库存健康(左) + 生产交付(中) + 风险供应商(右)
   { i: 'inventoryHealth', x: 0, y: 28, w: 8, h: 22, minH: 16, minW: 6 },
   { i: 'productionTracking', x: 8, y: 28, w: 10, h: 22, minH: 16, minW: 8 },
-  { i: 'topRiskSuppliers', x: 18, y: 14, w: 6, h: 14, minH: 10, minW: 4 },
+  { i: 'topRiskSuppliers', x: 18, y: 28, w: 6, h: 14, minH: 10, minW: 4 },
   
-  // 第三行: 销售订单概览(全宽)
+  // 第三行: 客户订单趋势(右) - 在topRiskSuppliers下方
+  { i: 'customerOrderTrend', x: 18, y: 36, w: 6, h: 14, minH: 10, minW: 4 },
+  
+  // 第四行: 销售订单概览(全宽)
   { i: 'salesOverview', x: 0, y: 50, w: 24, h: 18, minH: 14, minW: 12 },
 ];
 
@@ -387,6 +391,13 @@ export default function AlertDashboard() {
               <div key="topRiskSuppliers">
                 <Widget title="受影响供应商TOP5" subtitle="风险关联分析">
                   <RiskCharts />
+                </Widget>
+              </div>
+
+              {/* ── 客户订单交付趋势 ── */}
+              <div key="customerOrderTrend">
+                <Widget title="客户订单交付趋势" subtitle="近30天状态分布">
+                  <CustomerOrderTrend />
                 </Widget>
               </div>
 

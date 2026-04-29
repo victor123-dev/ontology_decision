@@ -326,6 +326,60 @@ class OperationService:
             logger.error(f"获取本月客户订单金额失败: {e}")
             return 0.0
     
+    def get_customer_order_trend(self, days: int = 30) -> List[Dict]:
+        """获取客户订单交付趋势(近N天)"""
+        try:
+            now = datetime.now()
+            start_date = now - timedelta(days=days)
+            
+            all_orders = self.client.models.CustomerOrder.find()
+            
+            # 按日期统计订单状态
+            daily_stats = {}
+            for i in range(days):
+                date = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
+                daily_stats[date] = {
+                    'date': date,
+                    'completed': 0,    # 已完成
+                    'shipping': 0,     # 部分发货/已发货
+                    'producing': 0,    # 生产中
+                    'delayed': 0       # 延期
+                }
+            
+            for order in all_orders:
+                required_date_str = getattr(order, 'required_date', '')
+                if not required_date_str:
+                    continue
+                
+                try:
+                    required_date = datetime.fromisoformat(required_date_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    date_key = required_date.strftime('%Y-%m-%d')
+                    
+                    if date_key not in daily_stats:
+                        continue
+                    
+                    status = getattr(order, 'status', '')
+                    
+                    # 判断是否延期
+                    if required_date < now and status not in ['已完成', '已发货', '部分发货']:
+                        daily_stats[date_key]['delayed'] += 1
+                    elif status in ['已完成', '已发货']:
+                        daily_stats[date_key]['completed'] += 1
+                    elif status == '部分发货':
+                        daily_stats[date_key]['shipping'] += 1
+                    elif status in ['生产中', '已确认']:
+                        daily_stats[date_key]['producing'] += 1
+                except:
+                    continue
+            
+            # 转换为列表并排序
+            trend_data = sorted(daily_stats.values(), key=lambda x: x['date'])
+            return trend_data
+            
+        except Exception as e:
+            logger.error(f"获取客户订单交付趋势失败: {e}")
+            return []
+    
     def get_upcoming_customer_orders(self, days: int = 7) -> List[Dict]:
         """获取即将到期的客户订单"""
         try:

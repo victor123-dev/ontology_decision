@@ -280,3 +280,34 @@ export function useUpcomingCustomerOrders() {
 
   return { data, loading, error, refetch: loadData };
 }
+
+// 客户订单交付趋势
+export function useCustomerOrderTrend() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const hasLoaded = useRef(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await alertDashboardApi.getCustomerOrderTrend();
+      setData(response.data);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching customer order trend:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoaded.current) {
+      hasLoaded.current = true;
+      loadData();
+    }
+  }, [loadData]);
+
+  return { data, loading, error, refetch: loadData };
+}

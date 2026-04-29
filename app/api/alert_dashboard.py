@@ -144,6 +144,16 @@ def get_upcoming_customer_orders():
         logger.error(f"获取即将到期订单失败: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取即将到期订单失败: {str(e)}")
 
+@router.get("/customer-order/trend")
+def get_customer_order_trend():
+    """获取客户订单交付趋势(近30天)"""
+    try:
+        trend = operation_service.get_customer_order_trend(days=30)
+        return trend
+    except Exception as e:
+        logger.error(f"获取客户订单交付趋势失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取客户订单交付趋势失败: {str(e)}")
+
 
 # ==================== 风险监控 API ====================
 

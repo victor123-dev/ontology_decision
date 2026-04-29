@@ -33,6 +33,7 @@ export const alertDashboardApi = {
 
   // ==================== 销售订单 API ====================
   getUpcomingCustomerOrders: () => api.get('/customer-order/upcoming'),
+  getCustomerOrderTrend: () => api.get('/customer-order/trend'),
 
   // ==================== 风险监控 API ====================
   getActiveRisks: () => api.get('/risks/active'),

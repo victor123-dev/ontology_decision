@@ -253,7 +253,7 @@ def _get_po_receipts(client, material_id, day_offset):
         today = datetime.now()
         
         for line in po_lines:
-            if line.status in ['已确认', '运输中']:
+            if line.status in ['待收货', '部分到货']:
                 # 获取采购订单
                 po = client.models.PurchaseOrder.get(line.po_id)
                 if po and po.expected_delivery_date:
