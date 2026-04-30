@@ -971,6 +971,8 @@ function BusinessModel() {
               <Option value="integer">整数</Option>
               <Option value="float">浮点数</Option>
               <Option value="boolean">布尔值</Option>
+              <Option value="array">数组</Option>
+              <Option value="object">对象</Option>
               <Option value="date">日期</Option>
               <Option value="datetime">日期时间</Option>
             </Select>

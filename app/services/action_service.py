@@ -48,6 +48,9 @@ class ActionService:
             
             if param_name in parameters:
                 value = parameters[param_name]
+                # 对于可选参数，如果值为None，跳过类型验证
+                if value is None and not param_required:
+                    continue
                 if not self._validate_type(value, param_type):
                     errors.append(f"Parameter '{param_name}' should be of type {param_type}")
         

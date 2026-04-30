@@ -9,6 +9,20 @@ from app.utils.shared_utils import get_db
 
 router = APIRouter()
 
+# 允许的字段类型列表（与 data_source_manager.py 中的 type_mapping 保持一致）
+ALLOWED_DATA_TYPES = {
+    'string', 'text', 'integer', 'float', 
+    'boolean', 'object', 'array', 'date', 'datetime'
+}
+
+def _validate_data_type(data_type: str):
+    """校验字段类型是否在允许的范围内"""
+    if data_type and data_type.lower() not in ALLOWED_DATA_TYPES:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"无效的字段类型: '{data_type}'。允许的类型为: {', '.join(sorted(ALLOWED_DATA_TYPES))}"
+        )
+
 def _to_camel_case(snake_str):
     """将下划线分隔的字符串转换为小驼峰命名"""
     components = snake_str.split('_')
@@ -85,13 +99,17 @@ def create_business_model_field(model_id: str, field_data: dict, db: Session = D
     if existing_field:
         raise HTTPException(status_code=400, detail="Field ID already exists")
     
+    # 校验字段类型
+    data_type = field_data.get("data_type", "string")
+    _validate_data_type(data_type)
+    
     # 创建新字段
     field = BusinessModelField(
         model_id=model_id,
         field_id=field_data.get("field_id"),
         name=field_data.get("name", field_data.get("field_id")),
         description=field_data.get("description", ""),
-        data_type=field_data.get("data_type", "string"),
+        data_type=data_type,
         required=field_data.get("required", False)  # 新增：支持required字段，默认False
     )
     db.add(field)
@@ -113,6 +131,10 @@ def update_business_model_field(model_id: str, field_id: str, field_data: dict, 
     ).first()
     if not field:
         raise HTTPException(status_code=404, detail="Field not found")
+    
+    # 校验字段类型（如果提供了新的类型）
+    if "data_type" in field_data:
+        _validate_data_type(field_data["data_type"])
     
     # 更新字段信息
     if "name" in field_data:
