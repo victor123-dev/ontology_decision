@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 import sqlite3
+import json
 from typing import List, Dict, Any
 
 Base = declarative_base()
@@ -15,7 +16,22 @@ class DBClient:
         
     def connect(self):
         if self.db_type == 'sqlite':
-            self.engine = create_engine(self.connection_string)
+            # 自定义JSON编码器，确保中文字符不被转义
+            class ChineseJSONEncoder(json.JSONEncoder):
+                def encode(self, obj):
+                    # 使用ensure_ascii=False来保持中文字符
+                    return super().encode(obj)
+                
+                def iterencode(self, obj, _one_shot=False):
+                    # 重写iterencode方法以确保ensure_ascii=False
+                    return json.JSONEncoder.iterencode(self, obj, _one_shot)
+            
+            # 创建引擎并配置JSON序列化
+            self.engine = create_engine(
+                self.connection_string,
+                json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
+                json_deserializer=json.loads
+            )
         elif self.db_type == 'mysql':
             # 预留MySQL支持
             pass

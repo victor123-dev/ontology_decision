@@ -66,7 +66,8 @@ class {{ action_name }}Parameters:
         {%- endif %}
         {%- if param.is_enum and param.enum_values %}
         if self.{{ param.name }} is not None and self.{{ param.name }} not in {{ param.enum_values | tojson }}:
-            errors.append("Parameter '{{ param.name }}' value '" + str(self.{{ param.name }}) + "' is not in allowed values: {{ param.enum_values | tojson }}")
+            allowed_values = {{ param.enum_values | tojson }}
+            errors.append("Parameter '{{ param.name }}' value '" + str(self.{{ param.name }}) + "' is not in allowed values: " + str(allowed_values))
         {%- endif %}
         {%- endfor %}
         return len(errors) == 0, errors
