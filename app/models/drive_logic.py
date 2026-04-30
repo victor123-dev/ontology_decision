@@ -14,7 +14,7 @@ event_logic_association = Table(
 class DriveLogic(Base):
     __tablename__ = "drive_logics"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False)  # first_order, script
     config = Column(JSON, nullable=False, default={})  # 可选的预处理配置

@@ -5,7 +5,7 @@ from app.utils.db_client import Base
 class DataSensingConfig(Base):
     __tablename__ = "data_sensing_configs"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False)  # data_change, threshold
     model_id = Column(String(255), ForeignKey("business_models.id"))

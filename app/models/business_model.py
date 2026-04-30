@@ -20,7 +20,7 @@ class BusinessModel(Base):
 class BusinessModelField(Base):
     __tablename__ = "business_model_fields"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     model_id = Column(String(255), ForeignKey("business_models.id"))
     field_id = Column(String(255), nullable=False)  # 映射字段名
     data_type = Column(String(100), nullable=False)  # 通用数据类型
