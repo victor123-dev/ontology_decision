@@ -116,17 +116,17 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
         return {
           name: field.field_id,
           type: mapDataTypeToParamType(field.data_type),
-          required: isPrimaryKey, // 主键必填，其他字段可选
+          required: isPrimaryKey || field.required, // 主键或字段本身标记为必填则必填
           default_value: '',
           description: field.description || field.name + (isPrimaryKey ? ' (主键，必填)' : '')
         };
       });
     } else {
-      // 创建操作包含所有字段（都可选）
+      // 创建操作包含所有字段，根据字段本身的required属性设置必填状态
       return model.fields.map(field => ({
         name: field.field_id,
         type: mapDataTypeToParamType(field.data_type),
-        required: false,
+        required: field.required || false, // 使用字段本身的required属性
         default_value: '',
         description: field.description || field.name
       }));

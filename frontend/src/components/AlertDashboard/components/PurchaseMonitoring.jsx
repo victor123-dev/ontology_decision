@@ -1,11 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDelayedPurchaseOrders, useSupplierPerformance } from '../hooks/useOperationData';
 import { formatDate, formatCurrency, getStatusStyle } from '../lib/operationUtils';
 
-export default function PurchaseMonitoring() {
+export default function PurchaseMonitoring({ refreshTrigger }) {
   const [activeTab, setActiveTab] = useState('delayed');
-  const { data: delayedOrders, loading: loadingDelayed } = useDelayedPurchaseOrders();
-  const { data: supplierPerf, loading: loadingPerf } = useSupplierPerformance();
+  const { data: delayedOrders, loading: loadingDelayed, refetch } = useDelayedPurchaseOrders();
+  const { data: supplierPerf, loading: loadingPerf, refetch: refetchPerf } = useSupplierPerformance();
+  
+  // 监听刷新触发器
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+      refetchPerf();
+    }
+  }, [refreshTrigger, refetch, refetchPerf]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

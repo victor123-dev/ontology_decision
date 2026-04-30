@@ -52,17 +52,34 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
     svg.selectAll("*").remove();
     const g = svg.append("g");
 
-    svg.append("defs").append("marker")
+    svg.append("defs")
+      .append("marker")
       .attr("id", "arrowhead-static")
       .attr("viewBox", "0 -5 10 10")
-      .attr("refX", GRAPH_CONFIG.NODE_RADIUS + 10)
+      .attr("refX", GRAPH_CONFIG.NODE_RADIUS + 12)
       .attr("refY", 0)
       .attr("orient", "auto")
-      .attr("markerWidth", 6)
-      .attr("markerHeight", 6)
+      .attr("markerWidth", 8)
+      .attr("markerHeight", 8)
+      .attr("markerUnits", "userSpaceOnUse")
       .append("path")
-      .attr("d", "M 0,-5 L 10,0 L 0,5")
+      .attr("d", "M 0,-4 L 10,0 L 0,4")
       .attr("fill", GRAPH_CONFIG.DEFAULT_STROKE);
+
+    // 添加选中状态的箭头
+    svg.select("defs")
+      .append("marker")
+      .attr("id", "arrowhead-selected")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", GRAPH_CONFIG.NODE_RADIUS + 12)
+      .attr("refY", 0)
+      .attr("orient", "auto")
+      .attr("markerWidth", 8)
+      .attr("markerHeight", 8)
+      .attr("markerUnits", "userSpaceOnUse")
+      .append("path")
+      .attr("d", "M 0,-4 L 10,0 L 0,4")
+      .attr("fill", GRAPH_CONFIG.SELECTED_STROKE);
 
     const zoom = d3.zoom()
       .scaleExtent([GRAPH_CONFIG.MIN_ZOOM, GRAPH_CONFIG.MAX_ZOOM])
@@ -89,7 +106,7 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
 
     // 1. 渲染边
     const links = linkGroup.selectAll("line")
-      .data(data.links, d => d.id);
+      .data(data.links.filter(d => d.source !== d.target), d => d.id); // 过滤掉自引用关系
 
     links.enter().append("line")
       .attr("stroke", GRAPH_CONFIG.DEFAULT_STROKE)
@@ -117,9 +134,37 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
 
     links.exit().remove();
 
+    // 渲染自引用边（环形曲线）
+    const selfLinks = linkGroup.selectAll("path.self-link")
+      .data(data.links.filter(d => d.source === d.target), d => d.id);
+
+    selfLinks.enter().append("path")
+      .attr("class", "self-link")
+      .attr("fill", "none")
+      .attr("stroke", GRAPH_CONFIG.DEFAULT_STROKE)
+      .attr("stroke-width", 2)
+      .attr("marker-end", "url(#arrowhead-static)")
+      .attr("cursor", "pointer")
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        // 还原原始链接对象，保持 source 和 target 为字符串 ID
+        const originalLink = {
+          id: d.id,
+          source: d.source?.id || d.source,
+          target: d.target?.id || d.target,
+          name: d.name,
+          description: d.description,
+          data: d.data
+        };
+        onSelect({ type: 'link', data: originalLink });
+      })
+      .merge(selfLinks);
+
+    selfLinks.exit().remove();
+
     // 2. 渲染边标签
     const labelGroups = linkLabelGroup.selectAll("g")
-      .data(data.links, d => d.id);
+      .data(data.links.filter(d => d.source !== d.target), d => d.id); // 过滤掉自引用关系
 
     const labelEnter = labelGroups.enter().append("g").attr("class", "link-label-container");
     
@@ -138,6 +183,29 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
       .text(d => d.name);
 
     labelGroups.exit().remove();
+
+    // 渲染自引用边标签
+    const selfLabelGroups = linkLabelGroup.selectAll("g.self-link-label")
+      .data(data.links.filter(d => d.source === d.target), d => d.id);
+
+    const selfLabelEnter = selfLabelGroups.enter().append("g")
+      .attr("class", "link-label-container self-link-label");
+    
+    // 标签背景
+    selfLabelEnter.append("rect")
+      .attr("fill", "#FFFFFF")
+      .attr("rx", 4)
+      .attr("ry", 4);
+    
+    // 标签文字
+    selfLabelEnter.append("text")
+      .attr("font-size", "12px")
+      .attr("fill", "#475569")
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle")
+      .text(d => d.name);
+
+    selfLabelGroups.exit().remove();
 
     // 3. 渲染节点
     const nodeGroups = nodeGroup.selectAll("g")
@@ -207,16 +275,58 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
 
     // 4. Tick 更新 (核心动画循环)
     simulation.on("tick", () => {
-      // 更新边位置
+      // 更新普通边位置
       linkGroup.selectAll("line")
         .attr("x1", d => d.source.x)
         .attr("y1", d => d.source.y)
         .attr("x2", d => d.target.x)
         .attr("y2", d => d.target.y);
 
-      // 更新边标签位置
-      linkLabelGroup.selectAll("g")
+      // 更新自引用边位置(环形曲线)
+      linkGroup.selectAll("path.self-link")
+        .attr("d", d => {
+          const radius = GRAPH_CONFIG.NODE_RADIUS;
+          const loopRadius = radius * 2.5;
+                
+          // 从节点右侧开始
+          const startX = d.source.x + radius;
+          const startY = d.source.y;
+                
+          // 使用贝塞尔曲线绘制环形
+          // 控制点在节点上方，形成向上的环
+          const cp1x = d.source.x + radius;
+          const cp1y = d.source.y - loopRadius;
+          const cp2x = d.source.x - radius;
+          const cp2y = d.source.y - loopRadius;
+          const endX = d.source.x - radius;
+          const endY = d.source.y;
+                
+          return `M ${startX},${startY} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${endX},${endY}`;
+        });
+
+      // 更新普通边标签位置
+      linkLabelGroup.selectAll("g:not(.self-link-label)")
         .attr("transform", d => `translate(${(d.source.x + d.target.x) / 2}, ${(d.source.y + d.target.y) / 2})`)
+        .each(function() {
+          const text = d3.select(this).select("text");
+          const bbox = text.node()?.getBBox();
+          if (bbox) {
+            d3.select(this).select("rect")
+              .attr("x", bbox.x - 4)
+              .attr("y", bbox.y - 2)
+              .attr("width", bbox.width + 8)
+              .attr("height", bbox.height + 4);
+          }
+        });
+
+      // 更新自引用边标签位置（放在环的顶部）
+      linkLabelGroup.selectAll("g.self-link-label")
+        .attr("transform", d => {
+          const radius = GRAPH_CONFIG.NODE_RADIUS;
+          const loopRadius = radius * 2.5;
+          // 标签放在环的顶部中央
+          return `translate(${d.source.x}, ${d.source.y - loopRadius})`;
+        })
         .each(function() {
           const text = d3.select(this).select("text");
           const bbox = text.node()?.getBBox();
@@ -250,7 +360,14 @@ export const useD3ForceGraph = (data, onSelect, selectedId) => {
     // 更新边的样式
     linkGroup.selectAll("line")
       .attr("stroke", d => d.id === selectedId ? GRAPH_CONFIG.SELECTED_STROKE : GRAPH_CONFIG.DEFAULT_STROKE)
-      .attr("stroke-width", d => d.id === selectedId ? 4 : 2);
+      .attr("stroke-width", d => d.id === selectedId ? 4 : 2)
+      .attr("marker-end", d => d.id === selectedId ? "url(#arrowhead-selected)" : "url(#arrowhead-static)");
+
+    // 更新自引用边的样式
+    linkGroup.selectAll("path.self-link")
+      .attr("stroke", d => d.id === selectedId ? GRAPH_CONFIG.SELECTED_STROKE : GRAPH_CONFIG.DEFAULT_STROKE)
+      .attr("stroke-width", d => d.id === selectedId ? 4 : 2)
+      .attr("marker-end", d => d.id === selectedId ? "url(#arrowhead-selected)" : "url(#arrowhead-static)");
 
     // 更新节点的样式
     nodeGroup.selectAll("g").select("circle")

@@ -1,8 +1,15 @@
+import { useEffect } from 'react';
 import { useUpcomingCustomerOrders } from '../hooks/useOperationData';
 import { formatDate, formatCurrency, getDaysRemaining } from '../lib/operationUtils';
 
-export default function SalesOverview() {
-  const { data: upcomingOrders, loading, error } = useUpcomingCustomerOrders();
+export default function SalesOverview({ refreshTrigger }) {
+  const { data: upcomingOrders, loading, error, refetch } = useUpcomingCustomerOrders();
+  
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+    }
+  }, [refreshTrigger, refetch]);
 
   if (loading) {
     return (

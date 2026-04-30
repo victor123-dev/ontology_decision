@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useActiveRisks } from '../hooks/useRiskData';
 import { 
   getRiskLevelStyle, 
@@ -10,8 +10,14 @@ import {
 } from '../lib/riskUtils';
 import { formatDate } from '../lib/operationUtils';
 
-export default function RiskList() {
+export default function RiskList({ refreshTrigger }) {
   const { data: risks, loading, error, refetch } = useActiveRisks();
+  
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+    }
+  }, [refreshTrigger, refetch]);
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [expandedRisk, setExpandedRisk] = useState(null);
@@ -105,9 +111,8 @@ export default function RiskList() {
           </thead>
           <tbody>
             {filteredRisks.map(risk => (
-              <>
+              <React.Fragment key={risk.risk_id}>
                 <tr
-                  key={risk.risk_id}
                   style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}
                   onClick={() => setExpandedRisk(expandedRisk === risk.risk_id ? null : risk.risk_id)}
                   onMouseOver={e => e.currentTarget.style.background = 'rgba(59,130,246,0.05)'}
@@ -212,7 +217,7 @@ export default function RiskList() {
                     </td>
                   </tr>
                 )}
-              </>
+              </React.Fragment>
             ))}
             
             {filteredRisks.length === 0 && (

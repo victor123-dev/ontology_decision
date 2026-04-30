@@ -1,8 +1,15 @@
+import { useEffect } from 'react';
 import { useCustomerOrderTrend } from '../hooks/useOperationData';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-export default function CustomerOrderTrend() {
-  const { data: trendData, loading, error } = useCustomerOrderTrend();
+export default function CustomerOrderTrend({ refreshTrigger }) {
+  const { data: trendData, loading, error, refetch } = useCustomerOrderTrend();
+  
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+    }
+  }, [refreshTrigger, refetch]);
 
   if (loading) {
     return (

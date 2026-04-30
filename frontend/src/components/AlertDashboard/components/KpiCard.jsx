@@ -22,6 +22,7 @@ function useCountUp(target, duration = 1500, delay = 0) { const [current, setCur
   return current; }
 
 export default function KpiCard({ title, value, unit, format = 'number', trend = 'flat', trendValue, icon, color = '#3b82f6', delay = 0, loading = false }) { 
+  // 使用数字跳动动画,但保持高度固定避免布局抖动
   const animatedValue = useCountUp(value || 0, 1500, delay);
 
   // 加载状态：显示旋转动画
@@ -111,29 +112,32 @@ export default function KpiCard({ title, value, unit, format = 'number', trend =
         </div>
       </div>
 
-      {/* 数值 */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-        <span
-          style={{ color, fontSize: '20px', fontWeight: 'bold',
-            fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
-            letterSpacing: '-0.02em',
-            animation: 'countUp 0.6s ease-out forwards' }}
-        >
-          {formatValue(animatedValue)}
-        </span>
-        {unit && (
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>{unit}</span>
-        )}
+      {/* 数值 - 保持与loading状态相同的高度40px */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '40px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+          <span
+            style={{ color, fontSize: '20px', fontWeight: 'bold',
+              fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+              letterSpacing: '-0.02em' }}
+          >
+            {formatValue(animatedValue)}
+          </span>
+          {unit && (
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>{unit}</span>
+          )}
+        </div>
       </div>
 
-      {/* 趋势 */}
-      {trendValue && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-          <TrendIcon size={11} style={{ color: trendColor }} />
-          <span style={{ fontSize: '11px', color: trendColor }}>{trendValue}</span>
-          <span style={{ fontSize: '11px', color: '#64748b' }}>较上月</span>
-        </div>
-      )}
+      {/* 趋势 - 保持与loading状态相同的高度17px */}
+      <div style={{ height: '17px' }}>
+        {trendValue && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <TrendIcon size={11} style={{ color: trendColor }} />
+            <span style={{ fontSize: '11px', color: trendColor }}>{trendValue}</span>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>较上月</span>
+          </div>
+        )}
+      </div>
     </div>
   ); 
 }

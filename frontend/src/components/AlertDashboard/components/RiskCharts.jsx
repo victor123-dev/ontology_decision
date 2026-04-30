@@ -1,12 +1,20 @@
+import { useEffect } from 'react';
 import { useRiskStatistics, useTopAffectedSuppliers } from '../hooks/useRiskData';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatRiskCategory, getRiskLevelColor } from '../lib/riskUtils';
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#8b5cf6', '#10b981'];
 
-export default function RiskCharts() {
-  const { data: stats, loading: loadingStats } = useRiskStatistics();
-  const { data: topSuppliers, loading: loadingSuppliers } = useTopAffectedSuppliers();
+export default function RiskCharts({ refreshTrigger }) {
+  const { data: stats, loading: loadingStats, refetch: refetchStats } = useRiskStatistics();
+  const { data: topSuppliers, loading: loadingSuppliers, refetch: refetchSuppliers } = useTopAffectedSuppliers();
+  
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetchStats();
+      refetchSuppliers();
+    }
+  }, [refreshTrigger, refetchStats, refetchSuppliers]);
 
   if (loadingStats || loadingSuppliers) {
     return (

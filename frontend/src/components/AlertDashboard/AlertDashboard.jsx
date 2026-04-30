@@ -23,8 +23,8 @@ import RiskCharts from './components/RiskCharts';
 import CustomerOrderTrend from './components/CustomerOrderTrend';
 
 // 运营和风险数据hooks
-import { usePOExecutionRate, useInventoryHealthRate, useWOOnTimeDeliveryRate, useMonthlyCustomerOrderAmount } from './hooks/useOperationData';
-import { useActiveRiskCount, useHighRiskSupplierCount } from './hooks/useRiskData';
+import { usePOExecutionRate, useInventoryHealthRate, useWOOnTimeDeliveryRate, useMonthlyCustomerOrderAmount, useDelayedPurchaseOrders, useSupplierPerformance, useLowInventoryAlerts, useDelayedWorkOrders, useUpcomingCustomerOrders, useCustomerOrderTrend } from './hooks/useOperationData';
+import { useActiveRiskCount, useHighRiskSupplierCount, useActiveRisks, useRiskStatistics, useTopAffectedSuppliers } from './hooks/useRiskData';
 import { getRiskTextColor, getStatusColor, getLogisticsStatusColor } from "./lib/data";
 import { useWindowSize } from "./hooks/useWindowSize";
 
@@ -36,11 +36,10 @@ import { useWindowSize } from "./hooks/useWindowSize";
 // 物流/预测行：h=29 → 232+28=260px（匹配线上版本约230px）
 // 预警概览行：h=14 → 112+13=125px（匹配线上版本约110px）
 const INITIAL_LAYOUT = [
-  // 第一行: 风险列表(左) + 采购执行(中) + 风险统计(右上) - 风险供应商(右下)
-  { i: 'riskList', x: 0, y: 0, w: 10, h: 28, minH: 20, minW: 8 },
-  { i: 'purchaseMonitoring', x: 10, y: 0, w: 8, h: 28, minH: 20, minW: 6 },
-  { i: 'riskCharts', x: 18, y: 0, w: 6, h: 14, minH: 10, minW: 4 },
-  { i: 'topRiskSuppliers', x: 18, y: 28, w: 6, h: 14, minH: 10, minW: 4 },
+  // 第一行: 风险列表(左) + 采购执行(中) + 风险统计(右)
+  { i: 'riskList', x: 0, y: 0, w: 12, h: 28, minH: 20, minW: 8 },
+  { i: 'purchaseMonitoring', x: 12, y: 0, w: 6, h: 28, minH: 20, minW: 4 },
+  { i: 'riskCharts', x: 18, y: 0, w: 6, h: 28, minH: 20, minW: 4 },
   
   // 第二行: 库存健康(左) + 客户订单趋势(中) + 生产交付(右)
   { i: 'inventoryHealth', x: 0, y: 28, w: 8, h: 22, minH: 16, minW: 6 },
@@ -109,8 +108,9 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
       {/* 正常卡片 */}
       <div style={{
         display: 'flex', flexDirection: 'column', height: '100%',
-        background: '#0f1d35', borderRadius: '8px',
-        border: '1px solid rgba(59,130,246,0.12)',
+        background: 'linear-gradient(135deg, #0f1d35 0%, #162447 100%)', borderRadius: '8px',
+        border: '1px solid rgba(24,144,255,0.15)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
         overflow: 'hidden'
       }}>
         {/* 标题栏 - 拖拽手柄 */}
@@ -118,14 +118,15 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
           className="widget-drag-handle"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '8px 16px', flexShrink: 0, userSelect: 'none',
-            borderBottom: '1px solid rgba(59,130,246,0.12)', cursor: 'move' }}
+            borderBottom: '1px solid rgba(24,144,255,0.15)', cursor: 'move',
+            background: 'rgba(24,144,255,0.03)' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <GripHorizontal size={13} style={{ color: '#475569', flexShrink: 0 }} />
+            <GripHorizontal size={13} style={{ color: '#595959', flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
-              <span style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0',
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#f0f2f5',
                 display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
-              {subtitle && <span style={{ fontSize: '10px', color: '#64748b' }}>{subtitle}</span>}
+              {subtitle && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{subtitle}</span>}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
@@ -134,14 +135,14 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
               onMouseDown={e => e.stopPropagation()}
               onClick={e => { e.stopPropagation(); setIsFullscreen(true); }}
               style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', borderRadius: '4px', color: '#64748b', cursor: 'pointer',
+                justifyContent: 'center', borderRadius: '4px', color: '#8c8c8c', cursor: 'pointer',
                 background: 'transparent', border: 'none', transition: 'all 0.2s' }}
               onMouseOver={e => {
-                e.currentTarget.style.color = '#cbd5e1';
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.color = '#d9d9d9';
+                e.currentTarget.style.background = 'rgba(24,144,255,0.1)';
               }}
               onMouseOut={e => {
-                e.currentTarget.style.color = '#64748b';
+                e.currentTarget.style.color = '#8c8c8c';
                 e.currentTarget.style.background = 'transparent';
               }}
               title="全屏展示"
@@ -166,15 +167,19 @@ function Widget({ title, subtitle, children, headerRight, fullscreenContent, ful
 function KpiWidget({ children }) {
   return (
     // 外层容器高度固定为105px，防止被 GridLayout 拉伸
-    <div style={{ height: 105, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: 105, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      background: 'linear-gradient(135deg, #0f1d35 0%, #162447 100%)', borderRadius: '8px',
+      border: '1px solid rgba(24,144,255,0.15)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
       {/* 拖拽手柄条 */}
       <div
         style={{ display: 'flex', alignItems: 'center', gap: '8px',
           padding: '0 12px', flexShrink: 0, userSelect: 'none',
-          cursor: 'move', borderBottom: '1px solid rgba(59,130,246,0.08)', height: 20, minHeight: 20 }}
+          cursor: 'move', borderBottom: '1px solid rgba(24,144,255,0.15)', height: 20, minHeight: 20,
+          background: 'rgba(24,144,255,0.03)' }}
       >
-        <GripHorizontal size={11} style={{ color: '#334155' }} />
-        <span style={{ fontSize: '10px', color: '#334155',
+        <GripHorizontal size={11} style={{ color: '#595959' }} />
+        <span style={{ fontSize: '10px', color: '#8c8c8c',
           letterSpacing: '0.2em', textTransform: 'uppercase' }}>KPI 指标</span>
       </div>
       {/* KPI 卡片网格 */}
@@ -191,14 +196,26 @@ export default function AlertDashboard() {
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(1280);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);  // 刷新触发器
 
   // 供应链运营KPI hooks
-  const { data: poExecutionRate, loading: poExecutionRateLoading } = usePOExecutionRate();
-  const { data: inventoryHealthRate, loading: inventoryHealthRateLoading } = useInventoryHealthRate();
-  const { data: woOnTimeDeliveryRate, loading: woOnTimeDeliveryRateLoading } = useWOOnTimeDeliveryRate();
-  const { data: monthlyCustomerOrderAmount, loading: monthlyCustomerOrderAmountLoading } = useMonthlyCustomerOrderAmount();
-  const { data: activeRiskCount, loading: activeRiskCountLoading } = useActiveRiskCount();
-  const { data: highRiskSupplierCount, loading: highRiskSupplierCountLoading } = useHighRiskSupplierCount();
+  const { data: poExecutionRate, loading: poExecutionRateLoading, refetch: refetchPOExecutionRate } = usePOExecutionRate();
+  const { data: inventoryHealthRate, loading: inventoryHealthRateLoading, refetch: refetchInventoryHealthRate } = useInventoryHealthRate();
+  const { data: woOnTimeDeliveryRate, loading: woOnTimeDeliveryRateLoading, refetch: refetchWOOnTimeDeliveryRate } = useWOOnTimeDeliveryRate();
+  const { data: monthlyCustomerOrderAmount, loading: monthlyCustomerOrderAmountLoading, refetch: refetchMonthlyCustomerOrderAmount } = useMonthlyCustomerOrderAmount();
+  const { data: activeRiskCount, loading: activeRiskCountLoading, refetch: refetchActiveRiskCount } = useActiveRiskCount();
+  const { data: highRiskSupplierCount, loading: highRiskSupplierCountLoading, refetch: refetchHighRiskSupplierCount } = useHighRiskSupplierCount();
+
+  // 业务组件hooks
+  const { refetch: refetchDelayedPurchaseOrders } = useDelayedPurchaseOrders();
+  const { refetch: refetchSupplierPerformance } = useSupplierPerformance();
+  const { refetch: refetchLowInventoryAlerts } = useLowInventoryAlerts();
+  const { refetch: refetchDelayedWorkOrders } = useDelayedWorkOrders();
+  const { refetch: refetchUpcomingCustomerOrders } = useUpcomingCustomerOrders();
+  const { refetch: refetchCustomerOrderTrend } = useCustomerOrderTrend();
+  const { refetch: refetchActiveRisks } = useActiveRisks();
+  const { refetch: refetchRiskStatistics } = useRiskStatistics();
+  const { refetch: refetchTopAffectedSuppliers } = useTopAffectedSuppliers();
 
   // 监听容器宽度变化
   useEffect(() => {
@@ -217,21 +234,41 @@ export default function AlertDashboard() {
   // 刷新所有页面数据
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    // 立即触发业务组件刷新,不等待KPI完成
+    setRefreshTrigger(prev => prev + 1);
+    
     try {
-      // 刷新所有KPI数据
+      // 并发刷新所有KPI数据 + 业务组件数据
       await Promise.all([
-        poExecutionRate?.refetch?.(),
-        inventoryHealthRate?.refetch?.(),
-        woOnTimeDeliveryRate?.refetch?.(),
-        monthlyCustomerOrderAmount?.refetch?.(),
-        activeRiskCount?.refetch?.(),
-        highRiskSupplierCount?.refetch?.(),
+        // KPI数据
+        refetchPOExecutionRate?.(),
+        refetchInventoryHealthRate?.(),
+        refetchWOOnTimeDeliveryRate?.(),
+        refetchMonthlyCustomerOrderAmount?.(),
+        refetchActiveRiskCount?.(),
+        refetchHighRiskSupplierCount?.(),
+        // 业务组件数据
+        refetchDelayedPurchaseOrders?.(),
+        refetchSupplierPerformance?.(),
+        refetchLowInventoryAlerts?.(),
+        refetchDelayedWorkOrders?.(),
+        refetchUpcomingCustomerOrders?.(),
+        refetchCustomerOrderTrend?.(),
+        refetchActiveRisks?.(),
+        refetchRiskStatistics?.(),
+        refetchTopAffectedSuppliers?.(),
       ]);
     } finally {
       setIsRefreshing(false);
       setLastRefresh(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }
-  }, [poExecutionRate, inventoryHealthRate, woOnTimeDeliveryRate, monthlyCustomerOrderAmount, activeRiskCount, highRiskSupplierCount]);
+  }, [
+    refetchPOExecutionRate, refetchInventoryHealthRate, refetchWOOnTimeDeliveryRate, 
+    refetchMonthlyCustomerOrderAmount, refetchActiveRiskCount, refetchHighRiskSupplierCount,
+    refetchDelayedPurchaseOrders, refetchSupplierPerformance, refetchLowInventoryAlerts,
+    refetchDelayedWorkOrders, refetchUpcomingCustomerOrders, refetchCustomerOrderTrend,
+    refetchActiveRisks, refetchRiskStatistics, refetchTopAffectedSuppliers
+  ]);
 
   // 根据 layout 中的 h 计算实际像素高度
   const getItemPx = useCallback((id) => {
@@ -250,21 +287,21 @@ export default function AlertDashboard() {
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           height: '64px',
           padding: '0 24px',
-          background: 'linear-gradient(90deg, #0d1a2e, #0f1d35)',
-          borderBottom: '1px solid rgba(59,130,246,0.2)',
+          background: 'linear-gradient(90deg, #001529 0%, #002140 100%)',
+          borderBottom: '1px solid rgba(24,144,255,0.2)',
           boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
           flexShrink: 0 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '0 0 auto' }}>
           <div style={{ width: '36px', height: '36px', borderRadius: '8px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #1e40af, #0891b2)' }}>
+            background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)' }}>
             <Factory size={18} style={{ color: '#fff' }} />
           </div>
           <div>
-            <h1 style={{ fontSize: '16px', fontWeight: 'bold', color: '#f1f5f9',
+            <h1 style={{ fontSize: '16px', fontWeight: 'bold', color: '#f0f2f5',
               lineHeight: '1.2', letterSpacing: '-0.02em', margin: 0 }}>供应链控制塔</h1>
-            <p style={{ fontSize: '10px', color: '#64748b', margin: '2px 0 0' }}>
+            <p style={{ fontSize: '10px', color: '#8c8c8c', margin: '2px 0 0' }}>
               Supply Chain Control Tower · 半导体制造</p>
           </div>
         </div>
@@ -273,8 +310,8 @@ export default function AlertDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px',
             padding: '8px 16px', borderRadius: '6px',
             fontSize: '13px', fontWeight: 500,
-            background: 'rgba(59,130,246,0.15)', color: '#60a5fa',
-            border: '1px solid rgba(59,130,246,0.3)' }}>
+            background: 'rgba(24,144,255,0.15)', color: '#40a9ff',
+            border: '1px solid rgba(24,144,255,0.3)' }}>
             <LayoutDashboard size={14} />
             供应链运营监控看板
           </div>
@@ -282,29 +319,29 @@ export default function AlertDashboard() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '0 0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px',
-            fontSize: '12px', color: '#64748b' }}>
+            fontSize: '12px', color: '#8c8c8c' }}>
             <div style={{ width: '6px', height: '6px', borderRadius: '50%',
-              background: '#4ade80', animation: 'pulse 2s ease-out infinite' }} />
+              background: '#52c41a', animation: 'pulse 2s ease-out infinite' }} />
             <span>实时更新 {lastRefresh}</span>
           </div>
           <button style={{ width: '32px', height: '32px', borderRadius: '8px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#94a3b8', cursor: 'pointer',
+            color: '#a6a6a6', cursor: 'pointer',
             background: 'transparent', border: 'none', transition: 'all 0.2s',
             animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }}
             onClick={handleRefresh}
-            onMouseOver={e => e.currentTarget.style.color = '#e2e8f0'}
-            onMouseOut={e => e.currentTarget.style.color = '#94a3b8'}
+            onMouseOver={e => e.currentTarget.style.color = '#d9d9d9'}
+            onMouseOut={e => e.currentTarget.style.color = '#a6a6a6'}
             title="刷新数据"
           >
             <RefreshCw size={14} />
           </button>
           <button style={{ width: '32px', height: '32px', borderRadius: '8px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#94a3b8', cursor: 'pointer',
+            color: '#a6a6a6', cursor: 'pointer',
             background: 'transparent', border: 'none', transition: 'all 0.2s' }}
-            onMouseOver={e => e.currentTarget.style.color = '#e2e8f0'}
-            onMouseOut={e => e.currentTarget.style.color = '#94a3b8'}
+            onMouseOver={e => e.currentTarget.style.color = '#d9d9d9'}
+            onMouseOut={e => e.currentTarget.style.color = '#a6a6a6'}
           >
             <Settings size={14} />
           </button>
@@ -312,11 +349,11 @@ export default function AlertDashboard() {
             padding: '6px 12px', borderRadius: '8px',
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <div style={{ width: '24px', height: '24px', borderRadius: '50%',
-              background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              background: '#1890ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <User size={12} style={{ color: '#fff' }} />
             </div>
-            <span style={{ fontSize: '12px', color: '#cbd5e1' }}>供应链管理员</span>
-            <ChevronDown size={12} style={{ color: '#64748b' }} />
+            <span style={{ fontSize: '12px', color: '#d9d9d9' }}>供应链管理员</span>
+            <ChevronDown size={12} style={{ color: '#8c8c8c' }} />
           </div>
         </div>
       </header>
@@ -329,12 +366,12 @@ export default function AlertDashboard() {
             {/* ── KPI 卡片行：独立于 GridLayout，宽度与 GridLayout 一致 ── */}
             <div style={{ padding: '0px 0 12px 0' }}>
               <KpiWidget>
-                <KpiCard title="采购订单执行率" value={poExecutionRate?.val ?? 0} format="percent" icon={<Truck size={16} />} color="#3b82f6" delay={0} loading={poExecutionRateLoading} />
-                <KpiCard title="库存健康度" value={inventoryHealthRate?.val ?? 0} format="percent" icon={<Package size={16} />} color="#10b981" delay={100} loading={inventoryHealthRateLoading} />
-                <KpiCard title="工单准时交付率" value={woOnTimeDeliveryRate?.val ?? 0} format="percent" icon={<Factory size={16} />} color="#f59e0b" delay={200} loading={woOnTimeDeliveryRateLoading} />
-                <KpiCard title="活跃风险事件" value={activeRiskCount?.val ?? 0} unit="个" format="integer" icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={activeRiskCountLoading} />
-                <KpiCard title="本月订单金额" value={monthlyCustomerOrderAmount?.val ?? 0} unit="元" format="currency" icon={<ShoppingCart size={16} />} color="#8b5cf6" delay={400} loading={monthlyCustomerOrderAmountLoading} />
-                <KpiCard title="高风险供应商" value={highRiskSupplierCount?.val ?? 0} unit="个" format="integer" icon={<TrendingUp size={16} />} color="#f97316" delay={500} loading={highRiskSupplierCountLoading} />
+                <KpiCard key={`po-${refreshTrigger}`} title="采购订单执行率" value={poExecutionRate?.val ?? 0} format="percent" icon={<Truck size={16} />} color="#3b82f6" delay={0} loading={poExecutionRateLoading} />
+                <KpiCard key={`inv-${refreshTrigger}`} title="库存健康度" value={inventoryHealthRate?.val ?? 0} format="percent" icon={<Package size={16} />} color="#10b981" delay={100} loading={inventoryHealthRateLoading} />
+                <KpiCard key={`wo-${refreshTrigger}`} title="工单准时交付率" value={woOnTimeDeliveryRate?.val ?? 0} format="percent" icon={<Factory size={16} />} color="#f59e0b" delay={200} loading={woOnTimeDeliveryRateLoading} />
+                <KpiCard key={`risk-${refreshTrigger}`} title="活跃风险事件" value={activeRiskCount?.val ?? 0} unit="个" format="integer" icon={<AlertTriangle size={16} />} color="#ef4444" delay={300} loading={activeRiskCountLoading} />
+                <KpiCard key={`amount-${refreshTrigger}`} title="本月订单金额" value={monthlyCustomerOrderAmount?.val ?? 0} unit="元" format="currency" icon={<ShoppingCart size={16} />} color="#8b5cf6" delay={400} loading={monthlyCustomerOrderAmountLoading} />
+                <KpiCard key={`supplier-${refreshTrigger}`} title="高风险供应商" value={highRiskSupplierCount?.val ?? 0} unit="个" format="integer" icon={<TrendingUp size={16} />} color="#f97316" delay={500} loading={highRiskSupplierCountLoading} />
               </KpiWidget>
             </div>
 
@@ -353,56 +390,49 @@ export default function AlertDashboard() {
               {/* ── 外部供应链风险列表 ── */}
               <div key="riskList">
                 <Widget title="外部供应链风险" subtitle="实时风险监控">
-                  <RiskList />
+                  <RiskList refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
 
               {/* ── 采购执行监控 ── */}
               <div key="purchaseMonitoring">
                 <Widget title="采购执行监控" subtitle="延迟订单与供应商表现">
-                  <PurchaseMonitoring />
+                  <PurchaseMonitoring refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
 
               {/* ── 风险统计分析 ── */}
               <div key="riskCharts">
                 <Widget title="风险统计分析" subtitle="等级分布与类别统计">
-                  <RiskCharts />
+                  <RiskCharts refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
 
               {/* ── 库存健康监控 ── */}
               <div key="inventoryHealth">
                 <Widget title="库存健康监控" subtitle="低库存预警">
-                  <InventoryHealth />
+                  <InventoryHealth refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
 
               {/* ── 生产交付跟踪 ── */}
               <div key="productionTracking">
                 <Widget title="生产交付跟踪" subtitle="延期工单监控">
-                  <ProductionTracking />
-                </Widget>
-              </div>
-
-              {/* ── 受影响供应商TOP5 ── */}
-              <div key="topRiskSuppliers">
-                <Widget title="受影响供应商TOP5" subtitle="风险关联分析">
-                  <RiskCharts />
+                  <ProductionTracking refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
 
               {/* ── 客户订单交付趋势 ── */}
               <div key="customerOrderTrend">
                 <Widget title="客户订单交付趋势" subtitle="近30天状态分布">
-                  <CustomerOrderTrend />
+                  <CustomerOrderTrend refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
 
               {/* ── 销售订单概览 ── */}
               <div key="salesOverview">
                 <Widget title="销售订单概览" subtitle="即将到期订单">
-                  <SalesOverview />
+                  <SalesOverview refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
             </GridLayout>

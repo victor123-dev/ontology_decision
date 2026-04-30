@@ -1,8 +1,15 @@
+import { useEffect } from 'react';
 import { useLowInventoryAlerts } from '../hooks/useOperationData';
 import { calculateInventoryHealth, getInventoryHealthColor } from '../lib/operationUtils';
 
-export default function InventoryHealth() {
-  const { data: alerts, loading, error } = useLowInventoryAlerts();
+export default function InventoryHealth({ refreshTrigger }) {
+  const { data: alerts, loading, error, refetch } = useLowInventoryAlerts();
+  
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+    }
+  }, [refreshTrigger, refetch]);
 
   if (loading) {
     return (

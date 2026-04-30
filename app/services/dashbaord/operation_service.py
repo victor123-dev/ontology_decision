@@ -53,10 +53,16 @@ class OperationService:
                 if expected_date_str:
                     try:
                         expected_date = datetime.fromisoformat(expected_date_str.replace('Z', '+00:00').replace('+00:00', ''))
-                        if expected_date < now:
+                        # 将期望日期设置为当天23:59:59,避免时间部分影响计算
+                        expected_date_end = expected_date.replace(hour=23, minute=59, second=59)
+                        if expected_date_end < now:
                             # 获取供应商信息
                             supplier = po.GetSupplier()
                             supplier_name = getattr(supplier, 'supplier_name', '') if supplier else ''
+                            
+                            # 计算延迟天数:使用日期部分计算,忽略时间
+                            from datetime import date
+                            delay_days = (now.date() - expected_date.date()).days
                             
                             delayed_orders.append({
                                 'po_id': getattr(po, 'po_id', ''),
@@ -67,7 +73,7 @@ class OperationService:
                                 'actual_delivery_date': getattr(po, 'actual_delivery_date', ''),
                                 'status': status,
                                 'total_amount': getattr(po, 'total_amount', 0),
-                                'delay_days': (now - expected_date).days
+                                'delay_days': delay_days
                             })
                     except:
                         continue
@@ -267,7 +273,9 @@ class OperationService:
                 if planned_end_str:
                     try:
                         planned_end = datetime.fromisoformat(planned_end_str.replace('Z', '+00:00').replace('+00:00', ''))
-                        if planned_end < now:
+                        # 将计划完成日期设置为当天23:59:59,避免时间部分影响计算
+                        planned_end_of_day = planned_end.replace(hour=23, minute=59, second=59)
+                        if planned_end_of_day < now:
                             # 获取产品信息
                             product_id = getattr(wo, 'product_id', '')
                             product_name = ''
@@ -275,6 +283,9 @@ class OperationService:
                                 products = self.client.models.Product.find(product_id=product_id)
                                 if products:
                                     product_name = getattr(products[0], 'product_name', '')
+                            
+                            # 计算延迟天数:使用日期部分计算,忽略时间
+                            delay_days = (now.date() - planned_end.date()).days
                             
                             delayed_wos.append({
                                 'work_order_id': getattr(wo, 'work_order_id', ''),
@@ -286,7 +297,7 @@ class OperationService:
                                 'planned_completion_date': planned_end_str,
                                 'actual_start_date': getattr(wo, 'actual_start_date', ''),
                                 'status': status,
-                                'delay_days': (now - planned_end).days
+                                'delay_days': delay_days
                             })
                     except:
                         continue

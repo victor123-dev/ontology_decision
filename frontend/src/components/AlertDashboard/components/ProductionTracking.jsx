@@ -1,8 +1,15 @@
+import { useEffect } from 'react';
 import { useDelayedWorkOrders } from '../hooks/useOperationData';
 import { formatDate } from '../lib/operationUtils';
 
-export default function ProductionTracking() {
-  const { data: delayedOrders, loading, error } = useDelayedWorkOrders();
+export default function ProductionTracking({ refreshTrigger }) {
+  const { data: delayedOrders, loading, error, refetch } = useDelayedWorkOrders();
+  
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+    }
+  }, [refreshTrigger, refetch]);
 
   if (loading) {
     return (

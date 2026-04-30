@@ -747,7 +747,7 @@ ALL_FIELDS = {
         {"field_id": "risk_category", "data_type": "VARCHAR(50)", "name": "风险类别", "description": "风险类别（枚举：自然灾害/政治事件/财务风险/质量风险/法律风险/运营风险）", "required": True},
         {"field_id": "risk_level", "data_type": "VARCHAR(20)", "name": "风险等级", "description": "风险等级（枚举：严重/高/中/低）", "required": True},
         {"field_id": "title", "data_type": "VARCHAR(200)", "name": "风险标题", "required": True,  "description": "风险事件标题"},
-        {"field_id": "description", "data_type": "TEXT", "name": "风险描述", "required": True},
+        {"field_id": "description", "data_type": "TEXT", "name": "风险描述", "required": True,  "description": "风险事件描述"},
         {"field_id": "source_url", "data_type": "VARCHAR(500)", "name": "信息来源URL", "required": False,  "description": "信息来源URL（舆情原文链接）"},
         {"field_id": "source_name", "data_type": "VARCHAR(100)", "name": "信息来源名称", "required": False,  "description": "信息来源名称（如：Reuters/Bloomberg/新华社）"},
         {"field_id": "impact_scope", "data_type": "VARCHAR(50)", "name": "影响范围", "description": "影响范围（枚举：全球/区域/局部）", "required": False},
