@@ -3,7 +3,7 @@ import GraphCanvas from './components/GraphCanvas';
 import Toolbar from './components/Toolbar';
 import PropertyPanel from './components/PropertyPanel';
 import { ontologyViewApi, businessModelApi, businessModelLinkApi, actionApi } from '../../../services/api';
-import { message, Modal, Form, Input, Select } from 'antd';
+import { message, Modal, Form, Input, Select, Switch } from 'antd';
 import { modelEventBus } from '../../../utils/modelEventBus';
 
 const OntologyView = () => {
@@ -534,8 +534,12 @@ const OntologyView = () => {
   const handleEditField = useCallback((modelId, field) => {
     setEditingModelId(modelId);
     setEditingField(field);
+    // enum_values 已经是数组类型，直接设置
+    setTimeout(() => {
+      fieldForm.setFieldsValue(field || {});
+    }, 0);
     setFieldModalVisible(true);
-  }, []);
+  }, [fieldForm]);
 
   const handleDeleteField = useCallback(async (modelId, fieldId) => {
     try {
@@ -551,6 +555,20 @@ const OntologyView = () => {
 
   const handleSaveField = useCallback(async (values) => {
     try {
+      // 处理枚举值：确保逻辑一致性
+      if (values.is_enum) {
+        // 开启枚举时，枚举值必填
+        if (!values.enum_values || values.enum_values.length === 0) {
+          message.error('开启枚举时，必须至少输入一个枚举值');
+          return;
+        }
+        values.enum_values = Array.isArray(values.enum_values) ? values.enum_values : [];
+      } else {
+        // 关闭枚举时，清空枚举值
+        values.is_enum = false;
+        values.enum_values = [];
+      }
+      
       if (editingModelId && editingField) {
         // 更新现有字段
         await businessModelApi.updateField(editingModelId, editingField.field_id, values);
@@ -731,6 +749,35 @@ const OntologyView = () => {
               <Select.Option value="datetime">日期时间</Select.Option>
               <Select.Option value="text">文本</Select.Option>
             </Select>
+          </Form.Item>
+          
+          <Form.Item 
+            name="is_enum" 
+            label="是否为枚举" 
+            valuePropName="checked"
+            initialValue={false}
+          >
+            <Switch checkedChildren="枚举" unCheckedChildren="普通" />
+          </Form.Item>
+          
+          <Form.Item 
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.is_enum !== currentValues.is_enum}
+          >
+            {({ getFieldValue }) => (
+              <Form.Item 
+                name="enum_values" 
+                label="枚举值"
+                tooltip="输入枚举值后按回车添加"
+                hidden={!getFieldValue('is_enum')}
+              >
+                <Select 
+                  mode="tags" 
+                  placeholder="输入枚举值后按回车"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            )}
           </Form.Item>
         </Form>
       </Modal>

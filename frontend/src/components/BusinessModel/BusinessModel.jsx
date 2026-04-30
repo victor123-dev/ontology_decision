@@ -247,6 +247,7 @@ function BusinessModel() {
     setEditingModel(model);
     setEditingField(field);
     if (field) {
+      // enum_values 已经是数组类型（后端 JSON 字段自动反序列化）
       fieldForm.setFieldsValue(field);
     }
     setFieldModalVisible(true);
@@ -267,6 +268,20 @@ function BusinessModel() {
 
   const handleSubmitField = async (values) => {
     try {
+      // 处理枚举值：确保逻辑一致性
+      if (values.is_enum) {
+        // 开启枚举时，枚举值必填
+        if (!values.enum_values || values.enum_values.length === 0) {
+          message.error('开启枚举时，必须至少输入一个枚举值');
+          return;
+        }
+        values.enum_values = Array.isArray(values.enum_values) ? values.enum_values : [];
+      } else {
+        // 关闭枚举时，清空枚举值
+        values.is_enum = false;
+        values.enum_values = [];
+      }
+      
       if (editingModel && editingField) {
         // 更新现有字段
         await businessModelApi.updateField(editingModel.id, editingField.field_id, values)
@@ -524,6 +539,18 @@ function BusinessModel() {
                       主键
                     </span>
                   )}
+                  {field.is_enum && (
+                    <span style={{ 
+                      marginLeft: '8px', 
+                      backgroundColor: '#d6e4ff', 
+                      color: '#1d39c4', 
+                      padding: '2px 6px', 
+                      borderRadius: '4px', 
+                      fontSize: '12px'
+                    }}>
+                      枚举
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
                   <strong>字段ID:</strong> {field.field_id}
@@ -531,6 +558,11 @@ function BusinessModel() {
                 <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
                   <strong>数据类型:</strong> {field.data_type}
                 </div>
+                {field.is_enum && field.enum_values && (
+                  <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
+                    <strong>枚举值:</strong> {field.enum_values.join(', ')}
+                  </div>
+                )}
                 {field.description && (
                   <div style={{ fontSize: '12px', color: '#595959', whiteSpace: 'pre-wrap', lineHeight: 1.4, marginBottom: '8px' }}>
                     {field.description}
@@ -984,6 +1016,33 @@ function BusinessModel() {
             initialValue={false}
           >
             <Switch checkedChildren="必填" unCheckedChildren="可选" />
+          </Form.Item>
+          <Form.Item 
+            name="is_enum" 
+            label="是否为枚举" 
+            valuePropName="checked"
+            initialValue={false}
+          >
+            <Switch checkedChildren="枚举" unCheckedChildren="普通" />
+          </Form.Item>
+          <Form.Item 
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.is_enum !== currentValues.is_enum}
+          >
+            {({ getFieldValue }) => (
+              <Form.Item 
+                name="enum_values" 
+                label="枚举值"
+                tooltip="输入枚举值后按回车添加"
+                hidden={!getFieldValue('is_enum')}
+              >
+                <Select 
+                  mode="tags" 
+                  placeholder="输入枚举值后按回车"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            )}
           </Form.Item>
           <Form.Item name="description" label="中文说明">
             <Input.TextArea />

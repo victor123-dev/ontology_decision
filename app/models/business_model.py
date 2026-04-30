@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.utils.db_client import Base
@@ -27,6 +27,8 @@ class BusinessModelField(Base):
     name = Column(String(255), nullable=False)  # 中文名称
     description = Column(Text)  # 中文说明
     required = Column(Boolean, default=False)  # 是否必填，默认False
+    is_enum = Column(Boolean, default=False)  # 是否为枚举字段
+    enum_values = Column(JSON)  # 枚举值列表（JSON格式），如 '["高", "中", "低"]'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

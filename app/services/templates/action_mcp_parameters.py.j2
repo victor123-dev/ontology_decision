@@ -1,9 +1,12 @@
 {% macro python_type_for_param(param) -%}
-{%- if param.type == "string" or param.type == "text" -%}
+{%- if param.is_enum and param.enum_values -%}
+    {# 枚举类型处理：使用 Literal 类型 #}
+    Literal{{ param.enum_values | tojson }}
+{%- elif param.type == "string" or param.type == "text" -%}
 str
 {%- elif param.type == "integer" -%}
 int
-{%- elif param.type == "float" or param.type == "decimal" -%}
+{%- elif param.type == "float" -%}
 float
 {%- elif param.type == "boolean" -%}
 bool
