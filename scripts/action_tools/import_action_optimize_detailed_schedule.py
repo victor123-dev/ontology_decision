@@ -14,7 +14,7 @@ ACTION_DATA = {
     "id": "optimize_detailed_schedule",
     "api_name": "OptimizeDetailedSchedule",
     "name": "详细排程优化",
-    "description": "使用CP-SAT约束规划进行详细排程，支持换线时间、工作日历、机台能力等复杂约束",
+    "description": "使用 CP-SAT 进行精确排程，支持换线时间等复杂约束。适用于小规模工单（≤20个），需要精确到工序级排程时使用。计算时间较长（1-5分钟）。大规模场景请用 optimize_detailed_schedule_fast。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -23,19 +23,19 @@ ACTION_DATA = {
             "name": "work_order_ids",
             "type": "array",
             "required": True,
-            "description": "要排程的工单ID列表"
+            "description": "需要精确排程的工单ID列表（建议≤20个）"
         },
         {
             "name": "planning_horizon_days",
             "type": "integer",
             "required": False,
-            "description": "排程规划时间范围，默认7天"
+            "description": "排程规划天数。时间越长计算越慢，默认7天"
         },
         {
             "name": "consider_setup",
             "type": "boolean",
             "required": False,
-            "description": "是否在排程中考虑换线时间，默认true"
+            "description": "是否考虑换线时间。默认true。设为false可加快计算"
         }
     ],
     "submission_criteria": [],
@@ -298,11 +298,22 @@ def execute_optimize_detailed_schedule(parameters):
             # 按开始时间排序
             schedule.sort(key=lambda x: x['start_time'])
             
+            # 防上下文膨胀：只返回前50条任务详情
+            max_schedule = 50
+            schedule_returned = schedule[:max_schedule]
+            truncated_count = max(0, len(schedule) - max_schedule)
+            
             result = {
                 "makespan_hours": round(makespan_hours, 2),
                 "makespan_days": round(makespan_hours / 24, 2),
                 "total_tasks": len(schedule),
-                "schedule": schedule
+                "schedule": schedule_returned,
+                "truncated_count": truncated_count,
+                "schedule_summary": {
+                    "total_tasks": len(schedule),
+                    "returned_tasks": len(schedule_returned),
+                    "note": "仅返回前50条任务详情，完整数据可通过数据库查询" if truncated_count > 0 else None
+                }
             }
             
             return {

@@ -12,10 +12,10 @@ import requests
 API_URL = "http://localhost:8080/api/v1"
 
 ACTION_DATA = {
-    "id": "optimize_detailed_schedule_heuristic",
-    "api_name": "OptimizeDetailedScheduleHeuristic",
-    "name": "详细排程优化（启发式）",
-    "description": "使用贪婪算法进行快速排程，支持机台能力过滤，秒级出结果",
+    "id": "optimize_detailed_schedule_fast",
+    "api_name": "OptimizeDetailedScheduleFast",
+    "name": "详细排程优化（快速）",
+    "description": "快速详细排程（贪婪算法），秒级出结果。适用于大规模工单，不保证最优但速度快。小规模追求最优解请用 optimize_detailed_schedule。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -24,25 +24,19 @@ ACTION_DATA = {
             "name": "work_order_ids",
             "type": "array",
             "required": True,
-            "description": "要排程的工单ID列表"
+            "description": "需要排程的工单ID列表"
         },
         {
             "name": "planning_horizon_days",
             "type": "integer",
             "required": False,
-            "description": "排程规划时间范围，默认30天"
+            "description": "排程规划天数，默认30天"
         },
         {
             "name": "consider_setup",
             "type": "boolean",
             "required": False,
-            "description": "是否考虑换线时间，默认false"
-        },
-        {
-            "name": "optimization_iterations",
-            "type": "integer",
-            "required": False,
-            "description": "局部优化迭代次数，默认100（当前未使用）"
+            "description": "是否考虑换线时间。默认false。设为true会更真实但略慢"
         }
     ],
     "submission_criteria": [],
@@ -186,15 +180,22 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         makespan = max(t.get("end_time", 0) for t in schedule) if schedule else 0
         makespan_hours = makespan / 60
         
+        # 防上下文膨胀：只返回前50条任务详情
+        max_schedule = 50
+        schedule_returned = schedule_result[:max_schedule]
+        truncated_count = max(0, len(schedule_result) - max_schedule)
+        
         return {
             "success": True,
-            "message": f"启发式排程完成，总工期: {makespan_hours:.1f}小时",
+            "message": f"快速排程完成，总工期: {makespan_hours:.1f}小时，共{len(schedule_result)}个任务",
             "result": {
                 "makespan_hours": round(makespan_hours, 2),
                 "makespan_days": round(makespan_hours / 24, 2),
                 "total_tasks": len(schedule_result),
+                "schedule": schedule_returned,
+                "truncated_count": truncated_count,
                 "algorithm": "Greedy Scheduling",
-                "schedule": schedule_result
+                "note": "仅返回前50条任务详情" if truncated_count > 0 else None
             }
         }
         

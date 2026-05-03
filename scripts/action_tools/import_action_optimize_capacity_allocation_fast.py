@@ -12,10 +12,10 @@ import requests
 API_URL = "http://localhost:8080/api/v1"
 
 ACTION_DATA = {
-    "id": "optimize_capacity_allocation_heuristic",
-    "api_name": "OptimizeCapacityAllocationHeuristic",
-    "name": "产能优化分配（启发式）",
-    "description": "使用启发式规则进行产能分配，最大化按时交付率（优先级加权），秒级出结果",
+    "id": "optimize_capacity_allocation_fast",
+    "api_name": "OptimizeCapacityAllocationFast",
+    "name": "产能优化分配（快速）",
+    "description": "快速产能分配（启发式），秒级出结果。适用于大规模工单（50+个）或需要快速估算的场景。结果近似最优（通常90%+质量）。小规模追求最优解请用 optimize_capacity_allocation。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -24,19 +24,19 @@ ACTION_DATA = {
             "name": "work_order_ids",
             "type": "array",
             "required": True,
-            "description": "要优化的工单ID列表"
+            "description": "需要分配产能的工单ID列表"
         },
         {
             "name": "planning_horizon_days",
             "type": "integer",
             "required": False,
-            "description": "排程规划时间范围，默认30天"
+            "description": "排程规划天数，默认30天"
         },
         {
             "name": "scheduling_rule",
             "type": "string",
             "required": False,
-            "description": "调度规则：EDD(最早交期), SPT(最短加工), CR(关键比率), 默认EDD"
+            "description": "调度规则。EDD=最早交期优先（默认，适合交期紧张），SPT=最短加工优先（适合多做订单），CR=关键比率优先（综合考量）"
         }
     ],
     "submission_criteria": [],

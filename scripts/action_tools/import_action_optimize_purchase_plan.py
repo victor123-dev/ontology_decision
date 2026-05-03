@@ -14,7 +14,7 @@ ACTION_DATA = {
     "id": "optimize_purchase_plan",
     "api_name": "OptimizePurchasePlan",
     "name": "采购计划优化",
-    "description": "基于供应商报价、交期、质量评分，优化采购计划，选择最优供应商组合，最小化采购成本",
+    "description": "优化采购计划，选择最优供应商组合以最小化成本。当需要制定采购决策、回答'应该向哪些供应商采购多少物料'或优化采购成本时使用。返回采购清单、总成本、供应商选择建议及成本分析。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "purchase_order",
@@ -23,19 +23,25 @@ ACTION_DATA = {
             "name": "material_ids",
             "type": "array",
             "required": True,
-            "description": "要采购的物料ID列表"
+            "description": "需要采购的物料ID列表。示例：['MAT-DIE-BGA', 'MAT-EMC-QFN']"
         },
         {
             "name": "forecast_days",
             "type": "integer",
             "required": False,
-            "description": "采购规划天数，默认30天"
+            "description": "采购规划天数。短期采购用7天，常规用30天。默认30天"
+        },
+        {
+            "name": "budget_limit",
+            "type": "float",
+            "required": False,
+            "description": "预算上限（元）。如果不设置则不限制预算"
         },
         {
             "name": "max_suppliers_per_material",
             "type": "integer",
             "required": False,
-            "description": "每个物料最多选择的供应商数量，默认3"
+            "description": "每个物料最多选择几个供应商。用于分散供应风险，默认3。设1表示单一供应商"
         }
     ],
     "submission_criteria": [],
@@ -319,10 +325,31 @@ def execute_optimize_purchase_plan(parameters):
         # 按成本排序
         purchase_plan.sort(key=lambda x: x["cost"], reverse=True)
         
+        # 按供应商聚合分析
+        supplier_cost_map = {}
+        for item in purchase_plan:
+            sid = item["supplier_id"]
+            if sid not in supplier_cost_map:
+                supplier_cost_map[sid] = {"supplier_name": item["supplier_name"], "total_cost": 0, "item_count": 0}
+            supplier_cost_map[sid]["total_cost"] += item["cost"]
+            supplier_cost_map[sid]["item_count"] += 1
+        
+        # 生成供应商建议
+        supplier_recommendations = []
+        for sid, info in sorted(supplier_cost_map.items(), key=lambda x: x[1]["total_cost"], reverse=True):
+            supplier_recommendations.append({
+                "supplier_id": sid,
+                "supplier_name": info["supplier_name"],
+                "total_cost": round(info["total_cost"], 2),
+                "item_count": info["item_count"],
+                "recommendation": "主要供应商" if info["total_cost"] > total_cost * 0.3 else "次要供应商"
+            })
+        
         result = {
             "total_cost": round(total_cost, 2),
             "total_purchase_items": len(purchase_plan),
             "purchase_plan": purchase_plan,
+            "supplier_summary": supplier_recommendations,
             "forecast_days": forecast_days,
             "material_demands": {
                 mid: {
@@ -331,6 +358,11 @@ def execute_optimize_purchase_plan(parameters):
                     "current_inv": demand_map[mid]["current_inv"]
                 }
                 for mid in demand_map
+            },
+            "cost_breakdown": {
+                "total_cost": round(total_cost, 2),
+                "avg_cost_per_item": round(total_cost / len(purchase_plan), 2) if purchase_plan else 0,
+                "supplier_count": len(supplier_cost_map)
             }
         }
         

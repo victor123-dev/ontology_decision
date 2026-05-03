@@ -58,7 +58,7 @@ def test_action(action_id, action_name, parameters, timeout=120):
             return success, data, duration
         else:
             print(f"  HTTP 错误: {r.status_code}")
-            print(f"  响应: {r.text[:500]}")
+            print(f"  响应: {r.text[:2000]}")
             return False, None, duration
     except requests.exceptions.Timeout:
         duration = time.time() - start
@@ -99,7 +99,7 @@ def main():
     # ==========================================
     if all_wo_ids:
         success, data, duration = test_action(
-            "optimize_detailed_schedule_heuristic",
+            "optimize_detailed_schedule_fast",
             "启发式详细排程 (Greedy)",
             {
                 "work_order_ids": all_wo_ids,
@@ -115,7 +115,7 @@ def main():
     # ==========================================
     if all_wo_ids:
         success, data, duration = test_action(
-            "optimize_capacity_allocation_heuristic",
+            "optimize_capacity_allocation_fast",
             "启发式产能优化 (EDD/SPT/CR)",
             {
                 "work_order_ids": all_wo_ids,

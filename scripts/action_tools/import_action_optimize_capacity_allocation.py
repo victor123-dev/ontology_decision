@@ -14,7 +14,7 @@ ACTION_DATA = {
     "id": "optimize_capacity_allocation",
     "api_name": "OptimizeCapacityAllocation",
     "name": "产能优化分配",
-    "description": "使用混合整数规划(MIP)进行产能分配，最大化按时交付率（优先级加权）",
+    "description": "使用 MIP 优化产能分配，最大化按时交付率。适用于中小规模工单（≤50个），需要最优解时使用。返回工单分配方案、按时交付率及瓶颈分析。大规模场景请用 optimize_capacity_allocation_fast。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -23,13 +23,13 @@ ACTION_DATA = {
             "name": "work_order_ids",
             "type": "array",
             "required": True,
-            "description": "要优化的工单ID列表"
+            "description": "需要分配产能的工单ID列表"
         },
         {
             "name": "planning_horizon_days",
             "type": "integer",
             "required": False,
-            "description": "排程规划时间范围，默认30天"
+            "description": "排程规划天数。时间越长计算越慢，默认30天"
         }
     ],
     "submission_criteria": [],

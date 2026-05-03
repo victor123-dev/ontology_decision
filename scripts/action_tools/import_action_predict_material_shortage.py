@@ -17,7 +17,7 @@ ACTION_DATA = {
     "id": "predict_material_shortage",
     "api_name": "PredictMaterialShortage",
     "name": "缺料预测",
-    "description": "预测未来指定天数内哪些物料会出现短缺，输出缺料清单、缺口数量、影响工单等信息",
+    "description": "预测未来指定天数内哪些物料会出现短缺。当需要检查物料供应风险、回答'未来X天哪些物料会缺货'或评估采购紧迫性时使用。输出按严重程度分级的缺料清单、影响工单及行动建议。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "material",
@@ -26,19 +26,19 @@ ACTION_DATA = {
             "name": "forecast_days",
             "type": "integer",
             "required": False,
-            "description": "预测未来多少天的缺料情况，默认30天"
+            "description": "预测天数范围。短期用7天，中期用30天。默认30天"
         },
         {
             "name": "material_ids",
             "type": "array",
             "required": False,
-            "description": "要预测的物料ID列表，为空则预测所有物料"
+            "description": "指定要检查的物料ID列表。为空则检查所有物料。示例：['MAT-DIE-BGA', 'MAT-EMC-QFN']"
         },
         {
             "name": "safety_stock_threshold",
             "type": "float",
             "required": False,
-            "description": "安全库存阈值，为空则使用物料自身的安全库存"
+            "description": "统一安全库存阈值（覆盖物料自身设置）。为空则使用各物料定义的安全库存"
         }
     ],
     "submission_criteria": [],
@@ -284,6 +284,8 @@ def execute_predict_material_shortage(parameters):
                 })
         
         shortages = []
+        critical_count = 0
+        warning_count = 0
         
         for m in materials_list:
             for t in days:
@@ -293,6 +295,21 @@ def execute_predict_material_shortage(parameters):
                 # 过滤微小缺料（数值误差）
                 if gap > 0.1:
                     safety_stock = safety_stock_threshold if safety_stock_threshold else (m.safety_stock_level or 0)
+                    
+                    # 严重程度分级
+                    if safety_stock > 0:
+                        severity_ratio = gap / safety_stock
+                        if severity_ratio > 2:
+                            severity = "critical"
+                            critical_count += 1
+                        elif severity_ratio > 1:
+                            severity = "warning"
+                            warning_count += 1
+                        else:
+                            severity = "info"
+                    else:
+                        severity = "warning"
+                        warning_count += 1
                     
                     # 从预构建的映射中获取影响工单（O(1)查找）
                     affected_wos = wo_date_map.get(t, [])[:5]
@@ -304,19 +321,51 @@ def execute_predict_material_shortage(parameters):
                         "shortage_qty": round(gap, 2),
                         "inventory_level": round(inv_level, 2),
                         "safety_stock": safety_stock,
+                        "severity": severity,
                         "affected_work_orders": affected_wos
                     })
+        
+        # 生成行动建议
+        recommendations = []
+        if critical_count > 0:
+            critical_items = [s["material_id"] for s in shortages if s["severity"] == "critical"][:5]
+            recommendations.append({
+                "priority": "urgent",
+                "action": "立即启动紧急采购流程",
+                "reason": f"发现 {critical_count} 个严重缺料点（缺口超过安全库存2倍）",
+                "materials": critical_items
+            })
+        if warning_count > 0:
+            recommendations.append({
+                "priority": "normal",
+                "action": "安排常规采购补货",
+                "reason": f"发现 {warning_count} 个预警缺料点（缺口超过安全库存）",
+                "materials": [s["material_id"] for s in shortages if s["severity"] == "warning"][:10]
+            })
+        
+        # 按严重程度排序
+        severity_order = {"critical": 0, "warning": 1, "info": 2}
+        shortages.sort(key=lambda x: (severity_order.get(x["severity"], 3), x["date_offset_days"]))
+        
+        # 防上下文膨胀：只返回前20条详情，其余汇总
+        max_details = 20
+        shortage_details_returned = shortages[:max_details]
+        truncated_count = max(0, len(shortages) - max_details)
         
         result = {
             "forecast_days": forecast_days,
             "total_shortages": len(shortages),
-            "shortage_details": shortages,
+            "critical_count": critical_count,
+            "warning_count": warning_count,
+            "shortage_details": shortage_details_returned,
+            "truncated_count": truncated_count,
+            "recommendations": recommendations,
             "generated_at": datetime.now().isoformat()
         }
         
         return {
             "success": True,
-            "message": f"缺料预测完成，发现 {len(shortages)} 个缺料点",
+            "message": f"缺料预测完成，发现 {len(shortages)} 个缺料点（严重{critical_count}个，预警{warning_count}个）",
             "result": result
         }
         

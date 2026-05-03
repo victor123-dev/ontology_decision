@@ -14,7 +14,7 @@ ACTION_DATA = {
     "id": "calculate_ctp",
     "api_name": "CalculateCTP",
     "name": "机台可用能力承诺(CTP)计算",
-    "description": "基于机台能力、工序排程，计算订单的最早可承诺交付日期（CTP）",
+    "description": "计算指定产品和数量的最早可承诺交付日期。当客户询问'什么时候能交货'、需要承诺交期或评估订单可行性时使用。返回预计交付日期、瓶颈工序、可用机台及产能分析。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "customer_order",
@@ -23,13 +23,13 @@ ACTION_DATA = {
             "name": "product_id",
             "type": "string",
             "required": True,
-            "description": "要查询的产品ID"
+            "description": "产品ID。示例：'BGA-CPU'"
         },
         {
             "name": "quantity",
             "type": "float",
             "required": True,
-            "description": "订单数量"
+            "description": "订单数量。支持浮点数，系统自动向上取整为整数"
         }
     ],
     "submission_criteria": [],
@@ -216,12 +216,52 @@ def execute_calculate_ctp(parameters):
         
         # 计算各机台加工时间
         machine_times = {}
+        max_machine_time = 0
+        bottleneck_machine_id = None
         for machine_id, var in machine_process_times.items():
             time_minutes = var.solution_value()
             machine_times[machine_id] = {
                 "time_minutes": round(time_minutes, 2),
                 "time_hours": round(time_minutes / 60, 2)
             }
+            if time_minutes > max_machine_time:
+                max_machine_time = time_minutes
+                bottleneck_machine_id = machine_id
+        
+        # 找出瓶颈工序（加工时间最长的工序类型）
+        bottleneck_step = None
+        max_step_time = 0
+        for step in step_times:
+            step_time_minutes = step['standard_time_hours'] * 60
+            if step_time_minutes > max_step_time:
+                max_step_time = step_time_minutes
+                bottleneck_step = step
+        
+        # 计算置信度
+        if status == pywraplp.Solver.OPTIMAL:
+            confidence = "high"
+        elif status == pywraplp.Solver.FEASIBLE:
+            confidence = "medium"
+        else:
+            confidence = "low"
+        
+        # 生成建议
+        recommendations = []
+        if delivery_days > 7:
+            recommendations.append({
+                "type": "warning",
+                "message": f"交付周期较长（{delivery_days:.1f}天），建议考虑加急或分批交付"
+            })
+        if bottleneck_machine_id:
+            recommendations.append({
+                "type": "info",
+                "message": f"瓶颈机台：{bottleneck_machine_id}（加工时间最长 {max_machine_time:.0f} 分钟）"
+            })
+        if bottleneck_step:
+            recommendations.append({
+                "type": "info",
+                "message": f"瓶颈工序：{bottleneck_step.get('step_id', '')}（标准时间 {max_step_time:.1f} 分钟）"
+            })
         
         result = {
             "product_id": product_id,
@@ -233,16 +273,22 @@ def execute_calculate_ctp(parameters):
                 "days": round(delivery_days, 2),
                 "date": ctp_date.isoformat()
             },
-            "capable_machines": [
-                {
-                    "machine_id": m.machine_id,
-                    "work_center_id": m.work_center_id,
-                    "processing_time": machine_times.get(m.machine_id, {}),
-                    "efficiency": capability_dict[m.machine_id].efficiency_factor if capability_dict.get(m.machine_id) else 1.0
-                }
-                for m in machines_with_capability
-            ],
-            "route_steps": step_times,
+            "confidence": confidence,
+            "summary": {
+                "capable_machine_count": len(machines_with_capability),
+                "total_standard_time_hours": round(total_standard_time * quantity, 2)
+            },
+            "recommendations": recommendations,
+            "bottleneck_analysis": {
+                "bottleneck_machine_id": bottleneck_machine_id,
+                "bottleneck_machine_time_minutes": round(max_machine_time, 2) if max_machine_time > 0 else None,
+                "bottleneck_step_id": bottleneck_step['step_id'] if bottleneck_step else None,
+                "bottleneck_step_time_minutes": round(max_step_time, 2) if max_step_time > 0 else None
+            },
+            "summary": {
+                "capable_machine_count": len(machines_with_capability),
+                "total_standard_time_hours": round(total_standard_time * quantity, 2)
+            },
             "calculated_at": datetime.now().isoformat()
         }
         
