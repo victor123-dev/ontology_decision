@@ -1540,6 +1540,7 @@ class FactorySimulation:
             mat_info = self.materials.get(material_id, {})
             eoq = mat_info.get("eoq", 0.0)
             min_order = mat_supplier.get("min_order_qty", shortage_qty)
+            max_order = mat_supplier.get("max_order_qty", 0.0)
             
             if eoq > 0:
                 base_qty = max(shortage_qty, eoq)
@@ -1549,6 +1550,10 @@ class FactorySimulation:
                     po_qty = base_qty
             else:
                 po_qty = max(shortage_qty, min_order)
+            
+            # 限制最大订购量
+            if max_order > 0 and po_qty > max_order:
+                po_qty = max_order
             
             # 交期扰动
             lead_time_mean = mat_supplier.get("lead_time_days", 3)
@@ -1593,6 +1598,7 @@ class FactorySimulation:
             mat_info = self.materials.get(material_id, {})
             eoq = mat_info.get("eoq", 0.0)
             min_order = mat_supplier.get("min_order_qty", shortage_qty)
+            max_order = mat_supplier.get("max_order_qty", 0.0)
             
             if eoq > 0:
                 base_qty = max(shortage_qty, eoq)
@@ -1602,6 +1608,10 @@ class FactorySimulation:
                     po_qty = base_qty
             else:
                 po_qty = max(shortage_qty, min_order)
+            
+            # 限制最大订购量
+            if max_order > 0 and po_qty > max_order:
+                po_qty = max_order
             
             # 创建POL
             line_data = {
@@ -1894,10 +1904,15 @@ class FactorySimulation:
                     # P2-13: 使用EOQ计算补货量
                     eoq = mat_info.get("eoq", 0.0)
                     min_order = supplier.get("min_order_qty", safety_stock)
+                    max_order = supplier.get("max_order_qty", 0.0)
                     if eoq > 0:
                         po_qty = max(eoq, min_order)
                     else:
                         po_qty = max(safety_stock * 2, min_order)
+                    
+                    # 限制最大订购量
+                    if max_order > 0 and po_qty > max_order:
+                        po_qty = max_order
 
                     # P0-3: 供应商可靠性扰动
                     lead_mean = supplier.get("lead_time_days", 3)

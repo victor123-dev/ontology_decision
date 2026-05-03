@@ -200,7 +200,7 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         
     except Exception as e:
         import traceback
-        return {"success": False, "error": f"执行失败: {str(e)}\n{traceback.format_exc()}"}
+        return {"success": False, "error": f"执行失败: {str(e)} - {traceback.format_exc()}"}
 
 
 def _greedy_schedule(tasks, machines_dict):

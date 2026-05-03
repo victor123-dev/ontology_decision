@@ -249,12 +249,16 @@ def execute_optimize_capacity_allocation(parameters):
         
         # 约束3: 按时交付判定 T[w] <= due_date[w] + M × (1 - L[w])
         # M是大数，当L[w]=0时约束失效
-        M = planning_horizon_days * 24  # 大数取规划时间范围
+        # 使用足够大的M值：规划时间范围 + 最大可能加工时间
+        max_processing_hours = max([d["total_processing_time"] / 60 for d in wo_data.values()]) if wo_data else 24
+        M = planning_horizon_days * 24 + max_processing_hours * 2
         for wo_id, data in wo_data.items():
             if wo_id not in t_vars:
                 continue
             
             due_hours = data["due_hours"]
+            # 确保due_hours不为负数
+            due_hours = max(0, due_hours)
             solver.Add(
                 t_vars[wo_id] <= due_hours + M * (1 - l_vars[wo_id])
             )
@@ -268,6 +272,7 @@ def execute_optimize_capacity_allocation(parameters):
         
         # 14. 求解
         solver.SetTimeLimit(60000)
+        solver.EnableOutput()
         status = solver.Solve()
         
         if status not in [pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE]:

@@ -257,6 +257,7 @@ def execute_predict_material_shortage(parameters):
         
         # 15. 求解
         solver.SetTimeLimit(5000)
+        solver.EnableOutput()
         status = solver.Solve()
         
         # 16. 解析结果

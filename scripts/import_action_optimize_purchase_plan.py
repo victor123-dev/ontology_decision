@@ -195,8 +195,8 @@ def execute_optimize_purchase_plan(parameters):
             # Y变量: 0-1变量，是否选择该供应商
             y_vars[key] = solver.IntVar(0, 1, f'y_{supplier_id}_{material_id}')
             
-            # X变量: 采购量，上界为供应商最大供应量
-            max_qty = sm.max_supply_quantity or 1000000
+            # X变量: 采购量，上界为供应商最大订购量
+            max_qty = sm.max_order_qty if hasattr(sm, 'max_order_qty') and sm.max_order_qty else 1000000
             x_vars[key] = solver.NumVar(0, max_qty, f'x_{supplier_id}_{material_id}')
         
         # 12. 添加约束
@@ -229,12 +229,12 @@ def execute_optimize_purchase_plan(parameters):
             
             sm = sm_dict[sm_key]
             
-            # 供应商最大供应量约束
-            max_qty = sm.max_supply_quantity or 1000000
+            # 供应商最大订购量约束
+            max_qty = sm.max_order_qty if hasattr(sm, 'max_order_qty') and sm.max_order_qty else 1000000
             solver.Add(x <= max_qty * y)
             
             # 最小订单量约束
-            min_order = sm.min_order_quantity or 0
+            min_order = sm.min_order_qty or 0
             if min_order > 0:
                 solver.Add(x >= min_order * y)
         
@@ -269,6 +269,7 @@ def execute_optimize_purchase_plan(parameters):
         
         # 14. 求解
         solver.SetTimeLimit(30000)
+        solver.EnableOutput()
         status = solver.Solve()
         
         if status not in [pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE]:

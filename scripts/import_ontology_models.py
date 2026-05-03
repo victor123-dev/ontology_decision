@@ -451,6 +451,7 @@ ALL_FIELDS = {
         {"field_id": "unit_price", "data_type": "float", "name": "单价", "required": False,  "description": "订单单价（单位：元）"},
         {"field_id": "lead_time_days", "data_type": "integer", "name": "交期(天)", "required": False,  "description": "交期（单位：天）"},
         {"field_id": "min_order_qty", "data_type": "float", "name": "最小订购量", "required": False,  "description": "最小订购量（MOQ，供应商要求的最小采购数量）"},
+        {"field_id": "max_order_qty", "data_type": "float", "name": "最大订购量", "required": False,  "description": "最大订购量（供应商单次最大供货能力）"},
         {"field_id": "is_preferred", "data_type": "boolean", "name": "是否首选供应商", "required": False,  "description": "是否首选供应商（True=优先采购）"},
         {"field_id": "effective_date", "data_type": "date", "name": "生效日期", "required": False,  "description": "生效日期"},
         {"field_id": "expiry_date", "data_type": "date", "name": "失效日期", "required": False,  "description": "失效日期（过期后不可使用）"},

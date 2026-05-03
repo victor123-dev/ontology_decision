@@ -96,6 +96,7 @@ class SupplierMaterial(Base):
     unit_price = Column(Float, default=1.0)
     lead_time_days = Column(Integer, default=3)
     min_order_qty = Column(Float, default=50.0)
+    max_order_qty = Column(Float, default=10000.0)
     is_preferred = Column(Boolean, default=True)
     effective_date = Column(Date, nullable=True)
     expiry_date = Column(Date, nullable=True)

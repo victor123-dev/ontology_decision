@@ -27,7 +27,7 @@ ACTION_DATA = {
         },
         {
             "name": "quantity",
-            "type": "integer",
+            "type": "float",
             "required": True,
             "description": "订单数量"
         }
@@ -60,12 +60,16 @@ def execute_calculate_ctp(parameters):
     try:
         # 1. 解析参数
         product_id = parameters.get("product_id")
-        quantity = parameters.get("quantity")
+        quantity_raw = parameters.get("quantity")
         
         if not product_id:
             return {"success": False, "error": "请提供产品ID"}
-        if not quantity or quantity <= 0:
+        if quantity_raw is None or quantity_raw <= 0:
             return {"success": False, "error": "请提供有效的订单数量"}
+        
+        # 类型转换：支持浮点数输入，向上取整为整数
+        import math
+        quantity = int(math.ceil(float(quantity_raw)))
         
         # 2. 初始化SDK客户端
         client = OntologyClient("http://localhost:8080", api_key="your-api-key")
@@ -94,6 +98,8 @@ def execute_calculate_ctp(parameters):
         capable_machine_ids = set([cap.machine_id for cap in all_caps])
         # 构建机台字典
         machines_dict = {m.machine_id: m for m in all_machines}
+        # 构建机台能力字典（按机台ID索引）
+        capability_dict = {cap.machine_id: cap for cap in all_caps}
         # 过滤出有能力的机台
         machines_with_capability = [m for m in all_machines if m.machine_id in capable_machine_ids]
         
@@ -104,13 +110,13 @@ def execute_calculate_ctp(parameters):
             }
         
         # 5. 查询产品工艺路线
-        product_routes = client.models.ProductRoute.find(product_id=product_id)
-        if not product_routes:
+        process_routes = client.models.ProcessRoute.find(product_id=product_id)
+        if not process_routes:
             return {"success": False, "error": f"没有找到产品 {product_id} 的工艺路线"}
         
         # 获取工艺路线ID（取第一个）
-        product_route = product_routes[0]
-        route_id = product_route.route_id
+        process_route = process_routes[0]
+        route_id = process_route.route_id
         
         # 6. 查询工艺路线步骤
         route_steps = client.models.RouteStep.find(route_id=route_id)
@@ -172,13 +178,18 @@ def execute_calculate_ctp(parameters):
             
             total_time = 0
             for step in step_times:
-                if machine.work_center_id == step.machine_type_required:
+                if machine.work_center_id == step['machine_type_required']:
                     step_time_minutes = step['standard_time_hours'] * 60
                     total_time += step_time_minutes * quantity
             
-            # 考虑机台效率
-            efficiency = machine.efficiency or 1.0
-            actual_time = total_time / efficiency if efficiency > 0 else total_time
+            # 计算机台加工时间（使用MachineCapability中的效率因子）
+            cap = capability_dict.get(machine.machine_id)
+            efficiency_factor = cap.efficiency_factor if cap else 1.0
+            
+            if efficiency_factor > 0:
+                actual_time = total_time / efficiency_factor
+            else:
+                actual_time = total_time
             
             # 机台加工时间约束
             solver.Add(
@@ -190,6 +201,7 @@ def execute_calculate_ctp(parameters):
         
         # 12. 求解
         solver.SetTimeLimit(5000)
+        solver.EnableOutput()
         status = solver.Solve()
         
         if status != pywraplp.Solver.OPTIMAL:
@@ -226,7 +238,7 @@ def execute_calculate_ctp(parameters):
                     "machine_id": m.machine_id,
                     "work_center_id": m.work_center_id,
                     "processing_time": machine_times.get(m.machine_id, {}),
-                    "efficiency": m.efficiency
+                    "efficiency": capability_dict[m.machine_id].efficiency_factor if capability_dict.get(m.machine_id) else 1.0
                 }
                 for m in machines_with_capability
             ],
