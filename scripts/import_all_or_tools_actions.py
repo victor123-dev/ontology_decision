@@ -1,12 +1,14 @@
 """
 批量导入所有OR-Tools优化Action到本体
 
-包含5个Action:
+包含7个Action:
 1. predict_material_shortage - 缺料预测 (LP)
 2. calculate_ctp - CTP可承诺量计算 (MIP)
 3. optimize_purchase_plan - 采购计划优化 (MIP)
 4. optimize_capacity_allocation - 产能优化分配 (MIP)
 5. optimize_detailed_schedule - 详细排程优化 (CP-SAT)
+6. optimize_capacity_allocation_heuristic - 产能优化分配 (启发式) 
+7. optimize_detailed_schedule_heuristic - 详细排程优化 (启发式) 
 
 功能:
 - 导入前先删除已存在的Action（避免重复导入报错）
@@ -57,6 +59,20 @@ ACTION_SCRIPTS = [
         "action_id": "optimize_detailed_schedule",
         "difficulty": "4星",
         "solver": "CP-SAT"
+    },
+    {
+        "name": "产能优化分配（启发式）",
+        "file": "import_action_heuristic_capacity_allocation.py",
+        "action_id": "optimize_capacity_allocation_heuristic",
+        "difficulty": "1星",
+        "solver": "启发式 (EDD/SPT/CR)"
+    },
+    {
+        "name": "详细排程优化（启发式）",
+        "file": "import_action_heuristic_detailed_schedule.py",
+        "action_id": "optimize_detailed_schedule_heuristic",
+        "difficulty": "2星",
+        "solver": "启发式 (贪婪+2-opt)"
     }
 ]
 
@@ -116,7 +132,7 @@ def main():
     
     for i, action in enumerate(ACTION_SCRIPTS, 1):
         print(f"\n{'='*80}")
-        print(f"[{i}/5] 导入Action: {action['name']}")
+        print(f"[{i}/7] 导入Action: {action['name']}")
         print(f"{'='*80}")
         print(f"   求解器: {action['solver']}")
         print(f"   难度: {action['difficulty']}")

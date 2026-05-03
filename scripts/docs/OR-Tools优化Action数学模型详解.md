@@ -1,10 +1,10 @@
 # OR-Tools优化Action数学模型详解
 
-> 本文档详细说明5个优化Action的数学模型，包括：
-> - 决策变量定义
-> - 目标函数推导
-> - 约束条件解释
-> - OR-Tools代码实现要点
+> 本文档详细说明7个优化Action的数学模型，包括：
+> - 5个OR-Tools求解器Action
+> - 2个启发式算法Action
+> 
+> 涵盖：决策变量定义、目标函数推导、约束条件解释、OR-Tools代码实现要点
 > 
 > 目标：让你能够完全理解每个模型，并能自行修改和扩展
 
@@ -802,18 +802,237 @@ model.Minimize(makespan)
 
 ---
 
-## 总结对比
+## Action 5: optimizeCapacityAllocationHeuristic（产能优化分配-启发式）
 
-| Action | 变量数 | 约束数 | 求解时间 | 实现难度 |
-|-------|-------|-------|---------|---------|
-| predictMaterialShortage | ~1000 | ~2000 | <5秒 | ⭐ |
-| calculateCTP | ~10000 | ~20000 | 30秒 | ⭐⭐ |
-| optimizePurchasePlan | ~5000 | ~10000 | 30秒 | ⭐⭐ |
-| optimizeCapacityAllocation | ~50000 | ~100000 | 2分钟 | ⭐⭐⭐ |
-| optimizeDetailedSchedule | ~20000 | ~50000 | 5分钟 | ⭐⭐⭐⭐ |
+**难度**: ⭐ 最简单（无需数学建模）  
+**算法类型**: 启发式规则（EDD/SPT/CR）  
+**预计实现时间**: 1天
 
 ---
 
-**文档版本**: v1.0  
+### 5.1 业务场景
+
+与Action 4相同，但针对**大规模工单场景**（500+工单），MIP求解器无法在合理时间内完成。
+
+---
+
+### 5.2 算法设计
+
+#### 5.2.1 核心思想
+
+不使用数学优化，而是使用**贪婪启发式规则**快速排程。
+
+#### 5.2.2 调度规则
+
+| 规则 | 全称 | 排序依据 | 适用场景 |
+|-----|------|---------|---------|
+| EDD | Earliest Due Date | 交期越早越先排 | 交期敏感 |
+| SPT | Shortest Processing Time | 加工时间越短越先排 | 效率优先 |
+| CR | Critical Ratio | CR = (交期-当前时间)/剩余加工时间，CR越小越先排 | 均衡考虑 |
+
+#### 5.2.3 算法流程
+
+```
+输入: 工单列表
+输出: 排程结果
+
+1. 计算每个工单的优先级分数
+   score = f(交期, 加工时间, 客户等级, 订单优先级)
+
+2. 按分数排序（分数小的优先）
+   sorted_work_orders.sort(key=score)
+
+3. 贪婪分配机台
+   for each work_order in sorted_work_orders:
+     for each operation in work_order:
+       best_machine = find_earliest_available_machine(operation)
+       assign(operation, best_machine)
+
+4. 检查按时交付率
+   on_time_rate = count(on_time) / total_work_orders
+```
+
+#### 5.2.4 优先级计算
+
+```python
+order_priority_weight = {1: 10, 3: 5, 5: 1}.get(priority, 5)
+customer_weight = {"VIP": 2.0, "重要": 1.5, "普通": 1.0}.get(customer_level, 1.0)
+total_weight = customer_weight * order_priority_weight
+```
+
+---
+
+### 5.3 代码实现要点
+
+```python
+def execute_optimize_capacity_allocation_heuristic(parameters):
+    # 1. 获取数据和客户信息
+    work_orders = get_work_orders()
+    customer_weights = calculate_customer_weights(work_orders)
+    
+    # 2. 计算调度分数
+    scored_work_orders = []
+    for wo in work_orders:
+        score = calculate_score(wo, scheduling_rule)
+        scored_work_orders.append({
+            "wo": wo,
+            "score": score,
+            "priority_weight": calculate_weight(wo)
+        })
+    
+    # 3. 排序
+    scored_work_orders.sort(key=lambda x: x["score"])
+    
+    # 4. 贪婪分配
+    machine_available_time = {m.machine_id: 0 for m in machines}
+    for scored_wo in scored_work_orders:
+        for op in scored_wo["ops"]:
+            best_machine = select_best_machine(op, machine_available_time)
+            assign_operation(op, best_machine, machine_available_time)
+    
+    return build_result()
+```
+
+---
+
+### 5.4 性能对比
+
+| 对比项 | MIP求解器 | 启发式算法 |
+|-------|----------|----------|
+| 求解时间 | 1-2分钟 | < 0.1秒 |
+| 最大工单数 | 50 | 500+ |
+| 规划天数 | ≤14天 | 无限制 |
+| 解质量 | 最优解 | 近似解（通常90%+） |
+| 实现复杂度 | 高 | 低 |
+
+---
+
+## Action 6: optimizeDetailedScheduleHeuristic（详细排程优化-启发式）
+
+**难度**: ⭐⭐ 简单  
+**算法类型**: 贪婪算法  
+**预计实现时间**: 1-2天
+
+---
+
+### 6.1 业务场景
+
+与Action 6（CP-SAT详细排程）相同，但针对**大规模场景**（500+工单），CP-SAT无法在合理时间内完成。
+
+---
+
+### 6.2 算法设计
+
+#### 6.2.1 核心思想
+
+使用**纯贪婪算法**快速构造排程，无需数学建模。
+
+#### 6.2.2 算法策略
+
+1. **按工单优先级排序**（高优先级先排）
+2. **同一工单内按工序顺序排**（工艺路线顺序）
+3. **每道工序选择最早可用的合适机台**
+
+#### 6.2.3 算法流程
+
+```
+输入: 工单列表、机台列表
+输出: 详细排程
+
+1. 构造任务列表
+   tasks = [
+     {wo_id, op_id, step_id, seq, priority, duration, valid_machine_ids}
+     for each work_order
+     for each operation
+   ]
+
+2. 排序
+   sorted_tasks.sort(key=lambda t: (t["priority"], t["wo_id"], t["seq"]))
+
+3. 贪婪排程
+   for task in sorted_tasks:
+     earliest_start = get_earliest_start(task)  # 考虑工序顺序
+     best_machine = find_earliest_machine(task, earliest_start)
+     assign(task, best_machine)
+
+4. 计算总工期
+   makespan = max(end_time for all tasks)
+```
+
+---
+
+### 6.3 代码实现要点
+
+```python
+def _greedy_schedule(tasks, machines_dict):
+    # 1. 排序
+    sorted_tasks = sorted(tasks, key=lambda t: (t["priority"], t["wo_id"], t["seq"]))
+    
+    # 2. 初始化机台可用时间
+    machine_available_time = {m: 0 for m in machines_dict.keys()}
+    wo_op_end_time = {}  # 记录每个工序的结束时间
+    
+    schedule = []
+    
+    # 3. 贪婪分配
+    for task in sorted_tasks:
+        # 计算最早开始时间
+        earliest_start = wo_op_end_time.get((task["wo_id"], task["seq"] - 1), 0)
+        
+        # 找到最佳机台
+        best_machine_id = None
+        best_start = float("inf")
+        
+        for mid in task["valid_machine_ids"]:
+            machine_start = max(earliest_start, machine_available_time.get(mid, 0))
+            if machine_start < best_start:
+                best_start = machine_start
+                best_machine_id = mid
+        
+        # 分配
+        if best_machine_id:
+            task["machine_id"] = best_machine_id
+            task["start_time"] = best_start
+            task["end_time"] = best_start + task["duration"]
+            
+            machine_available_time[best_machine_id] = task["end_time"]
+            wo_op_end_time[(task["wo_id"], task["seq"])] = task["end_time"]
+            
+            schedule.append(task)
+    
+    return schedule
+```
+
+---
+
+### 6.4 性能对比
+
+| 对比项 | CP-SAT | 启发式算法 |
+|-------|--------|----------|
+| 求解时间 | 5分钟 | < 1秒 |
+| 最大工单数 | 20 | 500+ |
+| 规划天数 | ≤14天 | 无限制 |
+| 换线约束 | 支持（简化版） | 不支持 |
+| 解质量 | 最优解 | 近似解 |
+| 适用场景 | 小规模精确排程 | 大规模快速排程 |
+
+---
+
+## 总结对比
+
+| Action | 类型 | 变量数 | 约束数 | 求解时间 | 实现难度 | 适用场景 |
+|-------|------|-------|-------|---------|---------|---------|
+| predictMaterialShortage | LP | ~1000 | ~2000 | <5秒 | ⭐ | 物料短缺预测 |
+| calculateCTP | MIP | ~10000 | ~20000 | 30秒 | ⭐⭐ | 订单交期承诺 |
+| optimizePurchasePlan | MIP | ~5000 | ~10000 | 30秒 | ⭐⭐ | 采购计划优化 |
+| optimizeCapacityAllocation | MIP | ~50000 | ~100000 | 2分钟 | ⭐⭐⭐ | 小规模产能分配(≤50工单) |
+| optimizeCapacityAllocationHeuristic | 启发式 | - | - | <0.1秒 | ⭐ | 大规模产能分配(500+工单) |
+| optimizeDetailedSchedule | CP-SAT | ~20000 | ~50000 | 5分钟 | ⭐⭐⭐⭐ | 小规模精确排程(≤20工单) |
+| optimizeDetailedScheduleHeuristic | 启发式 | - | - | <1秒 | ⭐⭐ | 大规模快速排程(500+工单) |
+
+---
+
+**文档版本**: v2.0  
 **创建日期**: 2026-04-28  
-**状态**: 已完成所有数学模型
+**更新日期**: 2026-05-03  
+**状态**: 已完成所有7个Action的数学模型和算法说明

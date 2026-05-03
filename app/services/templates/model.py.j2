@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from pydantic import Field
 from ..core.business_model import BusinessModel
 
 if TYPE_CHECKING:
@@ -19,19 +20,20 @@ class {{ model_name }}(BusinessModel):
 
     使用示例：
         # 创建新对象
-        order = client.models.work_order.create(
-            order_number="WO-001",
-            production_workshop="Assembly"
+        order = client.models.{{ model.id.lower() }}.create(
+            {{ model.primary_key_id }}="{{ model.id }}-001",
         )
 
         # 查询对象
-        orders = client.models.work_order.find(production_workshop="Assembly")
+        orders = client.models.{{ model.id.lower() }}.find()
 
         # 更新对象
         order.update(status="completed")
 
         # 访问关系
-        customer = order.get_customer_by_customer_id()
+        {% if links %}
+        related = order.{{ links[0].source_api_name if links[0].type == 'outgoing' else links[0].target_api_name }}()
+        {% endif %}
     """
 
     _model_name = "{{ model.id }}"
@@ -41,23 +43,30 @@ class {{ model_name }}(BusinessModel):
         "{{ field.field_id }}": "{{ field.data_type }}",
         {% endfor %}
     }
+{% for field in fields %}
+    {{ field.field_id }}: Optional[{{ field.python_type }}] = Field(
+        default=None,
+        description="{{ field.description or field.field_id }}"
+    )
+{% endfor %}
 
-    def __init__(self, client: 'OntologyClient', data: Dict[str, Any] = None):
-        super().__init__(client, data)
-        
-    {% for link in links %}
-    {% if link.type == 'outgoing' %}
-    {% if link.cardinality == 'one-to-one' or link.cardinality == 'many-to-one' %}
+    def __init__(self, client: Optional['OntologyClient'] = None, **data):
+        super().__init__(client=client, **data)
+{% for link in links %}
+{% if link.type == 'outgoing' %}
+{% if link.cardinality == 'one-to-one' or link.cardinality == 'many-to-one' %}
+
     def {{ link.source_api_name }}(self) -> Optional['{{ link.target_model_name }}']:
         """获取关联的{{ link.link.name }}"""
         from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
         results = self.client.models.{{ link.target_model_name }}.find({{ link.link.target_key }}=getattr(self, "{{ link.link.source_key }}", None))
         return results[0] if results else None
-    {% elif link.cardinality == 'one-to-many' or link.cardinality == 'many-to-many' %}
+{% elif link.cardinality == 'one-to-many' or link.cardinality == 'many-to-many' %}
+
     def {{ link.source_api_name }}(self) -> List['{{ link.target_model_name }}']:
         """获取关联的{{ link.link.name }}列表"""
         from .{{ link.target_model.lower() }} import {{ link.target_model_name }}
-        {% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}
+{% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}
         from .{{ link.link.intermediate_model.lower() }} import {{ link.intermediate_model_name }}
         # many-to-many 关系通过中间表查询
         intermediate_records = self.client.models.{{ link.intermediate_model_name }}.find(
@@ -65,23 +74,25 @@ class {{ model_name }}(BusinessModel):
         )
         target_ids = [getattr(record, "{{ link.link.intermediate_target_key }}") for record in intermediate_records]
         return self.client.models.{{ link.target_model_name }}.find({{ link.link.target_key }}__in=target_ids)
-        {% else %}
+{% else %}
         return self.client.models.{{ link.target_model_name }}.find({{ link.link.target_key }}=getattr(self, "{{ link.link.source_key }}", None))
-        {% endif %}
-    {% endif %}
+{% endif %}
+{% endif %}
 
-    {% elif link.type == 'incoming' %}
-    {% if link.cardinality == 'one-to-one' or link.cardinality == 'one-to-many' %}
+{% elif link.type == 'incoming' %}
+{% if link.cardinality == 'one-to-one' or link.cardinality == 'one-to-many' %}
+
     def {{ link.target_api_name }}(self) -> Optional['{{ link.source_model_name }}']:
         """获取关联的{{ link.link.name }}"""
         from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
         results = self.client.models.{{ link.source_model_name }}.find({{ link.link.source_key }}=getattr(self, "{{ link.link.target_key }}", None))
         return results[0] if results else None
-    {% elif link.cardinality == 'many-to-one' or link.cardinality == 'many-to-many' %}
+{% elif link.cardinality == 'many-to-one' or link.cardinality == 'many-to-many' %}
+
     def {{ link.target_api_name }}(self) -> List['{{ link.source_model_name }}']:
         """获取关联的{{ link.link.name }}列表"""
         from .{{ link.source_model.lower() }} import {{ link.source_model_name }}
-        {% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}
+{% if link.cardinality == 'many-to-many' and link.link.intermediate_model %}
         from .{{ link.link.intermediate_model.lower() }} import {{ link.intermediate_model_name }}
         # many-to-many 关系通过中间表查询
         intermediate_records = self.client.models.{{ link.intermediate_model_name }}.find(
@@ -89,20 +100,9 @@ class {{ model_name }}(BusinessModel):
         )
         source_ids = [getattr(record, "{{ link.link.intermediate_source_key }}") for record in intermediate_records]
         return self.client.models.{{ link.source_model_name }}.find({{ link.link.source_key }}__in=source_ids)
-        {% else %}
+{% else %}
         return self.client.models.{{ link.source_model_name }}.find({{ link.link.source_key }}=getattr(self, "{{ link.link.target_key }}", None))
-        {% endif %}
-    {% endif %}
-    {% endif %}
-    {% endfor %}
-
-    # 字段属性（类型提示）
-    {% for field in fields %}
-    @property
-    def {{ field.field_id }}(self) -> {{ field.python_type }}:
-        """{{ field.description or field.field_id }}"""
-        if not hasattr(self, 'data') or not isinstance(self.data, dict):
-            return None
-        return self.data.get("{{ field.field_id }}")
-
-    {% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}

@@ -1,18 +1,20 @@
 # OR-Tools优化Action使用指南
 
-> 本文档说明如何导入和使用5个OR-Tools优化Action
+> 本文档说明如何导入和使用9个优化Action（5个OR-Tools求解器 + 2个启发式算法 + 1个CTP + 1个缺料预测）
 
 ---
 
 ## 一、Action概览
 
-| # | Action名称 | 功能 | 求解器 | 难度 | 脚本文件 |
-|---|-----------|------|--------|------|---------|
+| # | Action名称 | 功能 | 求解器/算法 | 难度 | 脚本文件 |
+|---|-----------|------|------------|------|---------|
 | 1 | 缺料预测 | 预测未来30天物料短缺 | LP (GLOP) | ⭐ | `import_action_predict_material_shortage.py` |
 | 2 | CTP可承诺量计算 | 计算订单可承诺交期 | MIP (CBC) | ⭐⭐ | `import_action_calculate_ctp.py` |
 | 3 | 采购计划优化 | 优化采购计划降低成本 | MIP (CBC) | ⭐⭐ | `import_action_optimize_purchase_plan.py` |
 | 4 | 产能优化分配 | 多工单产能最优分配 | MIP (CBC) | ⭐⭐⭐ | `import_action_optimize_capacity_allocation.py` |
-| 5 | 详细排程优化 | CP-SAT详细排程 | CP-SAT | ⭐⭐⭐⭐ | `import_action_optimize_detailed_schedule.py` |
+| 5 | 产能优化分配（启发式） | 大规模快速产能分配 | EDD/SPT/CR规则 | ⭐ | `import_action_heuristic_capacity_allocation.py` |
+| 6 | 详细排程优化 | CP-SAT详细排程 | CP-SAT | ⭐⭐⭐⭐ | `import_action_optimize_detailed_schedule.py` |
+| 7 | 详细排程优化（启发式） | 大规模快速排程 | 贪婪算法 | ⭐⭐ | `import_action_heuristic_detailed_schedule.py` |
 
 ---
 
@@ -28,20 +30,16 @@ python scripts/import_all_or_tools_actions.py
 ### 2.2 单独导入某个Action
 
 ```bash
-# 导入缺料预测Action
-python scripts/import_action_predict_material_shortage.py
+# OR-Tools求解器Action
+python scripts/import_action_predict_material_shortage.py           # 缺料预测
+python scripts/import_action_calculate_ctp.py                       # CTP计算
+python scripts/import_action_optimize_purchase_plan.py              # 采购计划优化
+python scripts/import_action_optimize_capacity_allocation.py        # 产能优化分配（MIP）
+python scripts/import_action_optimize_detailed_schedule.py          # 详细排程优化（CP-SAT）
 
-# 导入CTP计算Action
-python scripts/import_action_calculate_ctp.py
-
-# 导入采购计划优化Action
-python scripts/import_action_optimize_purchase_plan.py
-
-# 导入产能优化分配Action
-python scripts/import_action_optimize_capacity_allocation.py
-
-# 导入详细排程优化Action
-python scripts/import_action_optimize_detailed_schedule.py
+# 启发式算法Action（无需求解器，超快速）
+python scripts/import_action_heuristic_capacity_allocation.py       # 产能优化分配（启发式）
+python scripts/import_action_heuristic_detailed_schedule.py         # 详细排程优化（启发式）
 ```
 
 ---
@@ -221,6 +219,7 @@ python scripts/import_action_optimize_detailed_schedule.py
     "total_work_orders": 10,
     "on_time_count": 8,
     "on_time_rate": 85.0,
+    "customer_weight_applied": true,
     "schedule": [...]
   }
 }
@@ -228,7 +227,75 @@ python scripts/import_action_optimize_detailed_schedule.py
 
 ---
 
-### 3.5 详细排程优化 (optimize_detailed_schedule)
+### 3.5 产能优化分配（启发式）(optimize_capacity_allocation_heuristic)
+
+**算法**:
+- **调度规则**: EDD(最早交期优先) / SPT(最短加工时间) / CR(关键比率)
+- **算法流程**:
+  1. 计算每个工单的优先级分数
+  2. 按分数排序
+  3. 贪婪分配机台
+  4. 检查按时交付情况
+
+**输入参数**:
+```json
+{
+  "work_order_ids": ["WO-001", "WO-002", "WO-003"],
+  "planning_horizon_days": 30,
+  "scheduling_rule": "EDD"
+}
+```
+
+**输出示例**:
+```json
+{
+  "success": true,
+  "message": "产能优化完成，按时交付率: 90.0%，调度规则: EDD",
+  "result": {
+    "total_work_orders": 10,
+    "on_time_count": 9,
+    "on_time_rate": 90.0,
+    "scheduling_rule": "EDD",
+    "customer_weight_applied": true,
+    "work_order_priorities": [
+      {
+        "work_order_id": "WO-001",
+        "order_priority": 1,
+        "customer_weight": 2.0,
+        "total_weight": 20.0,
+        "due_hours": 48.0,
+        "score": 48.0
+      }
+    ],
+    "schedule": [
+      {
+        "work_order_id": "WO-001",
+        "operation_id": "WO-OP-001",
+        "step_id": "STEP-010",
+        "sequence_no": 1,
+        "machine_id": "MACHINE-01",
+        "start_time": "2026-05-03T08:00:00",
+        "end_time": "2026-05-03T10:30:00",
+        "start_minutes": 0,
+        "end_minutes": 150
+      }
+    ]
+  }
+}
+```
+
+**性能对比**:
+| 对比项 | MIP求解器 | 启发式算法 |
+|-------|----------|----------|
+| 求解时间 | 1-2分钟 | < 0.1秒 |
+| 最大工单数 | 50 | 500+ |
+| 规划天数 | ≤14天 | 无限制 |
+| 解质量 | 最优解 | 近似解 |
+| 适用场景 | 小规模精确优化 | 大规模快速排程 |
+
+---
+
+### 3.6 详细排程优化 (optimize_detailed_schedule)
 
 **数学模型** (CP-SAT):
 - **决策变量**: `Task[w,o]`区间变量(Start, End, Duration)
@@ -279,6 +346,62 @@ python scripts/import_action_optimize_detailed_schedule.py
   }
 }
 ```
+
+---
+
+### 3.7 详细排程优化（启发式）(optimize_detailed_schedule_heuristic)
+
+**算法**:
+- **核心算法**: 贪婪排程
+- **算法流程**:
+  1. 按工单优先级排序（高优先级先排）
+  2. 同一工单内按工序顺序排
+  3. 每道工序选择最早可用的合适机台
+
+**输入参数**:
+```json
+{
+  "work_order_ids": ["WO-001", "WO-002", "WO-003"],
+  "planning_horizon_days": 30,
+  "consider_setup": false
+}
+```
+
+**输出示例**:
+```json
+{
+  "success": true,
+  "message": "启发式排程完成，总工期: 120.5小时",
+  "result": {
+    "makespan_hours": 120.5,
+    "makespan_days": 5.02,
+    "total_tasks": 45,
+    "algorithm": "Greedy Scheduling",
+    "schedule": [
+      {
+        "work_order_id": "WO-001",
+        "operation_id": "WO-OP-001",
+        "step_id": "STEP-010",
+        "sequence_no": 0,
+        "machine_id": "MACHINE-01",
+        "start_time": "2026-05-03T08:00:00",
+        "end_time": "2026-05-03T10:30:00",
+        "duration_minutes": 150
+      }
+    ]
+  }
+}
+```
+
+**性能对比**:
+| 对比项 | CP-SAT | 启发式算法 |
+|-------|--------|----------|
+| 求解时间 | 5分钟 | < 1秒 |
+| 最大工单数 | 20 | 500+ |
+| 规划天数 | ≤14天 | 无限制 |
+| 换线约束 | 支持（简化版） | 不支持 |
+| 解质量 | 最优解 | 近似解 |
+| 适用场景 | 小规模精确排程 | 大规模快速排程 |
 
 ---
 
@@ -335,8 +458,9 @@ pip install ortools
 4. **性能优化**: 
    - 缺料预测(LP): 最快，<5秒
    - CTP/采购优化(MIP): 30秒左右
-   - 产能分配(MIP): 1-2分钟
-   - 详细排程(CP-SAT): 5分钟
+   - 产能分配(MIP): 1-2分钟，规划天数≤14天
+   - 详细排程(CP-SAT): 5分钟，规划天数≤7天
+   - 启发式算法: <1秒，适合大规模场景
 
 ---
 

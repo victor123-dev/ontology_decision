@@ -42,7 +42,7 @@ ACTION_DATA = {
         }
     ],
     "submission_criteria": [],
-    "function_code": '''# 缺料预测函数实现 - 使用 Ontology SDK + OR-Tools
+    "function_code": '''# 缺料预测函数实现 - 使用 Ontology SDK + OR-Tools（批量查询优化版）
 import json
 from datetime import datetime, timedelta
 from ortools.linear_solver import pywraplp
@@ -52,20 +52,20 @@ from my_ontology_sdk import OntologyClient
 
 def execute_predict_material_shortage(parameters):
     """
-    缺料预测 - LP模型
+    缺料预测 - LP模型（批量查询优化版）
     
     数学模型:
     - 决策变量: I[m,t]库存量, G[m,t]缺料量
-    - 目标函数: Minimize ΣG[m,t] (虚拟目标)
+    - 目标函数: Minimize ΣG[m,t]（虚拟目标，实际值由约束决定）
     - 约束条件:
       1. 库存平衡: I[m,t] = I[m,t-1] + R[m,t] - D[m,t]
       2. 缺料计算: G[m,t] >= safety_stock - I[m,t]
       3. 非负约束: G[m,t] >= 0
     
-    Args:
-        parameters: 包含forecast_days, material_ids等参数
-    Returns:
-        dict: 缺料预测结果
+    优化内容:
+    1. 【关键】批量查询所有物料、库存、工单、采购订单数据（避免N+1查询）
+    2. 预计算每天的需求和到货量，避免重复查询
+    3. 预构建工单日期映射，快速查找影响工单
     """
     try:
         # 1. 解析参数
@@ -76,38 +76,139 @@ def execute_predict_material_shortage(parameters):
         # 2. 初始化SDK客户端
         client = OntologyClient("http://localhost:8080", api_key="your-api-key")
         
-        # 3. 获取物料数据
+        # ============================================================
+        # 【批量查询优化】核心数据加载阶段
+        # 原方案: 循环中逐条查询（N次API调用）
+        # 优化后: 使用 __in 批量查询（仅1次API调用）
+        # ============================================================
+        
+        # 3. 批量查询物料数据
         if material_ids:
-            materials = []
-            for mid in material_ids:
-                mat = client.models.Material.get(mid)
-                if mat:
-                    materials.append(mat)
+            # 使用 material_id__in 批量查询指定物料
+            materials = client.models.Material.find(material_id__in=material_ids)
         else:
+            # 查询所有物料
             materials = client.models.Material.find()
         
         if not materials:
             return {"success": False, "error": "没有找到物料数据"}
         
-        # 4. 创建LP求解器
+        materials_list = list(materials)
+        material_id_list = [m.material_id for m in materials_list]
+        
+        # 4. 批量查询所有库存数据（原方案: 循环N次，现: 1次批量查询）
+        all_inventories = client.models.Inventory.find(material_id__in=material_id_list)
+        inventory_map = {inv.material_id: inv.available_quantity for inv in all_inventories}
+        
+        # 5. 批量查询所有工单物料需求
+        all_woms = client.models.WorkOrderMaterial.find(material_id__in=material_id_list)
+        
+        # 6. 批量查询所有工单工序
+        # 提取所有工单工序ID，一次性查询
+        wo_op_ids = list(set([wom.wo_op_id for wom in all_woms if hasattr(wom, 'wo_op_id') and wom.wo_op_id]))
+        all_wo_ops = {}
+        if wo_op_ids:
+            for wo_op in client.models.WorkOrderOperation.find(wo_op_id__in=wo_op_ids):
+                all_wo_ops[wo_op.wo_op_id] = wo_op
+        
+        # 7. 批量查询所有工单
+        wo_ids = list(set([wom.work_order_id for wom in all_woms]))
+        all_work_orders = {}
+        if wo_ids:
+            for wo in client.models.WorkOrder.find(work_order_id__in=wo_ids):
+                all_work_orders[wo.work_order_id] = wo
+        
+        # 8. 批量查询所有采购订单行
+        all_po_lines = client.models.PurchaseOrderLine.find(material_id__in=material_id_list)
+        
+        # 9. 批量查询所有采购订单
+        po_ids = list(set([line.po_id for line in all_po_lines if hasattr(line, 'po_id') and line.po_id]))
+        all_pos = {}
+        if po_ids:
+            for po in client.models.PurchaseOrder.find(po_id__in=po_ids):
+                all_pos[po.po_id] = po
+        
+        # 10. 创建LP求解器（GLOP是纯线性规划求解器，速度快）
         solver = pywraplp.Solver.CreateSolver('GLOP')
         if not solver:
             return {"success": False, "error": "无法创建求解器"}
         
-        # 5. 准备数据
+        # 11. 预计算每天的需求和到货量（使用内存数据，无API调用）
         days = range(forecast_days)
-        materials_list = list(materials)
+        today = datetime.now()
         
-        # 6. 创建决策变量
-        inventory = {}  # I[m,t]
-        shortage = {}   # G[m,t]
+        # 需求缓存: demand_cache[material_id][day] = demand_qty
+        demand_cache = {}
+        for m in materials_list:
+            demand_cache[m.material_id] = {t: 0 for t in days}
+        
+        # 遍历所有工单物料需求，按日期聚合
+        for wom in all_woms:
+            demand_qty = wom.required_quantity or 0
+            if demand_qty == 0:
+                continue
+            
+            material_id = wom.material_id
+            if material_id not in demand_cache:
+                continue
+            
+            planned_date = None
+            
+            # 优先使用工序计划开始时间
+            if hasattr(wom, 'wo_op_id') and wom.wo_op_id and wom.wo_op_id in all_wo_ops:
+                wo_op = all_wo_ops[wom.wo_op_id]
+                if wo_op.planned_start:
+                    planned_date = datetime.fromisoformat(wo_op.planned_start) if isinstance(wo_op.planned_start, str) else wo_op.planned_start
+                elif wo_op.planned_end:
+                    planned_date = datetime.fromisoformat(wo_op.planned_end) if isinstance(wo_op.planned_end, str) else wo_op.planned_end
+            
+            # 其次使用工单计划日期
+            if not planned_date and hasattr(wom, 'work_order_id') and wom.work_order_id in all_work_orders:
+                wo = all_work_orders[wom.work_order_id]
+                if wo.planned_start_date:
+                    planned_date = datetime.fromisoformat(wo.planned_start_date) if isinstance(wo.planned_start_date, str) else wo.planned_start_date
+                elif wo.planned_completion_date:
+                    planned_date = datetime.fromisoformat(wo.planned_completion_date) if isinstance(wo.planned_completion_date, str) else wo.planned_completion_date
+            
+            if planned_date:
+                days_diff = (planned_date - today).days
+                if days_diff in demand_cache[material_id]:
+                    demand_cache[material_id][days_diff] += demand_qty
+            else:
+                # 无计划日期，默认当天需求
+                demand_cache[material_id][0] += demand_qty
+        
+        # 到货缓存: receipt_cache[material_id][day] = receipt_qty
+        receipt_cache = {}
+        for m in materials_list:
+            receipt_cache[m.material_id] = {t: 0 for t in days}
+        
+        # 遍历所有采购订单行，按日期聚合到货量
+        for line in all_po_lines:
+            if line.status not in ['待收货', '部分到货']:
+                continue
+            
+            material_id = line.material_id
+            if material_id not in receipt_cache:
+                continue
+            
+            if hasattr(line, 'po_id') and line.po_id and line.po_id in all_pos:
+                po = all_pos[line.po_id]
+                if po.expected_delivery_date:
+                    delivery_date = datetime.fromisoformat(po.expected_delivery_date) if isinstance(po.expected_delivery_date, str) else po.expected_delivery_date
+                    days_diff = (delivery_date - today).days
+                    
+                    if days_diff in receipt_cache[material_id]:
+                        receipt_cache[material_id][days_diff] += line.quantity - (line.received_quantity or 0)
+        
+        # 12. 创建决策变量
+        inventory = {}  # I[m,t]: 物料m在第t天的库存
+        shortage = {}   # G[m,t]: 物料m在第t天的缺料量
         
         for m in materials_list:
-            # 获取当前库存
-            inv_records = client.models.Inventory.find(material_id=m.material_id)
-            current_inv = inv_records[0].available_quantity if inv_records else 0
+            current_inv = inventory_map.get(m.material_id, 0)
             
-            # 初始库存 (t=0)
+            # 初始库存 (t=0) 固定为当前库存
             inventory[m.material_id, 0] = solver.NumVar(0, 1000000, f'inv_{m.material_id}_0')
             inventory[m.material_id, 0].ub = current_inv
             inventory[m.material_id, 0].lb = current_inv
@@ -118,66 +219,82 @@ def execute_predict_material_shortage(parameters):
                         0, 1000000, f'inv_{m.material_id}_{t}'
                     )
                 
-                # 缺料量变量
                 shortage[m.material_id, t] = solver.NumVar(
                     0, 1000000, f'short_{m.material_id}_{t}'
                 )
         
-        # 7. 添加约束
+        # 13. 添加约束
         
-        # 约束1: 库存平衡方程
+        # 约束1: 库存平衡方程 I[m,t] = I[m,t-1] + receipt - demand
         for m in materials_list:
             for t in days:
                 if t == 0:
                     continue
                 
-                # 计算当天的需求（从生产计划）
-                demand = _get_production_demand(client, m.material_id, t)
+                demand = demand_cache[m.material_id][t]
+                receipt = receipt_cache[m.material_id][t]
                 
-                # 计算当天的到货（在途采购）
-                receipt = _get_po_receipts(client, m.material_id, t)
-                
-                # 库存平衡: I[t] = I[t-1] + receipt - demand
                 solver.Add(
                     inventory[m.material_id, t] == 
                     inventory[m.material_id, t-1] + receipt - demand
                 )
         
-        # 约束2: 缺料量计算
+        # 约束2: 缺料量计算 G[m,t] >= safety_stock - I[m,t]
         for m in materials_list:
-            safety_stock = safety_stock_threshold if safety_stock_threshold else m.safety_stock_level or 0
+            safety_stock = safety_stock_threshold if safety_stock_threshold else (m.safety_stock_level or 0)
             
             for t in days:
-                # G[m,t] >= safety_stock - I[m,t]
                 solver.Add(
                     shortage[m.material_id, t] >= safety_stock - inventory[m.material_id, t]
                 )
-                # G[m,t] >= 0 (已通过变量定义保证)
         
-        # 8. 目标函数（虚拟：最小化总缺料量）
+        # 14. 目标函数：最小化总缺料量
         objective = solver.Objective()
         for m in materials_list:
             for t in days:
                 objective.SetCoefficient(shortage[m.material_id, t], 1)
         objective.SetMinimization()
         
-        # 9. 求解
-        solver.SetTimeLimit(5000)  # 5秒
+        # 15. 求解
+        solver.SetTimeLimit(5000)
         status = solver.Solve()
         
-        # 10. 解析结果
+        # 16. 解析结果
         if status != pywraplp.Solver.OPTIMAL:
             return {"success": False, "error": "求解失败"}
         
+        # 【批量优化】预构建工单日期映射，避免结果解析时的循环查询
+        wo_date_map = {}
+        for wo_id, wo in all_work_orders.items():
+            wo_date = None
+            if wo.planned_start_date:
+                wo_date = datetime.fromisoformat(wo.planned_start_date) if isinstance(wo.planned_start_date, str) else wo.planned_start_date
+            elif wo.planned_completion_date:
+                wo_date = datetime.fromisoformat(wo.planned_completion_date) if isinstance(wo.planned_completion_date, str) else wo.planned_completion_date
+            
+            if wo_date:
+                days_diff = (wo_date - today).days
+                if days_diff not in wo_date_map:
+                    wo_date_map[days_diff] = []
+                wo_date_map[days_diff].append({
+                    "work_order_id": wo.work_order_id,
+                    "product_id": wo.product_id,
+                    "status": wo.status
+                })
+        
         shortages = []
+        
         for m in materials_list:
             for t in days:
                 gap = shortage[m.material_id, t].solution_value()
-                if gap > 0.1:  # 阈值过滤
-                    inv_level = inventory[m.material_id, t].solution_value()
+                inv_level = inventory[m.material_id, t].solution_value()
+                
+                # 过滤微小缺料（数值误差）
+                if gap > 0.1:
+                    safety_stock = safety_stock_threshold if safety_stock_threshold else (m.safety_stock_level or 0)
                     
-                    # 查询影响的工单
-                    affected_wos = _get_affected_work_orders(client, m.material_id, t)
+                    # 从预构建的映射中获取影响工单（O(1)查找）
+                    affected_wos = wo_date_map.get(t, [])[:5]
                     
                     shortages.append({
                         "material_id": m.material_id,
@@ -189,7 +306,6 @@ def execute_predict_material_shortage(parameters):
                         "affected_work_orders": affected_wos
                     })
         
-        # 11. 构建返回结果
         result = {
             "forecast_days": forecast_days,
             "total_shortages": len(shortages),
@@ -207,91 +323,6 @@ def execute_predict_material_shortage(parameters):
         return {"success": False, "error": f"执行失败: {str(e)}"}
 
 
-def _get_production_demand(client, material_id, day_offset):
-    """
-    计算某天该物料的生产需求量
-    
-    逻辑: 
-    1. 查询使用该物料的工单工序
-    2. 根据工序计划时间计算当天的需求
-    """
-    try:
-        # 查询使用该物料的工单物料需求
-        woms = client.models.WorkOrderMaterial.find(material_id=material_id)
-        
-        total_demand = 0
-        for wom in woms:
-            # 获取关联的工单工序
-            wo_op = client.models.WorkOrderOperation.get(wom.wo_op_id)
-            if wo_op and wo_op.planned_start:
-                # 计算工序开始日期
-                start_date = datetime.fromisoformat(wo_op.planned_start) if isinstance(wo_op.planned_start, str) else wo_op.planned_start
-                today = datetime.now()
-                days_diff = (start_date - today).days
-                
-                if days_diff == day_offset:
-                    total_demand += wom.required_quantity or 0
-        
-        return total_demand
-    except:
-        return 0
-
-
-def _get_po_receipts(client, material_id, day_offset):
-    """
-    计算某天的采购到货量
-    
-    逻辑:
-    1. 查询该物料的在途采购订单
-    2. 根据预期交货日期计算当天的到货
-    """
-    try:
-        # 查询采购订单行
-        po_lines = client.models.PurchaseOrderLine.find(material_id=material_id)
-        
-        total_receipt = 0
-        today = datetime.now()
-        
-        for line in po_lines:
-            if line.status in ['待收货', '部分到货']:
-                # 获取采购订单
-                po = client.models.PurchaseOrder.get(line.po_id)
-                if po and po.expected_delivery_date:
-                    delivery_date = datetime.fromisoformat(po.expected_delivery_date) if isinstance(po.expected_delivery_date, str) else po.expected_delivery_date
-                    days_diff = (delivery_date - today).days
-                    
-                    if days_diff == day_offset:
-                        total_receipt += line.quantity - (line.received_quantity or 0)
-        
-        return total_receipt
-    except:
-        return 0
-
-
-def _get_affected_work_orders(client, material_id, day_offset):
-    """
-    查询受缺料影响的工单列表
-    """
-    try:
-        woms = client.models.WorkOrderMaterial.find(material_id=material_id)
-        affected_wos = []
-        
-        for wom in woms:
-            if wom.shortage_quantity and wom.shortage_quantity > 0:
-                wo = client.models.WorkOrder.get(wom.work_order_id)
-                if wo:
-                    affected_wos.append({
-                        "work_order_id": wo.work_order_id,
-                        "product_id": wo.product_id,
-                        "status": wo.status
-                    })
-        
-        return affected_wos[:5]  # 最多返回5个
-    except:
-        return []
-
-
-# 必须定义result变量供Action框架使用
 result = execute_predict_material_shortage(parameters)
 '''
 }

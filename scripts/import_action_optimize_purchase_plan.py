@@ -2,285 +2,347 @@
 导入采购计划优化Action到本体
 
 Action: optimizePurchasePlan
-功能: 优化未来30天的采购计划，最小化采购成本
+功能: 优化采购计划，选择最优供应商组合
 求解器: MIP (CBC)
 难度: ⭐⭐
 """
 import requests
-import json
 
-# API配置
 API_URL = "http://localhost:8080/api/v1"
 
-# Action定义
 ACTION_DATA = {
     "id": "optimize_purchase_plan",
     "api_name": "OptimizePurchasePlan",
     "name": "采购计划优化",
-    "description": "基于物料需求、供应商信息、库存状态，优化采购计划以最小化总采购成本",
+    "description": "基于供应商报价、交期、质量评分，优化采购计划，选择最优供应商组合，最小化采购成本",
     "action_type": "function",
     "operation": "custom",
-    "target_model_id": "material",
+    "target_model_id": "purchase_order",
     "parameters": [
         {
             "name": "material_ids",
             "type": "array",
-            "required": False,
-            "description": "要优化的物料ID列表，为空则优化所有物料"
+            "required": True,
+            "description": "要采购的物料ID列表"
         },
         {
-            "name": "planning_days",
+            "name": "forecast_days",
             "type": "integer",
             "required": False,
-            "description": "采购规划的时间范围，默认30天"
+            "description": "采购规划天数，默认30天"
         },
         {
-            "name": "budget_limit",
-            "type": "float",
+            "name": "max_suppliers_per_material",
+            "type": "integer",
             "required": False,
-            "description": "总预算上限"
+            "description": "每个物料最多选择的供应商数量，默认3"
         }
     ],
     "submission_criteria": [],
-    "function_code": '''# 采购计划优化函数实现 - 使用 Ontology SDK + OR-Tools
+    "function_code": '''# 采购计划优化 - 使用 Ontology SDK + OR-Tools（批量查询优化版）
 import json
 from datetime import datetime, timedelta
 from ortools.linear_solver import pywraplp
-
-# 使用 SDK
 from my_ontology_sdk import OntologyClient
 
 def execute_optimize_purchase_plan(parameters):
     """
-    采购计划优化 - MIP模型
+    采购计划优化 - MIP模型（批量查询优化版）
     
     数学模型:
-    - 决策变量: y[m,s,t]采购数量, z[m,s,t]是否采购, I[m,t]库存
-    - 目标函数: Minimize Σ(P[m,s] * y[m,s,t])
+    - 决策变量:
+      X[s,m]: 供应商s向物料m的采购量（连续变量）
+      Y[s,m]: 是否选择供应商s供应物料m（0-1变量）
+    - 目标函数: Minimize Σ(price[s,m] × X[s,m])
     - 约束条件:
-      1. 库存平衡: I[m,t] = I[m,t-1] + Σy[m,s,t-L[m,s]] - D[m,t]
-      2. 最小订购量: y[m,s,t] >= MOQ[m,s] * z[m,s,t]
-      3. 非负库存: I[m,t] >= 0
-      4. 预算限制: Σ(P[m,s] * y[m,s,t]) <= B
+      1. 需求满足: ΣX[s,m] >= demand[m]
+      2. 供应商容量: X[s,m] <= capacity[s,m] × Y[s,m]
+      3. 供应商数量限制: ΣY[s,m] <= max_suppliers
+      4. 最小订单量: X[s,m] >= min_order[s,m] × Y[s,m]
+      5. 变量边界: X[s,m] >= 0, Y[s,m] ∈ {0,1}
     
-    Args:
-        parameters: 包含material_ids, planning_days, budget_limit等参数
-    Returns:
-        dict: 优化后的采购计划
+    优化内容:
+    1. 【关键】批量查询所有供应商-物料关系（原方案: N×M次API调用）
+    2. 预构建供应商物料字典，避免循环查询
+    3. 预计算需求缺口，减少重复计算
     """
     try:
         # 1. 解析参数
         material_ids = parameters.get("material_ids", [])
-        planning_days = parameters.get("planning_days", 30)
-        budget_limit = parameters.get("budget_limit")
+        forecast_days = parameters.get("forecast_days", 30)
+        max_suppliers = parameters.get("max_suppliers_per_material", 3)
+        
+        if not material_ids:
+            return {"success": False, "error": "请提供物料ID列表"}
         
         # 2. 初始化SDK客户端
         client = OntologyClient("http://localhost:8080", api_key="your-api-key")
         
-        # 3. 获取物料数据
-        if material_ids:
-            materials = []
-            for mid in material_ids:
-                mat = client.models.Material.get(mid)
-                if mat:
-                    materials.append(mat)
-        else:
-            materials = client.models.Material.find()
+        # ============================================================
+        # 【批量查询优化】核心数据加载阶段
+        # 原方案: 循环中逐条查询供应商物料关系（N×M次API调用）
+        # 优化后: 批量查询所有供应商-物料关系（仅1次API调用）
+        # ============================================================
         
+        # 3. 批量查询物料数据
+        materials = client.models.Material.find(material_id__in=material_ids)
         if not materials:
             return {"success": False, "error": "没有找到物料数据"}
+        materials = list(materials)
+        material_id_list = [m.material_id for m in materials]
         
-        # 4. 获取供应商数据
-        suppliers = client.models.Supplier.find(is_active=True)
-        if not suppliers:
-            return {"success": False, "error": "没有可用供应商"}
+        # 4. 批量查询所有供应商
+        all_suppliers = client.models.Supplier.find(is_active=True)
+        if not all_suppliers:
+            return {"success": False, "error": "没有找到供应商数据"}
+        all_suppliers = list(all_suppliers)
+        supplier_id_list = [s.supplier_id for s in all_suppliers]
         
-        # 5. 创建MIP求解器
+        # 5. 【核心优化】批量查询供应商-物料关系
+        # 原方案: for s in suppliers: for m in materials: sm = client.models.SupplierMaterial.find(supplier_id=s.supplier_id, material_id=m.material_id)
+        # 优化后: 一次性查询所有供应商-物料关系，用__in批量查询
+        all_sm = client.models.SupplierMaterial.find(
+            supplier_id__in=supplier_id_list,
+            material_id__in=material_id_list
+        )
+        
+        # 构建供应商-物料关系字典，用于快速查找
+        # Key: (supplier_id, material_id) -> Value: SupplierMaterial对象
+        sm_dict = {}
+        for sm in all_sm:
+            sm_dict[(sm.supplier_id, sm.material_id)] = sm
+        
+        # 6. 批量查询库存数据
+        all_inventories = client.models.Inventory.find(material_id__in=material_id_list)
+        inventory_map = {inv.material_id: inv.available_quantity for inv in all_inventories}
+        
+        # 7. 批量查询工单物料需求
+        all_woms = client.models.WorkOrderMaterial.find(material_id__in=material_id_list)
+        
+        # 8. 计算每个物料的需求量（基于工单需求 - 当前库存）
+        demand_map = {}
+        for m in materials:
+            material_id = m.material_id
+            
+            # 计算该物料的总工单需求
+            wo_demand = 0
+            for wom in all_woms:
+                if wom.material_id == material_id:
+                    wo_demand += (wom.required_quantity or 0)
+            
+            # 计算当前库存
+            current_inv = inventory_map.get(material_id, 0)
+            
+            # 需求缺口 = 工单需求 - 当前库存
+            demand = max(0, wo_demand - current_inv)
+            
+            # 考虑安全库存
+            safety_stock = m.safety_stock_level or 0
+            demand = max(demand, safety_stock - current_inv)
+            
+            if demand > 0:
+                demand_map[material_id] = {
+                    "wo_demand": wo_demand,
+                    "current_inv": current_inv,
+                    "safety_stock": safety_stock,
+                    "demand": demand
+                }
+        
+        # 9. 构建供应商-物料可行列表
+        # 只有demand>0且有供应商-物料关系的才参与优化
+        feasible_pairs = []
+        for m in materials:
+            material_id = m.material_id
+            if material_id not in demand_map:
+                continue
+            
+            for s in all_suppliers:
+                supplier_id = s.supplier_id
+                sm_key = (supplier_id, material_id)
+                
+                if sm_key in sm_dict:
+                    sm = sm_dict[sm_key]
+                    feasible_pairs.append({
+                        "supplier": s,
+                        "material": m,
+                        "sm": sm,
+                        "demand": demand_map[material_id]["demand"]
+                    })
+        
+        if not feasible_pairs:
+            return {"success": False, "error": "没有找到可行的供应商-物料组合"}
+        
+        # 10. 创建MIP求解器（CBC是混合整数规划求解器，支持0-1变量）
         solver = pywraplp.Solver.CreateSolver('CBC')
         if not solver:
             return {"success": False, "error": "无法创建求解器"}
         
-        # 6. 准备数据
-        days = range(planning_days)
-        materials_list = list(materials)
-        suppliers_list = list(suppliers)
+        # 11. 创建决策变量
+        # X[supplier_id, material_id]: 采购量（连续变量）
+        # Y[supplier_id, material_id]: 是否选择该供应商（0-1变量）
+        x_vars = {}
+        y_vars = {}
         
-        # 7. 创建决策变量
-        y = {}  # 采购数量 y[m,s,t]
-        z = {}  # 是否采购 z[m,s,t]
-        
-        # 只对有供应关系的物料-供应商组合创建变量
-        valid_combinations = []
-        for m in materials_list:
-            for s in suppliers_list:
-                # 检查供应商是否能供应此物料
-                sm_records = client.models.SupplierMaterial.find(
-                    supplier_id=s.supplier_id,
-                    material_id=m.material_id
-                )
-                
-                if sm_records:
-                    sm = sm_records[0]
-                    valid_combinations.append((m, s, sm))
-                    
-                    for t in days:
-                        y[m.material_id, s.supplier_id, t] = solver.NumVar(
-                            0, 1000000, f'y_{m.material_id}_{s.supplier_id}_{t}'
-                        )
-                        z[m.material_id, s.supplier_id, t] = solver.IntVar(
-                            0, 1, f'z_{m.material_id}_{s.supplier_id}_{t}'
-                        )
-                        
-                        # 最小订购量约束
-                        moq = sm.min_order_qty or 0
-                        solver.Add(y[m.material_id, s.supplier_id, t] >= moq * z[m.material_id, s.supplier_id, t])
-                        solver.Add(y[m.material_id, s.supplier_id, t] <= 1000000 * z[m.material_id, s.supplier_id, t])
-        
-        if not valid_combinations:
-            return {"success": False, "error": "没有有效的物料-供应商组合"}
-        
-        # 库存变量
-        I = {}
-        for m in materials_list:
-            for t in days:
-                I[m.material_id, t] = solver.NumVar(0, 1000000, f'I_{m.material_id}_{t}')
-        
-        # 8. 添加约束
-        
-        # 约束1: 库存平衡方程
-        for m in materials_list:
-            # 获取当前库存
-            inv_records = client.models.Inventory.find(material_id=m.material_id)
-            current_inv = inv_records[0].available_quantity if inv_records else 0
+        for pair in feasible_pairs:
+            s = pair["supplier"]
+            m = pair["material"]
+            sm = pair["sm"]
             
-            for t in days:
-                # 计算当天需求量
-                demand = _get_production_demand(client, m.material_id, t)
-                
-                # 计算当天到货量（考虑交期）
-                receipts = []
-                for s, sm in [(item[1], item[2]) for item in valid_combinations if item[0].material_id == m.material_id]:
-                    lead_time = sm.lead_time_days or 0
-                    if t >= lead_time:
-                        receipts.append(y[m.material_id, s.supplier_id, t - lead_time])
-                
-                receipt_sum = sum(receipts) if receipts else 0
-                
-                if t == 0:
-                    solver.Add(I[m.material_id, t] == current_inv + receipt_sum - demand)
-                else:
-                    solver.Add(I[m.material_id, t] == I[m.material_id, t-1] + receipt_sum - demand)
-                
-                # 约束2: 非负库存（不允许缺货）
-                solver.Add(I[m.material_id, t] >= 0)
+            supplier_id = s.supplier_id
+            material_id = m.material_id
+            key = (supplier_id, material_id)
+            
+            # Y变量: 0-1变量，是否选择该供应商
+            y_vars[key] = solver.IntVar(0, 1, f'y_{supplier_id}_{material_id}')
+            
+            # X变量: 采购量，上界为供应商最大供应量
+            max_qty = sm.max_supply_quantity or 1000000
+            x_vars[key] = solver.NumVar(0, max_qty, f'x_{supplier_id}_{material_id}')
         
-        # 9. 目标函数：最小化总采购成本
+        # 12. 添加约束
+        
+        # 约束1: 需求满足 ΣX[s,m] >= demand[m]
+        for m in materials:
+            material_id = m.material_id
+            if material_id not in demand_map:
+                continue
+            
+            demand = demand_map[material_id]["demand"]
+            expr = solver.Sum([
+                x_vars.get((s.supplier_id, material_id), solver.NumVar(0, 0, ''))
+                for s in all_suppliers
+                if (s.supplier_id, material_id) in x_vars
+            ])
+            solver.Add(expr >= demand)
+        
+        # 约束2: 供应商容量 X[s,m] <= capacity[s,m] × Y[s,m]
+        # 约束3: 最小订单量 X[s,m] >= min_order[s,m] × Y[s,m]
+        for key in x_vars:
+            supplier_id, material_id = key
+            x = x_vars[key]
+            y = y_vars[key]
+            
+            # 获取供应商-物料关系
+            sm_key = (supplier_id, material_id)
+            if sm_key not in sm_dict:
+                continue
+            
+            sm = sm_dict[sm_key]
+            
+            # 供应商最大供应量约束
+            max_qty = sm.max_supply_quantity or 1000000
+            solver.Add(x <= max_qty * y)
+            
+            # 最小订单量约束
+            min_order = sm.min_order_quantity or 0
+            if min_order > 0:
+                solver.Add(x >= min_order * y)
+        
+        # 约束4: 每个物料最多选择max_suppliers个供应商
+        for m in materials:
+            material_id = m.material_id
+            if material_id not in demand_map:
+                continue
+            
+            expr = solver.Sum([
+                y_vars.get((s.supplier_id, material_id), solver.IntVar(0, 0, ''))
+                for s in all_suppliers
+                if (s.supplier_id, material_id) in y_vars
+            ])
+            solver.Add(expr <= max_suppliers)
+        
+        # 13. 目标函数：最小化总采购成本
         objective = solver.Objective()
-        for m, s, sm in valid_combinations:
+        for key in x_vars:
+            supplier_id, material_id = key
+            
+            # 获取单价
+            sm_key = (supplier_id, material_id)
+            if sm_key not in sm_dict:
+                continue
+            
+            sm = sm_dict[sm_key]
             unit_price = sm.unit_price or 0
-            for t in days:
-                objective.SetCoefficient(y[m.material_id, s.supplier_id, t], unit_price)
+            
+            objective.SetCoefficient(x_vars[key], unit_price)
         objective.SetMinimization()
         
-        # 10. 预算约束（如果指定）
-        if budget_limit:
-            budget_expr = []
-            for m, s, sm in valid_combinations:
-                unit_price = sm.unit_price or 0
-                for t in days:
-                    budget_expr.append(unit_price * y[m.material_id, s.supplier_id, t])
-            
-            if budget_expr:
-                solver.Add(sum(budget_expr) <= budget_limit)
-        
-        # 11. 求解
-        solver.SetTimeLimit(30000)  # 30秒
+        # 14. 求解
+        solver.SetTimeLimit(30000)
         status = solver.Solve()
         
-        # 12. 解析结果
-        if status == pywraplp.Solver.OPTIMAL:
-            purchase_plan = []
-            total_cost = 0
+        if status not in [pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE]:
+            return {"success": False, "error": "求解失败"}
+        
+        # 15. 解析结果
+        purchase_plan = []
+        total_cost = 0
+        
+        for key in x_vars:
+            supplier_id, material_id = key
+            x_val = x_vars[key].solution_value()
+            y_val = y_vars[key].solution_value()
             
-            for m, s, sm in valid_combinations:
-                for t in days:
-                    qty = y[m.material_id, s.supplier_id, t].solution_value()
-                    if qty > 0.1:  # 阈值过滤
-                        cost = qty * (sm.unit_price or 0)
-                        total_cost += cost
-                        
-                        # 计算到货日期
-                        lead_time = sm.lead_time_days or 0
-                        delivery_date = datetime.now() + timedelta(days=t + lead_time)
-                        
-                        purchase_plan.append({
-                            "material_id": m.material_id,
-                            "material_name": m.material_name,
-                            "supplier_id": s.supplier_id,
-                            "supplier_name": s.supplier_name,
-                            "order_date": (datetime.now() + timedelta(days=t)).strftime('%Y-%m-%d'),
-                            "delivery_date": delivery_date.strftime('%Y-%m-%d'),
-                            "quantity": round(qty, 2),
-                            "unit_price": sm.unit_price,
-                            "total_cost": round(cost, 2),
-                            "lead_time_days": lead_time
-                        })
-            
-            # 按日期排序
-            purchase_plan.sort(key=lambda x: x['order_date'])
-            
-            result = {
-                "planning_days": planning_days,
-                "total_orders": len(purchase_plan),
-                "total_cost": round(total_cost, 2),
-                "budget_limit": budget_limit,
-                "budget_used_percent": round((total_cost / budget_limit * 100) if budget_limit else 0, 2),
-                "purchase_plan": purchase_plan
+            # 只保留有采购量的记录
+            if x_val > 0.1:
+                sm_key = (supplier_id, material_id)
+                sm = sm_dict[sm_key]
+                
+                # 获取物料和供应商名称
+                material_name = None
+                for m in materials:
+                    if m.material_id == material_id:
+                        material_name = m.material_name
+                        break
+                
+                supplier_name = None
+                for s in all_suppliers:
+                    if s.supplier_id == supplier_id:
+                        supplier_name = s.supplier_name
+                        break
+                
+                cost = x_val * (sm.unit_price or 0)
+                total_cost += cost
+                
+                purchase_plan.append({
+                    "supplier_id": supplier_id,
+                    "supplier_name": supplier_name,
+                    "material_id": material_id,
+                    "material_name": material_name,
+                    "quantity": round(x_val, 2),
+                    "unit_price": sm.unit_price or 0,
+                    "cost": round(cost, 2),
+                    "selected": y_val > 0.5
+                })
+        
+        # 按成本排序
+        purchase_plan.sort(key=lambda x: x["cost"], reverse=True)
+        
+        result = {
+            "total_cost": round(total_cost, 2),
+            "total_purchase_items": len(purchase_plan),
+            "purchase_plan": purchase_plan,
+            "forecast_days": forecast_days,
+            "material_demands": {
+                mid: {
+                    "demand": demand_map[mid]["demand"],
+                    "wo_demand": demand_map[mid]["wo_demand"],
+                    "current_inv": demand_map[mid]["current_inv"]
+                }
+                for mid in demand_map
             }
-            
-            return {
-                "success": True,
-                "message": f"采购计划优化完成，总成本: ¥{total_cost:.2f}",
-                "result": result
-            }
-        else:
-            return {
-                "success": False,
-                "error": "无可行解，请检查约束条件"
-            }
+        }
+        
+        return {
+            "success": True,
+            "message": f"采购计划优化完成，总成本: ¥{total_cost:.2f}",
+            "result": result
+        }
         
     except Exception as e:
         return {"success": False, "error": f"执行失败: {str(e)}"}
 
 
-def _get_production_demand(client, material_id, day_offset):
-    """
-    计算某天该物料的生产需求量
-    """
-    try:
-        # 查询使用该物料的工单物料需求
-        woms = client.models.WorkOrderMaterial.find(material_id=material_id)
-        
-        total_demand = 0
-        today = datetime.now()
-        
-        for wom in woms:
-            # 获取关联的工单工序
-            wo_op = client.models.WorkOrderOperation.get(wom.wo_op_id)
-            if wo_op and wo_op.planned_start:
-                # 计算工序开始日期
-                start_date = datetime.fromisoformat(wo_op.planned_start) if isinstance(wo_op.planned_start, str) else wo_op.planned_start
-                days_diff = (start_date - today).days
-                
-                if days_diff == day_offset:
-                    total_demand += wom.required_quantity or 0
-        
-        return total_demand
-    except:
-        return 0
-
-
-# 必须定义result变量供Action框架使用
 result = execute_optimize_purchase_plan(parameters)
 '''
 }
@@ -291,23 +353,36 @@ def import_action():
     print("开始导入采购计划优化Action")
     print("=" * 60)
     
-    # 发送POST请求创建Action
-    response = requests.post(
-        f"{API_URL}/actions",
-        json=ACTION_DATA,
-        headers={"Content-Type": "application/json"}
-    )
+    # 打印请求信息
+    print(f"\nAPI URL: {API_URL}/actions")
+    print(f"Action ID: {ACTION_DATA['id']}")
+    print(f"Function code length: {len(ACTION_DATA.get('function_code', ''))} chars")
     
-    if response.status_code in [200, 201]:
-        print("[SUCCESS] 采购计划优化Action导入成功")
-        print(f"   Action ID: {ACTION_DATA['id']}")
-        print(f"   Action Name: {ACTION_DATA['name']}")
-        print(f"   求解器类型: MIP (CBC)")
-        print(f"   实现难度: 2星")
-        return True
-    else:
-        print(f"[FAILED] 导入失败: {response.status_code}")
-        print(f"   错误信息: {response.text}")
+    # 发送POST请求创建Action
+    try:
+        response = requests.post(
+            f"{API_URL}/actions",
+            json=ACTION_DATA,
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+        
+        print(f"\n响应状态码: {response.status_code}")
+        print(f"响应内容: {response.text[:500]}")
+        
+        if response.status_code in [200, 201]:
+            print("\n[SUCCESS] 采购计划优化Action导入成功")
+            print(f"   Action ID: {ACTION_DATA['id']}")
+            print(f"   Action Name: {ACTION_DATA['name']}")
+            print(f"   求解器类型: MIP (CBC)")
+            print(f"   实现难度: 2星")
+            return True
+        else:
+            print(f"\n[FAILED] 导入失败: {response.status_code}")
+            print(f"   错误信息: {response.text}")
+            return False
+    except Exception as e:
+        print(f"\n[ERROR] 请求异常: {str(e)}")
         return False
 
 
