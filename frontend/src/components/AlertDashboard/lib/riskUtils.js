@@ -2,43 +2,43 @@
 
 // 风险类别映射
 export const RISK_CATEGORY_MAP = {
-  natural_disaster: '自然灾害',
-  geopolitical: '地缘政治',
-  financial: '财务风险',
-  quality: '质量风险',
-  legal: '法律合规',
-  operational: '运营风险'
+  自然灾害: '自然灾害',
+  地缘政治: '地缘政治',
+  财务风险: '财务风险',
+  质量风险: '质量风险',
+  法律合规: '法律合规',
+  运营风险: '运营风险'
 };
 
 // 风险等级映射
 export const RISK_LEVEL_MAP = {
-  critical: { label: '严重', color: '#ef4444' },
-  high: { label: '高', color: '#f97316' },
-  medium: { label: '中', color: '#eab308' },
-  low: { label: '低', color: '#3b82f6' }
+  严重: { label: '严重', color: '#ef4444' },
+  高: { label: '高', color: '#f97316' },
+  中: { label: '中', color: '#eab308' },
+  低: { label: '低', color: '#3b82f6' }
 };
 
 // 风险状态映射
 export const RISK_STATUS_MAP = {
-  new: { label: '新发现', color: '#ef4444' },
-  analyzing: { label: '分析中', color: '#f59e0b' },
-  mitigating: { label: '缓解中', color: '#3b82f6' },
-  resolved: { label: '已解决', color: '#10b981' },
-  ignored: { label: '已忽略', color: '#6b7280' }
+  新发现: { label: '新发现', color: '#ef4444' },
+  分析中: { label: '分析中', color: '#f59e0b' },
+  缓解中: { label: '缓解中', color: '#3b82f6' },
+  已解决: { label: '已解决', color: '#10b981' },
+  已忽略: { label: '已忽略', color: '#6b7280' }
 };
 
 // 影响范围映射
 export const IMPACT_SCOPE_MAP = {
-  global: '全球',
-  regional: '区域',
-  local: '局部'
+  全球: '全球',
+  区域: '区域',
+  局部: '局部'
 };
 
 // 关联类型映射
 export const ASSOCIATION_TYPE_MAP = {
-  direct: '直接影响',
-  indirect: '间接影响',
-  potential: '潜在影响'
+  直接影响: '直接影响',
+  间接影响: '间接影响',
+  潜在影响: '潜在影响'
 };
 
 // 格式化风险类别

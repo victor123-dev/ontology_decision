@@ -24,7 +24,7 @@ class JinaClient:
         data = {"url": url}
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post("https://r.jina.ai/", headers=headers, json=data, timeout=timeout)
+                response = await client.post("https://r.jinaai.cn/", headers=headers, json=data, timeout=timeout)
 
             if response.status_code != 200:
                 error_message = f"Jina API returned status {response.status_code}: {response.text}"

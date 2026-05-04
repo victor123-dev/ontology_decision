@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def _search_text(
     query: str,
     max_results: int = 5,
-    region: str = "wt-wt",
+    region: str = "cn-zh",
     safesearch: str = "moderate",
 ) -> list[dict]:
     """
@@ -44,6 +44,7 @@ def _search_text(
             region=region,
             safesearch=safesearch,
             max_results=max_results,
+            backend="yandex",
         )
         return list(results) if results else []
 
