@@ -80,6 +80,3 @@ frontend/build/
 app/api/dynamic_mcp/action_execute_mcp.py
 app/api/dynamic_mcp/object_get_by_id_mcp.py
 app/api/dynamic_mcp/object_link_query_mcp.py
-
-# deer-flow 已迁移为独立仓库
-deer-flow/
