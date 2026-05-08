@@ -147,14 +147,14 @@ class ExcelImportExportService:
     def _export_business_model_fields(self, wb: Workbook, db: Session):
         """导出对象字段页签"""
         ws = wb.create_sheet("对象字段")
-        
-        # 表头 - 新增“是否必填”列
-        headers = ["ID", "模型ID", "字段ID", "数据类型", "中文名称", "中文说明", "是否必填"]
+            
+        # 表头 - 新增"是否必填"、"是否为枚举"、"枚举值"列
+        headers = ["ID", "模型ID", "字段ID", "数据类型", "中文名称", "中文说明", "是否必填", "是否为枚举", "枚举值"]
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
             cell.font = Font(bold=True)
             cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
-        
+            
         # 数据
         business_model_fields = db.query(BusinessModelField).all()
         for row, field in enumerate(business_model_fields, 2):
@@ -164,8 +164,17 @@ class ExcelImportExportService:
             ws.cell(row=row, column=4, value=field.data_type)
             ws.cell(row=row, column=5, value=field.name)
             ws.cell(row=row, column=6, value=field.description)
-            ws.cell(row=row, column=7, value=field.required if field.required is not None else True)  # 新增：导出required字段
-        
+            ws.cell(row=row, column=7, value=field.required if field.required is not None else True)
+            ws.cell(row=row, column=8, value=field.is_enum if field.is_enum is not None else False)  # 新增：导出is_enum字段
+            # 新增：导出enum_values字段（JSON数组转字符串）
+            enum_values_str = ''
+            if field.enum_values:
+                if isinstance(field.enum_values, list):
+                    enum_values_str = ', '.join(field.enum_values)
+                else:
+                    enum_values_str = str(field.enum_values)
+            ws.cell(row=row, column=9, value=enum_values_str)
+            
         # 自动调整列宽
         for col in range(1, len(headers) + 1):
             ws.column_dimensions[get_column_letter(col)].auto_size = True
@@ -459,7 +468,9 @@ class ExcelImportExportService:
             data_type_col = self._find_column_index(headers, "数据类型")
             name_col = self._find_column_index(headers, "中文名称")
             description_col = self._find_column_index(headers, "中文说明")
-            required_col = self._find_column_index(headers, "是否必填")  # 新增：是否必填列
+            required_col = self._find_column_index(headers, "是否必填")
+            is_enum_col = self._find_column_index(headers, "是否为枚举")  # 新增：是否为枚举列
+            enum_values_col = self._find_column_index(headers, "枚举值")  # 新增：枚举值列
             
             if model_id_col is None or field_id_col is None or name_col is None:
                 result_detail["errors"].append("Missing required columns in business model fields sheet")
@@ -483,6 +494,13 @@ class ExcelImportExportService:
                             BusinessModelField.field_id == row[field_id_col]
                         ).first()
                     
+                    # 处理枚举值：将逗号分隔的字符串转为列表
+                    enum_values_list = None
+                    if enum_values_col is not None and row[enum_values_col]:
+                        enum_values_str = str(row[enum_values_col]).strip()
+                        if enum_values_str:
+                            enum_values_list = [v.strip() for v in enum_values_str.split(',') if v.strip()]
+                    
                     if existing:
                         # 更新现有记录
                         existing.model_id = row[model_id_col]
@@ -490,18 +508,27 @@ class ExcelImportExportService:
                         existing.data_type = row[data_type_col] if data_type_col is not None else existing.data_type
                         existing.name = row[name_col]
                         existing.description = row[description_col] if description_col is not None else existing.description
-                        # 新增：更新required字段
+                        # 更新required字段
                         if required_col is not None and row[required_col] is not None:
                             existing.required = bool(row[required_col])
+                        # 新增：更新is_enum字段
+                        if is_enum_col is not None and row[is_enum_col] is not None:
+                            existing.is_enum = bool(row[is_enum_col])
+                        # 新增：更新enum_values字段
+                        if enum_values_col is not None and enum_values_list is not None:
+                            existing.enum_values = enum_values_list if existing.is_enum else None
                     else:
                         # 创建新记录
+                        is_enum = bool(row[is_enum_col]) if is_enum_col is not None and row[is_enum_col] is not None else False
                         new_field = BusinessModelField(
                             model_id=row[model_id_col],
                             field_id=row[field_id_col],
                             data_type=row[data_type_col] if data_type_col is not None else "TEXT",
                             name=row[name_col],
                             description=row[description_col] if description_col is not None else None,
-                            required=row[required_col] if required_col is not None and row[required_col] is not None else False  # 新增：默认为False
+                            required=row[required_col] if required_col is not None and row[required_col] is not None else False,
+                            is_enum=is_enum,
+                            enum_values=enum_values_list if is_enum else None  # 新增：导入enum_values字段
                         )
                         db.add(new_field)
                     

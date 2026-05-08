@@ -19,14 +19,14 @@ class RiskService:
         self.client = get_ontology_client()
     
     def get_active_risks(self, limit: int = 50) -> List[Dict]:
-        """获取活跃风险事件(status in ['new', 'analyzing', 'mitigating'])"""
+        """获取活跃风险事件(status in ['新发现', '分析中', '缓解中'])"""
         try:
             all_risks = self.client.models.ExternalSupplyChainRisk.find()
             
             active_risks = []
             for risk in all_risks:
                 status = getattr(risk, 'status', '')
-                if status in ['new', 'analyzing', 'mitigating']:
+                if status in ['新发现', '分析中', '缓解中']:
                     # 获取供应商信息
                     supplier_id = getattr(risk, 'supplier_id', '')
                     supplier_name = ''
@@ -170,17 +170,17 @@ class RiskService:
                 if supplier_id not in supplier_stats:
                     supplier_stats[supplier_id] = {
                         'risk_count': 0,
-                        'max_impact_level': 'low',
+                        'max_impact_level': '低',
                         'association_types': []
                     }
                 
                 supplier_stats[supplier_id]['risk_count'] += 1
                 
-                impact_level = getattr(assoc, 'impact_level', 'low')
+                impact_level = getattr(assoc, 'impact_level', '低')
                 assoc_type = getattr(assoc, 'association_type', '')
                 
                 # 更新最高影响等级
-                level_priority = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1}
+                level_priority = {'严重': 4, '高': 3, '中': 2, '低': 1}
                 current_max = supplier_stats[supplier_id]['max_impact_level']
                 if level_priority.get(impact_level, 0) > level_priority.get(current_max, 0):
                     supplier_stats[supplier_id]['max_impact_level'] = impact_level
@@ -213,7 +213,7 @@ class RiskService:
         """获取活跃风险事件数量"""
         try:
             all_risks = self.client.models.ExternalSupplyChainRisk.find()
-            count = sum(1 for risk in all_risks if getattr(risk, 'status', '') in ['new', 'analyzing', 'mitigating'])
+            count = sum(1 for risk in all_risks if getattr(risk, 'status', '') in ['新发现', '分析中', '缓解中'])
             return count
         except Exception as e:
             logger.error(f"获取活跃风险数量失败: {e}")
@@ -227,7 +227,7 @@ class RiskService:
             high_risk_suppliers = set()
             for assoc in all_associations:
                 impact_level = getattr(assoc, 'impact_level', '')
-                if impact_level in ['critical', 'high']:
+                if impact_level in ['严重', '高']:
                     supplier_id = getattr(assoc, 'supplier_id', '')
                     if supplier_id:
                         high_risk_suppliers.add(supplier_id)

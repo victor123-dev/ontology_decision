@@ -118,7 +118,9 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
           type: mapDataTypeToParamType(field.data_type),
           required: isPrimaryKey || field.required, // 主键或字段本身标记为必填则必填
           default_value: '',
-          description: field.description || field.name + (isPrimaryKey ? ' (主键，必填)' : '')
+          description: field.description || field.name + (isPrimaryKey ? ' (主键，必填)' : ''),
+          is_enum: field.is_enum || false,
+          enum_values: field.enum_values || null
         };
       });
     } else {
@@ -128,7 +130,9 @@ const PropertyPanel = ({ element, onUpdate, onDelete, onAddField, onEditField, o
         type: mapDataTypeToParamType(field.data_type),
         required: field.required || false, // 使用字段本身的required属性
         default_value: '',
-        description: field.description || field.name
+        description: field.description || field.name,
+        is_enum: field.is_enum || false,
+        enum_values: field.enum_values || null
       }));
     }
   };
@@ -502,10 +506,20 @@ result = {
                       <List.Item>
                         <Card size="small" style={{ width: '100%' }}>
                           <Space direction="vertical" style={{ width: '100%' }}>
-                            <Typography.Text strong>参数 {index + 1}</Typography.Text>
+                            <Typography.Text strong>
+                              参数 {index + 1}
+                              {param.is_enum && (
+                                <Tag color="blue" style={{ marginLeft: '8px' }}>枚举</Tag>
+                              )}
+                            </Typography.Text>
                             <Typography.Text type="secondary">名称: {param.name}</Typography.Text>
                             <Typography.Text type="secondary">类型: {param.type}</Typography.Text>
                             <Typography.Text type="secondary">必填: {param.required ? '是' : '否'}</Typography.Text>
+                            {param.is_enum && param.enum_values && (
+                              <Typography.Text type="secondary">
+                                枚举值: {Array.isArray(param.enum_values) ? param.enum_values.join(', ') : param.enum_values}
+                              </Typography.Text>
+                            )}
                             {param.description && (
                               <Typography.Text type="secondary">说明: {param.description}</Typography.Text>
                             )}
@@ -639,9 +653,26 @@ result = {
                                 主键
                               </span>
                             )}
+                            {field.is_enum && (
+                              <span style={{ 
+                                marginLeft: '8px', 
+                                backgroundColor: '#d6e4ff', 
+                                color: '#1d39c4', 
+                                padding: '2px 6px', 
+                                borderRadius: '4px', 
+                                fontSize: '12px'
+                              }}>
+                                枚举
+                              </span>
+                            )}
                             <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
                               ID: {field.field_id} | 类型: {field.data_type}
                             </div>
+                            {field.is_enum && field.enum_values && (
+                              <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '4px' }}>
+                                枚举值: {Array.isArray(field.enum_values) ? field.enum_values.join(', ') : field.enum_values}
+                              </div>
+                            )}
                             {field.description && (
                               <div style={{ fontSize: '12px', color: '#595959', marginTop: '4px' }}>
                                 {field.description}
@@ -1092,7 +1123,9 @@ const ParameterEditorForPropertyPanel = ({ value = [], onChange }) => {
       type: 'string',
       required: false,
       default_value: '',
-      description: ''
+      description: '',
+      is_enum: false,
+      enum_values: []
     }
     const newParams = [...parameters, newParam]
     setParameters(newParams)
@@ -1175,6 +1208,25 @@ const ParameterEditorForPropertyPanel = ({ value = [], onChange }) => {
                 onChange={(checked) => handleChange(index, 'required', checked)}
               />
             </Form.Item>
+            
+            <Form.Item label="是否为枚举" valuePropName="checked">
+              <Switch
+                checked={param.is_enum || false}
+                onChange={(checked) => handleChange(index, 'is_enum', checked)}
+              />
+            </Form.Item>
+            
+            {param.is_enum && (
+              <Form.Item label="枚举值">
+                <Select
+                  mode="tags"
+                  value={param.enum_values || []}
+                  onChange={(value) => handleChange(index, 'enum_values', value)}
+                  placeholder="输入枚举值后按回车"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            )}
             
             <Button
               type="text"

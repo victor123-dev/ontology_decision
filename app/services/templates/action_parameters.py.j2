@@ -1,10 +1,13 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal
 {% macro python_type_for_param(param) -%}
-{%- if param.type == "string" or param.type == "text" -%}
+{%- if param.is_enum and param.enum_values -%}
+    {# 枚举类型处理：使用 Literal 类型 #}
+    Literal{{ param.enum_values | tojson }}
+{%- elif param.type == "string" or param.type == "text" -%}
 str
 {%- elif param.type == "integer" -%}
 int
-{%- elif param.type == "float" or param.type == "decimal" -%}
+{%- elif param.type == "float" -%}
 float
 {%- elif param.type == "boolean" -%}
 bool
@@ -60,6 +63,11 @@ class {{ action_name }}Parameters:
         {%- if param.required %}
         if self.{{ param.name }} is None:
             errors.append("Required parameter '{{ param.name }}' is missing")
+        {%- endif %}
+        {%- if param.is_enum and param.enum_values %}
+        if self.{{ param.name }} is not None and self.{{ param.name }} not in {{ param.enum_values | tojson }}:
+            allowed_values = {{ param.enum_values | tojson }}
+            errors.append("Parameter '{{ param.name }}' value '" + str(self.{{ param.name }}) + "' is not in allowed values: " + str(allowed_values))
         {%- endif %}
         {%- endfor %}
         return len(errors) == 0, errors

@@ -1,25 +1,32 @@
 """
 批量导入所有OR-Tools优化Action到本体
 
-包含5个Action:
+包含7个Action:
 1. predict_material_shortage - 缺料预测 (LP)
 2. calculate_ctp - CTP可承诺量计算 (MIP)
 3. optimize_purchase_plan - 采购计划优化 (MIP)
 4. optimize_capacity_allocation - 产能优化分配 (MIP)
 5. optimize_detailed_schedule - 详细排程优化 (CP-SAT)
+6. optimize_capacity_allocation_fast - 产能优化分配 (启发式)
+7. optimize_detailed_schedule_fast - 详细排程优化 (启发式)
 
 功能:
 - 导入前先删除已存在的Action（避免重复导入报错）
 - 批量导入所有Action
 - 输出详细导入结果
 """
+
 import subprocess
 import sys
+import os
 import requests
 import time
 
 # API配置
 API_URL = "http://localhost:8080/api/v1"
+
+# Action目录
+ACTION_DIR = os.path.join(os.path.dirname(__file__), "action_tools")
 
 # Action导入脚本列表
 ACTION_SCRIPTS = [
@@ -57,6 +64,20 @@ ACTION_SCRIPTS = [
         "action_id": "optimize_detailed_schedule",
         "difficulty": "4星",
         "solver": "CP-SAT"
+    },
+    {
+        "name": "产能优化分配（快速）",
+        "file": "import_action_optimize_capacity_allocation_fast.py",
+        "action_id": "optimize_capacity_allocation_fast",
+        "difficulty": "1星",
+        "solver": "启发式 (EDD/SPT/CR)"
+    },
+    {
+        "name": "详细排程优化（快速）",
+        "file": "import_action_optimize_detailed_schedule_fast.py",
+        "action_id": "optimize_detailed_schedule_fast",
+        "difficulty": "2星",
+        "solver": "启发式 (贪婪+2-opt)"
     }
 ]
 
@@ -116,15 +137,16 @@ def main():
     
     for i, action in enumerate(ACTION_SCRIPTS, 1):
         print(f"\n{'='*80}")
-        print(f"[{i}/5] 导入Action: {action['name']}")
+        print(f"[{i}/7] 导入Action: {action['name']}")
         print(f"{'='*80}")
         print(f"   求解器: {action['solver']}")
         print(f"   难度: {action['difficulty']}")
         print()
         
         # 运行导入脚本
+        script_path = os.path.join(ACTION_DIR, action['file'])
         result = subprocess.run(
-            [sys.executable, f"scripts/{action['file']}"],
+            [sys.executable, script_path],
             capture_output=True,
             text=True
         )

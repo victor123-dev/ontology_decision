@@ -41,6 +41,8 @@ class ActionService:
             param_required = param.get("required", False)
             param_type = param.get("type", "string")
             param_default = param.get("default_value")
+            param_is_enum = param.get("is_enum", False)
+            param_enum_values = param.get("enum_values", [])
             
             if param_required and param_name not in parameters:
                 errors.append(f"Required parameter '{param_name}' is missing")
@@ -48,6 +50,16 @@ class ActionService:
             
             if param_name in parameters:
                 value = parameters[param_name]
+                # 对于可选参数，如果值为None，跳过类型验证
+                if value is None and not param_required:
+                    continue
+                    
+                # 验证枚举值
+                if param_is_enum and param_enum_values:
+                    if value not in param_enum_values:
+                        errors.append(f"Parameter '{param_name}' value '{value}' is not in allowed values: {param_enum_values}")
+                        continue
+                
                 if not self._validate_type(value, param_type):
                     errors.append(f"Parameter '{param_name}' should be of type {param_type}")
         

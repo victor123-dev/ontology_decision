@@ -102,7 +102,9 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
           type: mapDataTypeToParamType(field.data_type),
           required: isPrimaryKey, // 主键必填，其他字段可选
           default_value: '',
-          description: field.description || field.name + (isPrimaryKey ? ' (主键，必填)' : '')
+          description: field.description || field.name + (isPrimaryKey ? ' (主键，必填)' : ''),
+          is_enum: field.is_enum || false,
+          enum_values: field.enum_values || null
         };
       });
     } else {
@@ -112,7 +114,9 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
         type: mapDataTypeToParamType(field.data_type),
         required: field.required || false,  // 使用字段的required值
         default_value: '',
-        description: field.description || field.name
+        description: field.description || field.name,
+        is_enum: field.is_enum || false,
+        enum_values: field.enum_values || null
       }));
     }
   };
@@ -323,9 +327,36 @@ const Toolbar = ({ onAddModel, onAddLink, onAddAction, models, }) => {
 
   const handleActionSubmit = () => {
     actionForm.validateFields().then(values => {
+      // 处理参数的枚举值：确保逻辑一致性
+      if (values.parameters && Array.isArray(values.parameters)) {
+        values.parameters = values.parameters.map(param => {
+          if (param.is_enum) {
+            // 开启枚举时，枚举值必填
+            if (!param.enum_values || param.enum_values.length === 0) {
+              message.error(`参数 "${param.name || '未命名'}" 开启枚举时，必须至少输入一个枚举值`);
+              throw new Error('枚举值必填');
+            }
+            return {
+              ...param,
+              enum_values: Array.isArray(param.enum_values) ? param.enum_values : []
+            };
+          } else {
+            // 关闭枚举时，清空枚举值
+            return {
+              ...param,
+              is_enum: false,
+              enum_values: []
+            };
+          }
+        });
+      }
+      
       onAddAction(values);
       actionForm.resetFields();
       setActionModalVisible(false);
+    }).catch(error => {
+      // 验证失败或枚举值检查失败
+      console.error('Action提交失败:', error);
     });
   };
 
@@ -1106,7 +1137,9 @@ const ParameterEditor = ({ value = [], onChange }) => {
       type: 'string',
       required: false,
       default_value: '',
-      description: ''
+      description: '',
+      is_enum: false,
+      enum_values: []
     }
     const newParams = [...parameters, newParam]
     setParameters(newParams)
@@ -1189,6 +1222,28 @@ const ParameterEditor = ({ value = [], onChange }) => {
                 onChange={(checked) => handleChange(index, 'required', checked)}
               />
             </Form.Item>
+            
+            <Form.Item 
+              label="是否为枚举" 
+              valuePropName="checked"
+            >
+              <Switch
+                checked={param.is_enum || false}
+                onChange={(checked) => handleChange(index, 'is_enum', checked)}
+              />
+            </Form.Item>
+            
+            {param.is_enum && (
+              <Form.Item label="枚举值">
+                <Select
+                  mode="tags"
+                  value={param.enum_values || []}
+                  onChange={(value) => handleChange(index, 'enum_values', value)}
+                  placeholder="输入枚举值后按回车"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            )}
             
             <Button
               type="text"

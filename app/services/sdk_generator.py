@@ -42,7 +42,9 @@ class SDKGenerator:
                         "name": field.name,
                         "data_type": field.data_type,
                         "description": field.description,
-                        "required": field.required  # 新增：包含required字段
+                        "required": field.required,
+                        "is_enum": getattr(field, 'is_enum', False),  # 新增：包含is_enum字段
+                        "enum_values": getattr(field, 'enum_values', None)  # 新增：包含enum_values字段
                     }
                     for field in model.fields
                 ]
@@ -477,16 +479,11 @@ class SDKGenerator:
             'text': 'str',
             'integer': 'int',
             'float': 'float',
-            'decimal': 'float',
             'boolean': 'bool',
             'date': 'str',
             'datetime': 'str',
-            'time': 'str',
-            'json': 'Dict[str, Any]',
             'object': 'Dict[str, Any]',
-            'array': 'List[Any]',
-            'uuid': 'str',
-            'binary': 'bytes'
+            'array': 'List[Any]'
         }
         return type_mapping.get(data_type.lower(), 'Any')
     
@@ -508,7 +505,9 @@ class SDKGenerator:
                 'python_type': self._get_action_parameter_python_type(param),
                 'required': param.get('required', False),
                 'description': param.get('description', ''),
-                'default_value': param.get('default_value', None)
+                'default_value': param.get('default_value', None),
+                'is_enum': param.get('is_enum', False),
+                'enum_values': param.get('enum_values', None)
             }
             prepared_params.append(prepared_param)
         return prepared_params
@@ -526,7 +525,9 @@ class SDKGenerator:
                 'python_type': self._get_python_type(field.data_type),
                 'description': field.description or field.field_id,
                 'required': getattr(field, 'required', False),
-                'default': getattr(field, 'default', None)
+                'default': getattr(field, 'default', None),
+                'is_enum': getattr(field, 'is_enum', False),
+                'enum_values': getattr(field, 'enum_values', None)  # JSON类型已自动反序列化为列表
             }
             prepared_fields.append(prepared_field)
         return prepared_fields
@@ -604,7 +605,9 @@ class SDKGenerator:
                         "name": field.name,
                         "data_type": field.data_type,
                         "description": field.description,
-                        "required": field.required  # 新增：包含required字段
+                        "required": field.required,
+                        "is_enum": getattr(field, 'is_enum', False),  # 新增：包含is_enum字段
+                        "enum_values": getattr(field, 'enum_values', None)  # 新增：包含enum_values字段
                     }
                     for field in model.fields
                 ]
@@ -645,7 +648,9 @@ class SDKGenerator:
                             "name": field.name,
                             "data_type": field.data_type,
                             "description": field.description,
-                            "required": field.required  # 新增：包含required字段
+                            "required": field.required,
+                            "is_enum": getattr(field, 'is_enum', False),  # 新增：包含is_enum字段
+                            "enum_values": getattr(field, 'enum_values', None)  # 新增：包含enum_values字段
                         }
                         for field in source_model.fields
                     ]
@@ -664,7 +669,9 @@ class SDKGenerator:
                             "name": field.name,
                             "data_type": field.data_type,
                             "description": field.description,
-                            "required": field.required  # 新增：包含required字段
+                            "required": field.required,
+                            "is_enum": getattr(field, 'is_enum', False),  # 新增：包含is_enum字段
+                            "enum_values": getattr(field, 'enum_values', None)  # 新增：包含enum_values字段
                         }
                         for field in target_model.fields
                     ]

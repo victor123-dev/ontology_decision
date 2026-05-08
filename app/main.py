@@ -86,11 +86,17 @@ def include_all_mcp_routers():
     """动态包含general_mcp和dynamic_mcp目录中的所有路由器"""
     import inspect
     
+    # 记录已注册的路由器，避免重复注册
+    registered_routers = set()
+    
     # 包含dynamic_mcp中的所有路由器  
     for attr_name in dir(dynamic_mcp):
         attr = getattr(dynamic_mcp, attr_name)
         if hasattr(attr, 'router'):
-            app.include_router(attr.router, prefix="/api/v1", tags=["ontology"])
+            router_id = id(attr.router)
+            if router_id not in registered_routers:
+                app.include_router(attr.router, prefix="/api/v1", tags=["ontology"])
+                registered_routers.add(router_id)
 
 include_all_mcp_routers()
 

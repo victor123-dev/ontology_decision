@@ -1,4 +1,6 @@
-from typing import Dict, Any, Optional, List, Union, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, Union, TYPE_CHECKING, ClassVar
+import json
+from pydantic import BaseModel, PrivateAttr, ConfigDict
 
 if TYPE_CHECKING:
     from .client import OntologyClient
@@ -55,7 +57,7 @@ class BusinessModelManager:
         if response.status_code == 200:
             result = response.json()
             items = result.get("data", [])
-            return [self.model_class(self.client, item) for item in items]
+            return [self.model_class(client=self.client, **item) for item in items]
         return []
     
     def get(self, object_id: str) -> Optional['BusinessModel']:
@@ -66,7 +68,7 @@ class BusinessModelManager:
             result = response.json()
             item_data = result.get("data", {})
             if item_data:
-                return self.model_class(self.client, item_data)
+                return self.model_class(client=self.client, **item_data)
         return None
     
     def create(self, data: Union[Dict[str, Any], 'BusinessModel', None] = None, **kwargs) -> Optional['BusinessModel']:
@@ -84,8 +86,11 @@ class BusinessModelManager:
         # 处理不同的输入格式
         if isinstance(data, dict):
             create_data = data
+        elif hasattr(data, 'model_dump') and callable(getattr(data, 'model_dump')):
+            # BusinessModel 实例（pydantic）
+            create_data = data.model_dump(exclude={'_client'})
         elif hasattr(data, 'to_dict') and callable(getattr(data, 'to_dict')):
-            # BusinessModel 实例
+            # BusinessModel 实例（旧版）
             create_data = data.to_dict()
         elif data is None:
             # 使用 kwargs
@@ -99,7 +104,7 @@ class BusinessModelManager:
             # 使用服务器返回的完整数据
             result = response.json()
             if "data" in result:
-                return self.model_class(self.client, result["data"])
+                return self.model_class(client=self.client, **result["data"])
             else:
                 return None
         return None
@@ -132,10 +137,12 @@ class BusinessModelManager:
         return self.count(**filters) > 0
 
 
-class BusinessModel:
+class BusinessModel(BaseModel):
     """业务对象基类
 
     所有业务对象模型的基类，提供通用的CRUD操作和查询功能。
+    
+    注意：client 使用 PrivateAttr，不会被序列化。
 
     使用示例：
         # 通过 models 命名空间访问（管理器方法）
@@ -149,37 +156,53 @@ class BusinessModel:
         work_order.refresh()
     """
 
-    _model_name = ""
-    _fields = {}
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-    def __init__(self, client: 'OntologyClient', data: Dict[str, Any] = None):
-        # 确保 data 属性总是存在，防止 AttributeError
-        self.data = {}
-        self.client = client
-        if data is not None and isinstance(data, dict):
-            self.data = data
+    # 使用 ClassVar 明确标记为类变量，pydantic 不会把它们当作字段
+    _model_name: ClassVar[str] = ""
+    _primary_key_field: ClassVar[str] = ""
+    _fields: ClassVar[Dict[str, str]] = {}
+    
+    # client 是私有属性，不会被序列化
+    _client: Optional['OntologyClient'] = PrivateAttr(default=None)
 
-    def to_dict(self) -> Dict[str, Any]:
-        """将对象转换为字典"""
-        return self.data.copy()
-
+    def __init__(self, client: Optional['OntologyClient'] = None, **data):
+        # Auto-parse JSON strings for array fields
+        for field_name, field_type in getattr(self, '_fields', {}).items():
+            if field_type in ['object','array'] and field_name in data:
+                value = data[field_name]
+                if isinstance(value, str):
+                    try:
+                        data[field_name] = json.loads(value)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        
+        super().__init__(**data)
+        self._client = client
+    
+    @property
+    def client(self) -> Optional['OntologyClient']:
+        """获取客户端"""
+        return self._client
+    
+    @client.setter
+    def client(self, value):
+        self._client = value
+    
     def __repr__(self) -> str:
         """对象字符串表示"""
         primary_key_value = self._get_primary_key_value()
         return f"<{self.__class__.__name__}({self._primary_key_field}={primary_key_value})>"
-
+    
     def __str__(self) -> str:
         """对象字符串表示"""
         return self.__repr__()
     
     def _get_primary_key_value(self) -> Any:
         """获取主键值"""
-        if not hasattr(self, 'data') or not isinstance(self.data, dict):
-            return None
         if hasattr(self, '_primary_key_field'):
             primary_key_field = self._primary_key_field
-            if hasattr(self, primary_key_field):
-                return getattr(self, primary_key_field)
+            return getattr(self, primary_key_field, None)
         return None
 
     # ============ 实例方法 ============
@@ -198,7 +221,8 @@ class BusinessModel:
             # 使用服务器返回的完整数据更新本地状态
             result = response.json()
             if "data" in result:
-                self.data = result["data"]
+                for key, value in result["data"].items():
+                    setattr(self, key, value)
                 return True
             else:
                 # 如果服务器没有返回完整数据
@@ -233,6 +257,7 @@ class BusinessModel:
             result = response.json()
             item_data = result.get("data", {})
             if item_data:
-                self.data = item_data
+                for key, value in item_data.items():
+                    setattr(self, key, value)
                 return True
         return False

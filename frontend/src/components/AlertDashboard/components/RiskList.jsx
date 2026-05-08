@@ -18,14 +18,14 @@ export default function RiskList({ refreshTrigger }) {
       refetch();
     }
   }, [refreshTrigger, refetch]);
-  const [filterLevel, setFilterLevel] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterLevel, setFilterLevel] = useState('全部等级');
+  const [filterCategory, setFilterCategory] = useState('全部类别');
   const [expandedRisk, setExpandedRisk] = useState(null);
-
+  
   // 筛选
   const filteredRisks = risks.filter(risk => {
-    const matchLevel = filterLevel === 'all' || risk.risk_level === filterLevel;
-    const matchCategory = filterCategory === 'all' || risk.risk_category === filterCategory;
+    const matchLevel = filterLevel === '全部等级' || risk.risk_level === filterLevel;
+    const matchCategory = filterCategory === '全部类别' || risk.risk_category === filterCategory;
     return matchLevel && matchCategory;
   });
 
@@ -65,11 +65,11 @@ export default function RiskList({ refreshTrigger }) {
             color: '#cbd5e1'
           }}
         >
-          <option value="all">全部等级</option>
-          <option value="critical">严重</option>
-          <option value="high">高</option>
-          <option value="medium">中</option>
-          <option value="low">低</option>
+          <option value="全部等级">全部等级</option>
+          <option value="严重">严重</option>
+          <option value="高">高</option>
+          <option value="中">中</option>
+          <option value="低">低</option>
         </select>
 
         <select
@@ -81,13 +81,13 @@ export default function RiskList({ refreshTrigger }) {
             color: '#cbd5e1'
           }}
         >
-          <option value="all">全部类别</option>
-          <option value="natural_disaster">自然灾害</option>
-          <option value="geopolitical">地缘政治</option>
-          <option value="financial">财务风险</option>
-          <option value="quality">质量风险</option>
-          <option value="legal">法律合规</option>
-          <option value="operational">运营风险</option>
+          <option value="全部类别">全部类别</option>
+          <option value="自然灾害">自然灾害</option>
+          <option value="地缘政治">地缘政治</option>
+          <option value="财务风险">财务风险</option>
+          <option value="质量风险">质量风险</option>
+          <option value="法律合规">法律合规</option>
+          <option value="运营风险">运营风险</option>
         </select>
 
         <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#64748b' }}>

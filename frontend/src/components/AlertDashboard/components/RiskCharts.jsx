@@ -68,8 +68,10 @@ export default function RiskCharts({ refreshTrigger }) {
                   background: '#1e293b',
                   border: '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '4px',
-                  fontSize: '11px'
+                  fontSize: '11px',
+                  color: '#e2e8f0'
                 }}
+                itemStyle={{ color: '#e2e8f0' }}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -100,8 +102,10 @@ export default function RiskCharts({ refreshTrigger }) {
                   background: '#1e293b',
                   border: '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '4px',
-                  fontSize: '11px'
+                  fontSize: '11px',
+                  color: '#e2e8f0'
                 }}
+                itemStyle={{ color: '#e2e8f0' }}
               />
               <Bar dataKey="value" fill="#3b82f6" radius={[2, 2, 0, 0]} />
             </BarChart>

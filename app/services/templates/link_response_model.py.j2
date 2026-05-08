@@ -1,22 +1,21 @@
 {% macro python_type_for_field(field) -%}
-{%- if field.data_type == "string" or field.data_type == "text" -%}
+{%- if field.is_enum and field.enum_values -%}
+    {# 枚举类型处理：使用 Literal 类型 #}
+    Literal{{ field.enum_values | tojson }}
+{%- elif field.data_type == "string" or field.data_type == "text" -%}
 str
 {%- elif field.data_type == "integer" -%}
 int
-{%- elif field.data_type == "float" or field.data_type == "decimal" -%}
+{%- elif field.data_type == "float" -%}
 float
 {%- elif field.data_type == "boolean" -%}
 bool
-{%- elif field.data_type == "date" or field.data_type == "datetime" or field.data_type == "time" -%}
+{%- elif field.data_type == "date" or field.data_type == "datetime" -%}
 str
-{%- elif field.data_type == "json" or field.data_type == "object" -%}
+{%- elif field.data_type == "object" -%}
 Dict[str, Any]
 {%- elif field.data_type == "array" -%}
 List[Any]
-{%- elif field.data_type == "uuid" -%}
-str
-{%- elif field.data_type == "binary" -%}
-bytes
 {%- else -%}
 Any
 {%- endif -%}

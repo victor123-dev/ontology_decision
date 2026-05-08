@@ -1,5 +1,6 @@
 from threading import Lock
 import sqlite3
+import json
 import time
 from typing import Dict, Any, List, Optional
 from app.models.data_source import DataSource
@@ -20,14 +21,15 @@ def map_data_type_to_sqlite(data_type: str) -> str:
         SQLite字段类型字符串
     """
     type_mapping = {
-        'string': 'TEXT',
+        'string': 'VARCHAR',
+        'text': 'TEXT',
         'integer': 'INTEGER', 
-        'float': 'REAL',
-        'boolean': 'INTEGER',
-        'object': 'JSON',
+        'float': 'FLOAT',
+        'boolean': 'BOOLEAN',  
+        'object': 'JSON', 
         'array': 'JSON',
-        'date': 'TEXT',
-        'datetime': 'TEXT'
+        'date': 'DATE',
+        'datetime': 'DATETIME'
     }
     
     # 转换为小写进行匹配，提供默认值
@@ -104,12 +106,20 @@ class DataSourceManager:
         
         client = self.get_client(data_source_id=data_source_id)
         try:
+            # 序列化复杂类型（list, dict等）为JSON字符串
+            serialized_data = {}
+            for key, value in data.items():
+                if isinstance(value, (list, dict)):
+                    serialized_data[key] = json.dumps(value, ensure_ascii=False)
+                else:
+                    serialized_data[key] = value
+            
             # 使用client的execute_query方法来执行INSERT
-            columns = ', '.join(data.keys())
-            placeholders = ', '.join(['?' for _ in data.values()])
+            columns = ', '.join(serialized_data.keys())
+            placeholders = ', '.join(['?' for _ in serialized_data.values()])
             query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
             # SQLite的execute_query方法支持执行非查询语句
-            client.execute_query(query, list(data.values()))
+            client.execute_query(query, list(serialized_data.values()))
             return True
         except Exception as e:
             logger.error(f"Execute insert failed: {str(e)}")
@@ -126,11 +136,18 @@ class DataSourceManager:
         
         client = self.get_client(data_source_id=data_source_id)
         try:
+            # 序列化复杂类型（list, dict等）为JSON字符串
             update_values = {k: v for k, v in data.items() if k != primary_key}
+            serialized_values = {}
+            for key, value in update_values.items():
+                if isinstance(value, (list, dict)):
+                    serialized_values[key] = json.dumps(value, ensure_ascii=False)
+                else:
+                    serialized_values[key] = value
             
-            set_clause = ', '.join([f"{key} = ?" for key in update_values.keys()])
+            set_clause = ', '.join([f"{key} = ?" for key in serialized_values.keys()])
             query = f"UPDATE {table_name} SET {set_clause} WHERE {primary_key} = ?"
-            values = list(update_values.values()) + [primary_value]
+            values = list(serialized_values.values()) + [primary_value]
             
             client.execute_query(query, values)
             return True
@@ -168,6 +185,14 @@ class DataSourceManager:
                 raise ValueError(f"DataSource not found: {data_source_name}")
             data_source_id = data_source.id
         
+        # 序列化复杂类型（list, dict等）为JSON字符串
+        serialized_data = {}
+        for key, value in data.items():
+            if isinstance(value, (list, dict)):
+                serialized_data[key] = json.dumps(value, ensure_ascii=False)
+            else:
+                serialized_data[key] = value
+        
         max_retries = 3
         retry_delay = 0.1  # 秒
         
@@ -176,24 +201,24 @@ class DataSourceManager:
             try:
                 if self._is_sqlite(client):
                     # SQLite 使用 INSERT OR REPLACE
-                    columns = ', '.join(data.keys())
-                    placeholders = ', '.join(['?' for _ in data.values()])
+                    columns = ', '.join(serialized_data.keys())
+                    placeholders = ', '.join(['?' for _ in serialized_data.values()])
                     query = f"INSERT OR REPLACE INTO {table_name} ({columns}) VALUES ({placeholders})"
-                    client.execute_query(query, list(data.values()))
+                    client.execute_query(query, list(serialized_data.values()))
                 else:
                     # 其他数据库使用标准UPSERT语法（这里简化处理为先尝试插入，失败则更新）
                     try:
-                        columns = ', '.join(data.keys())
-                        placeholders = ', '.join(['?' for _ in data.values()])
+                        columns = ', '.join(serialized_data.keys())
+                        placeholders = ', '.join(['?' for _ in serialized_data.values()])
                         query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-                        client.execute_query(query, list(data.values()))
+                        client.execute_query(query, list(serialized_data.values()))
                     except Exception:
                         # 插入失败，尝试更新
-                        if primary_key and primary_key in data:
-                            update_values = {k: v for k, v in data.items() if k != primary_key}
+                        if primary_key and primary_key in serialized_data:
+                            update_values = {k: v for k, v in serialized_data.items() if k != primary_key}
                             set_clause = ', '.join([f"{key} = ?" for key in update_values.keys()])
                             query = f"UPDATE {table_name} SET {set_clause} WHERE {primary_key} = ?"
-                            values = list(update_values.values()) + [data[primary_key]]
+                            values = list(update_values.values()) + [serialized_data[primary_key]]
                             client.execute_query(query, values)
                         else:
                             raise
