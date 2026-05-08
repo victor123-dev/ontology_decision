@@ -92,6 +92,15 @@ export const actionApi = {
   execute: (data) => api.post('/actions/execute', data),
 };
 
+// 逻辑编排管理
+export const orchestrationApi = {
+  create: (data) => api.post('/orchestrations', data),
+  getAll: () => api.get('/orchestrations'),
+  get: (id) => api.get(`/orchestrations/${id}`),
+  update: (id, data) => api.put(`/orchestrations/${id}`, data),
+  delete: (id) => api.delete(`/orchestrations/${id}`),
+};
+
 // SDK生成
 export const sdkApi = {
   generate: (data) => api.post('/sdk/generate', data),

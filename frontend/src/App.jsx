@@ -15,6 +15,8 @@ import TestExecution from './components/TestExecution/TestExecution'
 import DocumentImport from './components/DocumentImport/DocumentImport'
 import DriveVisualization from './components/DriveVisualization/DriveVisualization'
 import AlertDashboard from './components/AlertDashboard/AlertDashboard'
+import LogicOrchestration from './components/LogicOrchestration/LogicOrchestrationList'
+import LogicOrchestrationCanvas from './components/LogicOrchestration/LogicOrchestrationCanvas'
 import { AgentButton, AgentPanel } from './components/AgentDialog'
 
 const { Header, Sider, Content } = Layout
@@ -96,6 +98,11 @@ function AppContent() {
                   key: 'drive-logic',
                   icon: <span>⚙️</span>,
                   label: <Link to="/drive-logic">驱动逻辑配置</Link>,
+                },
+                {
+                  key: 'logic-orchestration',
+                  icon: <span>🔗</span>,
+                  label: <Link to="/logic-orchestration">逻辑编排</Link>,
                 }
               ]
             },
@@ -153,6 +160,8 @@ function AppContent() {
             <Route path="/drive-log" element={<DriveLog />} />
             <Route path="/drive-visualization" element={<DriveVisualization />} />
             <Route path="/alert-dashboard" element={<AlertDashboard />} />
+            <Route path="/logic-orchestration" element={<LogicOrchestration />} />
+            <Route path="/logic-orchestration/:id" element={<LogicOrchestrationCanvas />} />
             <Route path="/" element={<AlertDashboard />} />
           </Routes>
         </Content>
