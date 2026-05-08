@@ -197,6 +197,7 @@
   border-radius: 8px;
   padding: 12px;
   min-width: 180px;
+  min-height: 120px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s;
   position: relative;
@@ -251,6 +252,21 @@
 .action-node-params:hover {
   background: #e6f7ff;
   border-color: #40a9ff;
+}
+
+.action-node-context {
+  padding: 6px 8px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 4px;
+  margin-top: 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.action-node-context:hover {
+  border-color: #52c41a;
+  background: #f6ffed;
 }
 
 
@@ -627,4 +643,38 @@
   border-bottom: 2px solid #e8e8e8;
   padding-bottom: 10px;
   margin-bottom: 4px;
+}
+
+/* 逻辑编排列表表格优化样式 */
+.logic-orchestration-list-container .ant-table {
+  font-size: 13px;
+}
+
+.logic-orchestration-list-container .ant-table-thead > tr > th {
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  background: #fafafa;
+  text-align: center;
+}
+
+.logic-orchestration-list-container .ant-table-tbody > tr > td {
+  padding: 10px 12px;
+}
+
+.logic-orchestration-list-container .ant-table-tbody > tr:hover > td {
+  background: #f5f5f5;
+}
+
+.logic-orchestration-list-container .ant-pagination {
+  margin: 12px 0 0 0;
+}
+
+.logic-orchestration-list-container .ant-card-head {
+  min-height: 48px;
+  padding: 0 16px;
+}
+
+.logic-orchestration-list-container .ant-card-head-title {
+  padding: 12px 0;
 }

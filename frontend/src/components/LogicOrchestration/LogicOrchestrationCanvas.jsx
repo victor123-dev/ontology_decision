@@ -39,10 +39,18 @@ const ActionNode = ({ data, id }) => {
     }));
   };
 
+  const handleContextClick = (e) => {
+    e.stopPropagation();
+    window.dispatchEvent(new CustomEvent('configContextHandler', {
+      detail: { nodeId: id, nodeData }
+    }));
+  };
+
   const paramValues = nodeData.paramValues || {};
   const paramDefs = nodeData.params || [];
   const hasParams = paramDefs.length > 0;
   const configuredCount = paramDefs.filter(p => paramValues[p.name] !== undefined && paramValues[p.name] !== '').length;
+  const hasContextHandler = !!nodeData.contextHandler;
 
   return (
     <div 
@@ -82,6 +90,11 @@ const ActionNode = ({ data, id }) => {
           <span>参数 {configuredCount > 0 ? `(${configuredCount}/${paramDefs.length})` : ''}</span>
         </div>
       )}
+      <div className="action-node-context" onClick={handleContextClick}>
+        <span style={{ fontSize: '11px', color: hasContextHandler ? '#52c41a' : '#8c8c8c' }}>
+          {hasContextHandler ? '✓ 上下文处理' : '+ 上下文处理'}
+        </span>
+      </div>
       <Handle 
         type="source" 
         position={Position.Bottom} 
@@ -311,6 +324,9 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   const [branchModalVisible, setBranchModalVisible] = useState(false);
   const [branchModalNodeId, setBranchModalNodeId] = useState(null);
   const [branchForm] = Form.useForm();
+  const [contextHandlerModalVisible, setContextHandlerModalVisible] = useState(false);
+  const [contextHandlerNodeId, setContextHandlerNodeId] = useState(null);
+  const [contextHandlerForm] = Form.useForm();
   const historyRef = useRef([]);
   const historyIndexRef = useRef(-1);
   const isUndoRedoRef = useRef(false);
@@ -356,6 +372,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
                   paramValues: nodeData.paramValues || {},
                   branches: nodeData.branches || [],
                   condition: nodeData.condition || '',
+                  contextHandler: nodeData.contextHandler || '',
                 },
               };
             });
@@ -574,16 +591,27 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       setBranchModalVisible(true);
     };
 
+    const handleConfigContextHandler = (event) => {
+      const { nodeId, nodeData } = event.detail;
+      setContextHandlerNodeId(nodeId);
+      contextHandlerForm.setFieldsValue({
+        contextHandler: nodeData.contextHandler || ''
+      });
+      setContextHandlerModalVisible(true);
+    };
+
     window.addEventListener('deleteNode', handleDeleteNode);
     window.addEventListener('deleteBranch', handleDeleteBranch);
     window.addEventListener('configActionParams', handleConfigActionParams);
     window.addEventListener('requestAddBranch', handleRequestAddBranch);
+    window.addEventListener('configContextHandler', handleConfigContextHandler);
 
     return () => {
       window.removeEventListener('deleteNode', handleDeleteNode);
       window.removeEventListener('deleteBranch', handleDeleteBranch);
       window.removeEventListener('configActionParams', handleConfigActionParams);
       window.removeEventListener('requestAddBranch', handleRequestAddBranch);
+      window.removeEventListener('configContextHandler', handleConfigContextHandler);
     };
   }, [collectDownstreamIds, remapGhostNodes, remapBranchEdges, branchForm]);
 
@@ -771,7 +799,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     const nodeWidth = 220;
-    const nodeHeight = 110;
+    const nodeHeight = 130;
 
     dagreGraph.setGraph({ 
       rankdir: direction, nodesep: 60, ranksep: 120, marginx: 80, marginy: 80, align: 'DL', ranker: 'network-simplex', edgesep: 40,
@@ -862,7 +890,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     
     let targetGhostNode = null;
     const ghostNodeWidth = 220;
-    const ghostNodeHeight = 110;
+    const ghostNodeHeight = 130;
     
     nodes.forEach(node => {
       if (node.type === 'ghost' && node.id.startsWith('ghost-')) {
@@ -1087,6 +1115,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           paramValues: n.data.paramValues || {},
           branches: n.data.branches || [],
           condition: n.data.condition || '',
+          contextHandler: n.data.contextHandler || '',
         },
       })),
       edges: realEdges.map(e => ({
@@ -1138,6 +1167,26 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       message.success(configured > 0 ? `已配置 ${configured} 个参数` : '已清除参数配置');
     } catch {}
   }, [actionParamForm, actionParamNodeId, actionParamDefs, setNodes]);
+
+  // 保存上下文处理脚本
+  const handleSaveContextHandler = useCallback(async () => {
+    try {
+      const values = await contextHandlerForm.validateFields();
+      const contextHandler = values.contextHandler?.trim() || '';
+      setNodes((nds) => nds.map(n => {
+        if (n.id === contextHandlerNodeId) {
+          return { ...n, data: { ...n.data, contextHandler } };
+        }
+        return n;
+      }));
+      setContextHandlerModalVisible(false);
+      if (contextHandler) {
+        message.success('上下文处理脚本已保存');
+      } else {
+        message.info('已清除上下文处理脚本');
+      }
+    } catch {}
+  }, [contextHandlerForm, contextHandlerNodeId, setNodes]);
 
   // 保存编排
   const handleSave = useCallback(async () => {
@@ -1337,29 +1386,41 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       </Modal>
 
       {/* Action 节点参数配置弹窗 */}
-      <Modal title="Action 参数配置" open={actionParamModalVisible} onOk={handleSaveActionParams} onCancel={() => setActionParamModalVisible(false)} width={600} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title="Action 参数配置" open={actionParamModalVisible} onOk={handleSaveActionParams} onCancel={() => setActionParamModalVisible(false)} width={720} okText="确认" cancelText="取消" destroyOnHidden>
         {actionParamDefs.length > 0 ? (
-          <Form form={actionParamForm} layout="vertical">
-            <div className="param-row param-header">
-              <span style={{ flex: 2 }}>参数名</span>
-              <span style={{ flex: 1, textAlign: 'center' }}>类型</span>
-              <span style={{ flex: 1, textAlign: 'center' }}>是否必填</span>
-              <span style={{ flex: 3 }}>参数值</span>
-            </div>
-            {actionParamDefs.map(p => (
-              <div key={p.name} className="param-row" style={{ alignItems: 'center' }}>
-                <div style={{ flex: 2 }}>
-                  <Text strong style={{ fontSize: 13 }}>{p.name}</Text>
-                  {p.description && <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>{p.description}</Text>}
-                </div>
-                <div style={{ flex: 1, textAlign: 'center' }}><Tag color="blue" style={{ fontSize: 10 }}>{p.type}</Tag></div>
-                <div style={{ flex: 1, textAlign: 'center' }}>{p.required ? <Tag color="red" style={{ fontSize: 10 }}>必填</Tag> : <Tag style={{ fontSize: 10 }}>可选</Tag>}</div>
-                <Form.Item name={p.name} initialValue={actionParamValues[p.name] || ''} style={{ flex: 3, marginBottom: 0 }} rules={p.required ? [{ required: true, message: '请输入参数值' }] : []}>
-                  <Input placeholder={`输入 ${p.type} 类型的值`} size="small" />
-                </Form.Item>
+          <div>
+            <div style={{ marginBottom: 16, padding: 12, background: '#e6f7ff', borderRadius: 4, border: '1px solid #91d5ff' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <strong>参数值填写说明：</strong>参数值可以是固定值，也可以引用动态数据
+              </Text>
+              <div style={{ marginTop: 8, fontSize: 11, color: '#8c8c8c', fontFamily: 'Consolas, Monaco, monospace' }}>
+                <div><span style={{ color: '#1890ff' }}>固定值：</span>直接输入，如 <span style={{ color: '#52c41a' }}>123</span> 或 <span style={{ color: '#52c41a' }}>"hello"</span></div>
+                <div><span style={{ color: '#1890ff' }}>请求参数：</span>req.body.xxx、req.query.xxx、req.params.xxx，如 <span style={{ color: '#52c41a' }}>req.body.userId</span></div>
+                <div><span style={{ color: '#1890ff' }}>上下文数据：</span>context.xxx，如 <span style={{ color: '#52c41a' }}>context.userData</span></div>
               </div>
-            ))}
-          </Form>
+            </div>
+            <Form form={actionParamForm} layout="vertical">
+              <div className="param-row param-header">
+                <span style={{ flex: 2 }}>参数名</span>
+                <span style={{ flex: 1, textAlign: 'center' }}>类型</span>
+                <span style={{ flex: 1, textAlign: 'center' }}>是否必填</span>
+                <span style={{ flex: 3 }}>参数值</span>
+              </div>
+              {actionParamDefs.map(p => (
+                <div key={p.name} className="param-row" style={{ alignItems: 'center' }}>
+                  <div style={{ flex: 2 }}>
+                    <Text strong style={{ fontSize: 13 }}>{p.name}</Text>
+                    {p.description && <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>{p.description}</Text>}
+                  </div>
+                  <div style={{ flex: 1, textAlign: 'center' }}><Tag color="blue" style={{ fontSize: 10 }}>{p.type}</Tag></div>
+                  <div style={{ flex: 1, textAlign: 'center' }}>{p.required ? <Tag color="red" style={{ fontSize: 10 }}>必填</Tag> : <Tag style={{ fontSize: 10 }}>可选</Tag>}</div>
+                  <Form.Item name={p.name} initialValue={actionParamValues[p.name] || ''} style={{ flex: 3, marginBottom: 0 }} rules={p.required ? [{ required: true, message: '请输入参数值' }] : []}>
+                    <Input placeholder={`输入值或引用 req.xxx / context.xxx`} size="small" />
+                  </Form.Item>
+                </div>
+              ))}
+            </Form>
+          </div>
         ) : (
           <Text type="secondary">该 Action 无可配置参数</Text>
         )}
@@ -1373,6 +1434,52 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           </Form.Item>
           <Form.Item name="branchCondition" label="分支条件" rules={[{ required: true, message: '请输入分支条件表达式' }]}>
             <Input placeholder='如: shortage_ratio > 0.8' />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 上下文处理脚本配置弹窗 */}
+      <Modal 
+        title="上下文处理脚本配置" 
+        open={contextHandlerModalVisible} 
+        onOk={handleSaveContextHandler} 
+        onCancel={() => setContextHandlerModalVisible(false)} 
+        width={640} 
+        okText="确认" 
+        cancelText="取消"
+        destroyOnHidden
+      >
+        <div style={{ marginBottom: 16, padding: 12, background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            <strong>说明：</strong>此脚本在 Action 执行完成后运行，用于将返回结果中的部分数据提取并保存到上下文 context 中，供后续节点使用。
+          </Text>
+        </div>
+        <Form form={contextHandlerForm} layout="vertical">
+          <Form.Item 
+            name="contextHandler" 
+            label="上下文处理脚本"
+          >
+            <Input.TextArea 
+              rows={6} 
+              placeholder="# res 为 Action 返回结果&#10;# context 为之前节点设置的上下文对象&#10;# 直接给 context 属性赋值即可保存数据&#10;context.user_data = res['data']"
+              style={{ fontFamily: 'Consolas, Monaco, monospace', fontSize: 12 }}
+            />
+            <div style={{ marginTop: 12, fontSize: 12, color: '#8c8c8c' }}>
+              <div style={{ marginBottom: 8 }}><strong>使用示例：</strong></div>
+              <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, fontFamily: 'Consolas, Monaco, monospace', marginBottom: 8 }}>
+                <div style={{ color: '#52c41a' }}>context.user_data = res['data']['user']</div>
+                <div>context.token = res['headers']['token']</div>
+              </div>
+              <div style={{ marginBottom: 8 }}><strong>示例 1 - 提取用户信息：</strong></div>
+              <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, fontFamily: 'Consolas, Monaco, monospace', marginBottom: 8 }}>
+                <div>context.user_info = res['data']</div>
+              </div>
+              <div style={{ marginBottom: 8 }}><strong>示例 2 - 结合上下文：</strong></div>
+              <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, fontFamily: 'Consolas, Monaco, monospace' }}>
+                <div>user_id = context.user_id</div>
+                <div>context.full_data = res['data'][user_id]</div>
+              </div>
+            </div>
           </Form.Item>
         </Form>
       </Modal>

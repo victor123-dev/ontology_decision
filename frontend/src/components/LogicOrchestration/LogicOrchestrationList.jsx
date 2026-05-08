@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, message, Popconfirm } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, message, Popconfirm, Tooltip } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { orchestrationApi } from '../../services/api';
@@ -87,26 +87,40 @@ const LogicOrchestrationList = () => {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
+      width: 120,
+      ellipsis: true,
+      align: 'center',
     },
     {
       title: '描述',
       dataIndex: 'description',
       key: 'description',
+      width: 200,
       ellipsis: true,
+      render: (text) => (
+        <Tooltip title={text || '-'} placement="topLeft">
+          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {text || '-'}
+          </span>
+        </Tooltip>
+      ),
     },
     {
       title: '更新时间',
       dataIndex: 'updated_at',
       key: 'updated_at',
+      width: 80,
+      align: 'center',
       render: (text) => text || '-',
     },
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 120,
+      align: 'center',
       render: (_, record) => (
-        <Space size="small">
-          <Button type="primary" size="small" onClick={() => handleCanvas(record)}>
+        <Space size={4}>
+          <Button type="primary" size="small" onClick={() => handleCanvas(record)} style={{ marginRight: 0 }}>
             编辑
           </Button>
           <Button size="small" onClick={() => handleEdit(record)}>
@@ -128,24 +142,30 @@ const LogicOrchestrationList = () => {
   ];
 
   return (
-    <div className="logic-orchestration-list-container" style={{ padding: '24px', minHeight: '100vh', background: '#f0f2f5' }}>
+    <div className="logic-orchestration-list-container" style={{ padding: '16px', minHeight: '100vh', background: '#f0f2f5' }}>
       <Card
-        title={<span style={{ fontSize: '18px', fontWeight: 600 }}>逻辑编排管理</span>}
+        title={<span style={{ fontSize: '16px', fontWeight: 600 }}>逻辑编排管理</span>}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate} size="large">
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             新增编排
           </Button>
         }
-        style={{ height: 'calc(100vh - 48px)' }}
-        bodyStyle={{ height: 'calc(100% - 57px)', overflow: 'auto' }}
+        style={{ height: 'calc(100vh - 32px)' }}
+        bodyStyle={{ height: 'calc(100% - 57px)', overflow: 'auto', padding: '12px 16px' }}
       >
         <Table
           columns={columns}
           dataSource={data}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+            size: 'small',
+          }}
           scroll={{ y: 'calc(100vh - 280px)' }}
+          size="small"
         />
       </Card>
 
