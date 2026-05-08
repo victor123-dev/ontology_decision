@@ -327,6 +327,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   const [contextHandlerModalVisible, setContextHandlerModalVisible] = useState(false);
   const [contextHandlerNodeId, setContextHandlerNodeId] = useState(null);
   const [contextHandlerForm] = Form.useForm();
+  const [contextHandlerValue, setContextHandlerValue] = useState('');  // 当前编辑的脚本内容
   const historyRef = useRef([]);
   const historyIndexRef = useRef(-1);
   const isUndoRedoRef = useRef(false);
@@ -370,11 +371,38 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
                   description: matchedAction?.description || '',
                   params: matchedAction?.params || [],
                   paramValues: nodeData.paramValues || {},
-                  branches: nodeData.branches || [],
-                  condition: nodeData.condition || '',
+                  // nodes 上不保存 branches 和 condition，只用于内存显示
+                  branches: [],
                   contextHandler: nodeData.contextHandler || '',
                 },
               };
+            });
+            
+            // 收集 edges 上的条件信息（从条件分支出来的边带条件）
+            const branchConditionsMap = {};  // { 'nodeId-branchIndex': condition }
+            (orchestration.graph_data.edges || []).forEach(edge => {
+              if (edge.sourceHandle?.startsWith('branch')) {
+                const branchIndex = parseInt(edge.sourceHandle.replace('branch', ''), 10);
+                const key = `${edge.source}-${branchIndex}`;
+                branchConditionsMap[key] = edge.condition || '';
+              }
+            });
+            
+            // 从 edges 恢复 branches 到节点的内存状态（用于前端显示，不保存到数据库）
+            const updatedNodes = loadedNodes.map(node => {
+              if (node.type === 'condition') {
+                // 统计该条件节点有多少个分支
+                const branchCount = Object.keys(branchConditionsMap).filter(k => k.startsWith(`${node.id}-`)).length;
+                // 如果没有从 edges 恢复到的数据，创建默认空分支
+                const branches = branchCount > 0 
+                  ? Object.entries(branchConditionsMap)
+                      .filter(([key]) => key.startsWith(`${node.id}-`))
+                      .sort(([a], [b]) => parseInt(a.split('-').pop()) - parseInt(b.split('-').pop()))
+                      .map(([, condition]) => ({ title: '分支', condition }))
+                  : [];
+                return { ...node, data: { ...node.data, branches } };
+              }
+              return node;
             });
             
             // 对 edges 进行去重
@@ -400,9 +428,9 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
               };
             });
             
-            // 触发自动布局
+            // 触发自动布局，使用合并条件后的节点
             setTimeout(() => {
-              const { nodes: layoutedNodes } = getLayoutedElements(loadedNodes, loadedEdges, 'TB');
+              const { nodes: layoutedNodes } = getLayoutedElements(updatedNodes, loadedEdges, 'TB');
               setNodes(layoutedNodes);
             }, 100);
             setEdges(loadedEdges);
@@ -594,9 +622,6 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     const handleConfigContextHandler = (event) => {
       const { nodeId, nodeData } = event.detail;
       setContextHandlerNodeId(nodeId);
-      contextHandlerForm.setFieldsValue({
-        contextHandler: nodeData.contextHandler || ''
-      });
       setContextHandlerModalVisible(true);
     };
 
@@ -614,6 +639,16 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       window.removeEventListener('configContextHandler', handleConfigContextHandler);
     };
   }, [collectDownstreamIds, remapGhostNodes, remapBranchEdges, branchForm]);
+
+  // 当上下文处理弹窗打开时，从对应节点获取初始值
+  useEffect(() => {
+    if (contextHandlerModalVisible && contextHandlerNodeId) {
+      const node = nodes.find(n => n.id === contextHandlerNodeId);
+      if (node && node.data) {
+        setContextHandlerValue(node.data.contextHandler || '');
+      }
+    }
+  }, [contextHandlerModalVisible, contextHandlerNodeId, nodes]);
 
   // 确认添加分支
   const handleAddBranch = useCallback(async () => {
@@ -997,6 +1032,10 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     }
     
     if (sourceNodeId) {
+      // 从 branches 获取该分支的条件
+      const branchCondition = sourceBranchIndex !== null && sourceBranchIndex !== undefined && sourceNodeData?.branches?.[sourceBranchIndex]
+        ? (typeof sourceNodeData.branches[sourceBranchIndex] === 'object' ? sourceNodeData.branches[sourceBranchIndex].condition : '') : '';
+      
       if (targetGhostNode) {
         setEdges((eds) => {
           const filteredEdges = eds.filter(e => e.target !== targetGhostNode.id);
@@ -1009,6 +1048,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
             type: 'smoothstep',
             animated: true,
             style: { stroke: branchColor, strokeWidth: 2 },
+            condition: branchCondition,  // 保存条件到 edge 上
             label: sourceBranchIndex !== null && sourceNodeData?.branches?.[sourceBranchIndex] 
               ? (typeof sourceNodeData.branches[sourceBranchIndex] === 'object' ? sourceNodeData.branches[sourceBranchIndex].title : sourceNodeData.branches[sourceBranchIndex]) : undefined,
             labelStyle: { fill: branchColor, fontWeight: 'bold', fontSize: '12px' },
@@ -1034,6 +1074,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
             type: 'smoothstep',
             animated: true,
             style: { stroke: branchColor, strokeWidth: 2 },
+            condition: branchCondition,  // 保存条件到 edge 上
           };
           const updatedEdges = addEdge(newEdge, eds);
           setTimeout(() => {
@@ -1060,18 +1101,33 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   }, []);
 
   const onConnect = useCallback((params) => {
+    // 获取源节点和分支条件
+    let condition = '';
+    let branchColor = '#1890ff';
+    
+    if (params.sourceHandle?.startsWith('branch')) {
+      const sourceNode = nodes.find(n => n.id === params.source);
+      if (sourceNode && sourceNode.type === 'condition') {
+        const branchIndex = parseInt(params.sourceHandle.replace('branch', ''), 10);
+        const branches = sourceNode.data.branches || [];
+        if (branches[branchIndex]) {
+          condition = branches[branchIndex].condition || '';
+        }
+        branchColor = branchIndex === 0 ? '#52c41a' : branchIndex === 1 ? '#f5222d' : '#faad14';
+      }
+    }
+    
     const edge = {
       ...params,
       animated: true,
-      style: { stroke: '#1890ff', strokeWidth: 2 },
+      style: { stroke: branchColor, strokeWidth: 2 },
+      condition,  // 保存条件到 edge 上
     };
     
     if (params.sourceHandle === 'true') {
       edge.label = 'True';
-      edge.style = { stroke: '#52c41a', strokeWidth: 2 };
     } else if (params.sourceHandle === 'false') {
       edge.label = 'False';
-      edge.style = { stroke: '#f5222d', strokeWidth: 2 };
     } else if (params.sourceHandle?.startsWith('branch')) {
       edge.label = params.sourceHandle.replace('branch', '分支 ');
     }
@@ -1086,7 +1142,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       }, 100);
       return updatedEdges;
     });
-  }, [setEdges, getLayoutedElements]);
+  }, [setEdges, getLayoutedElements, nodes]);
 
   const toDAGData = useCallback(() => {
     const realNodes = nodes.filter(n => n.type !== 'ghost');
@@ -1095,17 +1151,12 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       return targetNode && targetNode.type !== 'ghost';
     });
 
-    const conditionBranchMap = {};
-    realNodes.forEach(n => {
-      if (n.type === 'condition') {
-        conditionBranchMap[n.id] = {
-          branches: n.data.branches || [],
-          condition: n.data.condition || '',
-        };
-      }
-    });
+    // 构建 nodeId -> index 的映射
+    const nodeIndexMap = {};
+    realNodes.forEach((n, idx) => { nodeIndexMap[n.id] = idx; });
 
     return {
+      // nodes 上不保存 condition 和 branches，只保存基本信息
       nodes: realNodes.map(n => ({
         id: n.id,
         type: n.type,
@@ -1113,17 +1164,30 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
         data: {
           actionId: n.data.actionId,
           paramValues: n.data.paramValues || {},
-          branches: n.data.branches || [],
-          condition: n.data.condition || '',
           contextHandler: n.data.contextHandler || '',
         },
       })),
-      edges: realEdges.map(e => ({
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-      })),
+      // 条件分支的条件放在 edges 上
+      edges: realEdges.map(e => {
+        const edgeData = {
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle,
+        };
+        // 如果是从条件分支出来的边，附加该分支的条件
+        if (e.sourceHandle?.startsWith('branch')) {
+          const sourceNode = realNodes.find(n => n.id === e.source);
+          if (sourceNode && sourceNode.type === 'condition') {
+            const branchIndex = parseInt(e.sourceHandle.replace('branch', ''), 10);
+            const branches = sourceNode.data.branches || [];
+            if (branches[branchIndex]) {
+              edgeData.condition = branches[branchIndex].condition || '';
+            }
+          }
+        }
+        return edgeData;
+      }),
     };
   }, [nodes, edges]);
 
@@ -1171,8 +1235,10 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   // 保存上下文处理脚本
   const handleSaveContextHandler = useCallback(async () => {
     try {
-      const values = await contextHandlerForm.validateFields();
-      const contextHandler = values.contextHandler?.trim() || '';
+      // 直接使用 state 中的值（通过 onChange 实时更新）
+      const inputValue = contextHandlerValue;
+      const hasContent = inputValue.replace(/\s/g, '').length > 0;
+      const contextHandler = hasContent ? inputValue : '';
       setNodes((nds) => nds.map(n => {
         if (n.id === contextHandlerNodeId) {
           return { ...n, data: { ...n.data, contextHandler } };
@@ -1186,7 +1252,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
         message.info('已清除上下文处理脚本');
       }
     } catch {}
-  }, [contextHandlerForm, contextHandlerNodeId, setNodes]);
+  }, [contextHandlerValue, contextHandlerNodeId, setNodes]);
 
   // 保存编排
   const handleSave = useCallback(async () => {
@@ -1461,6 +1527,8 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           >
             <Input.TextArea 
               rows={6} 
+              value={contextHandlerValue}
+              onChange={(e) => setContextHandlerValue(e.target.value)}
               placeholder="# res 为 Action 返回结果&#10;# context 为之前节点设置的上下文对象&#10;# 直接给 context 属性赋值即可保存数据&#10;context.user_data = res['data']"
               style={{ fontFamily: 'Consolas, Monaco, monospace', fontSize: 12 }}
             />

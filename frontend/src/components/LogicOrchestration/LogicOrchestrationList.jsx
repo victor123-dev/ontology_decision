@@ -13,6 +13,17 @@ const LogicOrchestrationList = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [form] = Form.useForm();
 
+  // 格式化时间，只显示到秒
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return '-';
+    // 处理 ISO 格式时间，截取到秒（去除毫秒）
+    const match = dateStr.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+    if (match) {
+      return match[1];
+    }
+    return dateStr;
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -109,9 +120,9 @@ const LogicOrchestrationList = () => {
       title: '更新时间',
       dataIndex: 'updated_at',
       key: 'updated_at',
-      width: 80,
+      width: 90,
       align: 'center',
-      render: (text) => text || '-',
+      render: (text) => formatDateTime(text),
     },
     {
       title: '操作',
