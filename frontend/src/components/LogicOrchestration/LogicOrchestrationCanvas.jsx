@@ -291,6 +291,17 @@ const GhostNode = ({ data, id }) => {
     }
   };
 
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    if (id === 'ghost-node') {
+      // 临时 ghost 节点，只需清除状态
+      window.dispatchEvent(new CustomEvent('cancelGhostNode'));
+    } else {
+      // 条件分支的 ghost 节点，走正常删除逻辑
+      window.dispatchEvent(new CustomEvent('deleteNode', { detail: { nodeId: id } }));
+    }
+  };
+
   return (
     <div className="ghost-node">
       <Handle 
@@ -300,6 +311,13 @@ const GhostNode = ({ data, id }) => {
         style={{ background: '#1890ff', width: 12, height: 12 }}
         isConnectable={true}
       />
+      <button 
+        className="node-delete-btn"
+        onClick={handleDelete}
+        title="删除"
+      >
+        ×
+      </button>
       <div className="ghost-node-content">
         <div className="ghost-icon">+</div>
         {isEditing ? (
@@ -782,6 +800,12 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       }));
     };
 
+    const handleCancelGhostNode = () => {
+      setGhostNode(null);
+      setGhostEdge(null);
+      setPendingEdgeSource(null);
+    };
+
     window.addEventListener('deleteNode', handleDeleteNode);
     window.addEventListener('deleteBranch', handleDeleteBranch);
     window.addEventListener('configActionParams', handleConfigActionParams);
@@ -790,6 +814,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     window.addEventListener('configContextHandler', handleConfigContextHandler);
     window.addEventListener('updateConditionNode', handleUpdateConditionNode);
     window.addEventListener('updateGhostNode', handleUpdateGhostNode);
+    window.addEventListener('cancelGhostNode', handleCancelGhostNode);
 
     return () => {
       window.removeEventListener('deleteNode', handleDeleteNode);
@@ -800,6 +825,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       window.removeEventListener('configContextHandler', handleConfigContextHandler);
       window.removeEventListener('updateConditionNode', handleUpdateConditionNode);
       window.removeEventListener('updateGhostNode', handleUpdateGhostNode);
+      window.removeEventListener('cancelGhostNode', handleCancelGhostNode);
     };
   }, [collectDownstreamIds, remapGhostNodes, remapBranchEdges, branchForm]);
 
@@ -1798,9 +1824,9 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
                 nodesDraggable={false}
                 nodesConnectable={true}
                 elementsSelectable={true}
-                zoomOnScroll={true}
+                zoomOnScroll={false}
                 panOnScroll={true}
-                panOnDrag={false}
+                panOnDrag={true}
                 zoomOnDoubleClick={false}
                 defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
               >

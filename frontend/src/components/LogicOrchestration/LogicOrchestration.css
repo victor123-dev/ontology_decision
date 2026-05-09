@@ -660,7 +660,8 @@
 .action-node:hover .node-delete-btn,
 .condition-node:hover .node-delete-btn,
 .merge-node:hover .node-delete-btn,
-.start-end-node:hover .node-delete-btn {
+.start-end-node:hover .node-delete-btn,
+.ghost-node:hover .node-delete-btn {
   opacity: 1;
 }
 
