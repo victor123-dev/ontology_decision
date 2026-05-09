@@ -12,7 +12,7 @@ import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 import { useCallback, useState, useRef, useMemo, useEffect } from 'react';
 import { Card, Typography, Space, Button, message, List, Tag, Input, Select, Modal, Form, Checkbox } from 'antd';
-import { SearchOutlined, SaveOutlined, DownloadOutlined, DeleteOutlined, BranchesOutlined, PlusOutlined, SettingOutlined, UndoOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { SearchOutlined, SaveOutlined, DownloadOutlined, DeleteOutlined, BranchesOutlined, PlusOutlined, SettingOutlined, UndoOutlined, ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { actionApi, orchestrationApi } from '../../services/api';
 import './LogicOrchestration.css';
@@ -112,13 +112,41 @@ const ActionNode = ({ data, id }) => {
 };
 
 const ConditionNode = ({ data, id }) => {
-  const nodeData = data || {};
-  const branches = nodeData.branches || [];
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
+
+  const branches = data?.branches || [];
 
   const handleAddBranch = () => {
     window.dispatchEvent(new CustomEvent('requestAddBranch', { 
       detail: { nodeId: id } 
     }));
+  };
+
+  const handleEditBranch = (index) => {
+    window.dispatchEvent(new CustomEvent('requestEditBranch', { 
+      detail: { nodeId: id, branchIndex: index } 
+    }));
+  };
+
+  const handleLabelDoubleClick = (e) => {
+    e.stopPropagation();
+    setIsEditingLabel(true);
+  };
+
+  const handleLabelBlur = () => {
+    setIsEditingLabel(false);
+  };
+
+  const handleLabelKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      const newLabel = e.target.value.trim() || '条件分支';
+      window.dispatchEvent(new CustomEvent('updateConditionNode', {
+        detail: { nodeId: id, updates: { label: newLabel } }
+      }));
+      setIsEditingLabel(false);
+    } else if (e.key === 'Escape') {
+      setIsEditingLabel(false);
+    }
   };
 
   return (
@@ -132,7 +160,34 @@ const ConditionNode = ({ data, id }) => {
       />
       <div className="condition-node-header">
         <span className="condition-node-icon"></span>
-        <span className="condition-node-title">{nodeData.label || '条件判断'}</span>
+        {isEditingLabel ? (
+          <input
+            className="condition-node-title-input"
+            defaultValue={data?.label || '条件分支'}
+            autoFocus
+            onBlur={handleLabelBlur}
+            onKeyDown={handleLabelKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ 
+              fontSize: '12px', 
+              padding: '2px 4px', 
+              border: '1px solid #1890ff', 
+              borderRadius: '2px',
+              width: '80px'
+            }}
+          />
+        ) : (
+          <span 
+            className="condition-node-title" 
+            onDoubleClick={handleLabelDoubleClick}
+            title="双击编辑名称"
+            style={{ cursor: 'pointer' }}
+          >
+            {data?.label || '条件分支'}
+          </span>
+        )}
         <button 
           className="node-delete-btn"
           onClick={(e) => {
@@ -145,26 +200,43 @@ const ConditionNode = ({ data, id }) => {
       </div>
       <div className="condition-node-body">
         <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>
-          {nodeData.condition || '请添加分支并配置条件'}
+          {data?.condition || '请添加分支并配置条件'}
         </Text>
       </div>
       {branches.length > 0 ? (
         <div className="condition-branches">
           {branches.map((branch, index) => (
-            <div key={index} className="branch-item">
-              <Handle 
-                type="source" 
-                position={Position.Bottom} 
-                id={`branch${index}`} 
-                style={{ 
-                  left: `${(index + 0.5) * (100 / branches.length)}%`, 
-                  background: '#faad14', 
-                  width: 12, 
-                  height: 12 
-                }}
-                isConnectable={true}
-              />
-              <div className="branch-label">{branch.title || branch}</div>
+            <div key={index} className="branch-row">
+              <div className="branch-row-left">
+                <Handle 
+                  type="source" 
+                  position={Position.Right} 
+                  id={`branch${index}`} 
+                  style={{ 
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: '#faad14', 
+                    width: 12, 
+                    height: 12 
+                  }}
+                  isConnectable={true}
+                />
+                <span className="branch-index">{index + 1}</span>
+              </div>
+              <div className="branch-row-content" onClick={() => handleEditBranch(index)}>
+                <div className="branch-row-item">
+                  <span className="branch-row-label">名称:</span>
+                  <span className="branch-row-value">
+                    {branch.title || '点击设置名称'}
+                  </span>
+                </div>
+                <div className="branch-row-item">
+                  <span className="branch-row-label">条件:</span>
+                  <span className="branch-row-value">
+                    {branch.condition || '点击设置条件'}
+                  </span>
+                </div>
+              </div>
               <button 
                 className="branch-delete-btn"
                 onClick={(e) => {
@@ -184,22 +256,6 @@ const ConditionNode = ({ data, id }) => {
           <Text type="secondary" style={{ fontSize: '11px' }}>暂无分支，请点击下方按钮添加</Text>
         </div>
       )}
-      {Array.from({ length: 8 - branches.length }, (_, i) => (
-        <Handle
-          key={`hidden-${i}`}
-          type="source"
-          position={Position.Bottom}
-          id={`branch${branches.length + i}`}
-          style={{ 
-            background: 'transparent', 
-            width: 0, 
-            height: 0,
-            opacity: 0,
-            pointerEvents: 'none',
-          }}
-          isConnectable={true}
-        />
-      ))}
       <button className="add-branch-btn" onClick={handleAddBranch}>
         + 添加分支
       </button>
@@ -207,8 +263,34 @@ const ConditionNode = ({ data, id }) => {
   );
 };
 
-const GhostNode = ({ data }) => {
+const GhostNode = ({ data, id }) => {
   const nodeData = data || {};
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(nodeData.label || '');
+
+  const handleDoubleClick = (e) => {
+    e.stopPropagation();
+    setEditValue(nodeData.label || '');
+    setIsEditing(true);
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (editValue.trim() && editValue !== nodeData.label) {
+      window.dispatchEvent(new CustomEvent('updateGhostNode', {
+        detail: { nodeId: id, updates: { label: editValue.trim() } }
+      }));
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleBlur();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
+
   return (
     <div className="ghost-node">
       <Handle 
@@ -220,7 +302,36 @@ const GhostNode = ({ data }) => {
       />
       <div className="ghost-node-content">
         <div className="ghost-icon">+</div>
-        <div className="ghost-text">{nodeData.label}</div>
+        {isEditing ? (
+          <input
+            className="ghost-text-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            autoFocus
+            style={{ 
+              fontSize: '10px', 
+              padding: '1px 4px', 
+              border: '1px solid #1890ff', 
+              borderRadius: '2px',
+              width: '80px',
+              textAlign: 'center'
+            }}
+          />
+        ) : (
+          <div 
+            className="ghost-text"
+            onDoubleClick={handleDoubleClick}
+            title="双击编辑名称"
+            style={{ cursor: 'pointer' }}
+          >
+            {nodeData.label}
+          </div>
+        )}
       </div>
       <Handle 
         type="source" 
@@ -324,6 +435,10 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   const [branchModalVisible, setBranchModalVisible] = useState(false);
   const [branchModalNodeId, setBranchModalNodeId] = useState(null);
   const [branchForm] = Form.useForm();
+  const [editBranchModalVisible, setEditBranchModalVisible] = useState(false);
+  const [editBranchNodeId, setEditBranchNodeId] = useState(null);
+  const [editBranchIndex, setEditBranchIndex] = useState(null);
+  const [editBranchForm] = Form.useForm();
   const [contextHandlerModalVisible, setContextHandlerModalVisible] = useState(false);
   const [contextHandlerNodeId, setContextHandlerNodeId] = useState(null);
   const [contextHandlerForm] = Form.useForm();
@@ -345,6 +460,20 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           const res = await orchestrationApi.get(orchestrationId);
           const orchestration = res.data;
           if (orchestration?.graph_data) {
+            // 收集 edges 上的条件信息（从条件分支出来的边带条件和标题）
+            const branchInfoMap = {};  // { 'nodeId-branchIndex': { condition, title } }
+            (orchestration.graph_data.edges || []).forEach(edge => {
+              if (edge.sourceHandle?.startsWith('branch')) {
+                const branchIndex = parseInt(edge.sourceHandle.replace('branch', ''), 10);
+                const key = `${edge.source}-${branchIndex}`;
+                if (!branchInfoMap[key]) {
+                  branchInfoMap[key] = { condition: '', title: '' };
+                }
+                branchInfoMap[key].condition = edge.condition || branchInfoMap[key].condition;
+                branchInfoMap[key].title = edge.branchTitle || branchInfoMap[key].title;
+              }
+            });
+
             // 通过 actionId 匹配获取完整 action 数据
             const loadedNodes = (orchestration.graph_data.nodes || []).map((node, idx) => {
               // 兼容旧格式（actionId 在根级别）和新格式（actionId 在 data 中）
@@ -358,12 +487,12 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
                 y: 150 * idx + 50 
               };
               
-              return {
+              const baseData = {
                 id: node.id || `loaded-node-${idx}`,
                 type: node.type || 'action',
                 position: defaultPosition,
                 data: {
-                  label: matchedAction?.name || node.label || `Action ${actionId}` || node.id,
+                  label: matchedAction?.name || nodeData.label || node.label || `Action ${actionId}` || node.id,
                   actionId: actionId,
                   apiName: matchedAction?.api_name || matchedAction?.name || '',
                   actionType: matchedAction?.action_type || matchedAction?.category || 'function',
@@ -371,38 +500,38 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
                   description: matchedAction?.description || '',
                   params: matchedAction?.params || [],
                   paramValues: nodeData.paramValues || {},
-                  // nodes 上不保存 branches 和 condition，只用于内存显示
-                  branches: [],
                   contextHandler: nodeData.contextHandler || '',
                 },
               };
-            });
-            
-            // 收集 edges 上的条件信息（从条件分支出来的边带条件）
-            const branchConditionsMap = {};  // { 'nodeId-branchIndex': condition }
-            (orchestration.graph_data.edges || []).forEach(edge => {
-              if (edge.sourceHandle?.startsWith('branch')) {
-                const branchIndex = parseInt(edge.sourceHandle.replace('branch', ''), 10);
-                const key = `${edge.source}-${branchIndex}`;
-                branchConditionsMap[key] = edge.condition || '';
+              
+              // 条件节点恢复标签和分支信息
+              if (baseData.type === 'condition') {
+                baseData.data.label = nodeData.label || node.label || '条件分支';
+                // 优先从 nodeData.branches 恢复，否则从 edges 恢复
+                if (nodeData.branches && nodeData.branches.length > 0) {
+                  baseData.data.branches = nodeData.branches;
+                } else {
+                  // 从 edges 恢复分支信息
+                  const nodeBranchKeys = Object.keys(branchInfoMap).filter(k => k.startsWith(`${baseData.id}-`));
+                  if (nodeBranchKeys.length > 0) {
+                    baseData.data.branches = nodeBranchKeys
+                      .sort((a, b) => parseInt(a.split('-').pop()) - parseInt(b.split('-').pop()))
+                      .map((key) => {
+                        const info = branchInfoMap[key];
+                        return { 
+                          title: info.title || '分支', 
+                          condition: info.condition || '' 
+                        };
+                      });
+                  } else {
+                    baseData.data.branches = [];
+                  }
+                }
+              } else {
+                baseData.data.branches = [];
               }
-            });
-            
-            // 从 edges 恢复 branches 到节点的内存状态（用于前端显示，不保存到数据库）
-            const updatedNodes = loadedNodes.map(node => {
-              if (node.type === 'condition') {
-                // 统计该条件节点有多少个分支
-                const branchCount = Object.keys(branchConditionsMap).filter(k => k.startsWith(`${node.id}-`)).length;
-                // 如果没有从 edges 恢复到的数据，创建默认空分支
-                const branches = branchCount > 0 
-                  ? Object.entries(branchConditionsMap)
-                      .filter(([key]) => key.startsWith(`${node.id}-`))
-                      .sort(([a], [b]) => parseInt(a.split('-').pop()) - parseInt(b.split('-').pop()))
-                      .map(([, condition]) => ({ title: '分支', condition }))
-                  : [];
-                return { ...node, data: { ...node.data, branches } };
-              }
-              return node;
+              
+              return baseData;
             });
             
             // 对 edges 进行去重
@@ -428,9 +557,9 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
               };
             });
             
-            // 触发自动布局，使用合并条件后的节点
+            // 触发自动布局
             setTimeout(() => {
-              const { nodes: layoutedNodes } = getLayoutedElements(updatedNodes, loadedEdges, 'TB');
+              const { nodes: layoutedNodes } = getLayoutedElements(loadedNodes, loadedEdges, 'TB');
               setNodes(layoutedNodes);
             }, 100);
             setEdges(loadedEdges);
@@ -438,8 +567,9 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
             setNodes([]);
             setEdges([]);
           }
-          if (orchestration?.inputs) {
-            setWorkflowParams(orchestration.inputs);
+          // inputs 保存在 graph_data 中
+          if (orchestration.graph_data?.inputs !== undefined) {
+            setWorkflowParams(Array.isArray(orchestration.graph_data.inputs) ? orchestration.graph_data.inputs : []);
           }
         } catch (err) {
           console.error('加载编排失败:', err);
@@ -619,24 +749,57 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       setBranchModalVisible(true);
     };
 
+    const handleRequestEditBranch = (event) => {
+      const { nodeId, branchIndex } = event.detail;
+      setEditBranchNodeId(nodeId);
+      setEditBranchIndex(branchIndex);
+      setEditBranchModalVisible(true);
+    };
+
     const handleConfigContextHandler = (event) => {
       const { nodeId, nodeData } = event.detail;
       setContextHandlerNodeId(nodeId);
       setContextHandlerModalVisible(true);
     };
 
+    const handleUpdateConditionNode = (event) => {
+      const { nodeId, updates } = event.detail;
+      setNodes((nds) => nds.map(n => {
+        if (n.id === nodeId) {
+          return { ...n, data: { ...n.data, ...updates } };
+        }
+        return n;
+      }));
+    };
+
+    const handleUpdateGhostNode = (event) => {
+      const { nodeId, updates } = event.detail;
+      setNodes((nds) => nds.map(n => {
+        if (n.id === nodeId) {
+          return { ...n, data: { ...n.data, ...updates } };
+        }
+        return n;
+      }));
+    };
+
     window.addEventListener('deleteNode', handleDeleteNode);
     window.addEventListener('deleteBranch', handleDeleteBranch);
     window.addEventListener('configActionParams', handleConfigActionParams);
     window.addEventListener('requestAddBranch', handleRequestAddBranch);
+    window.addEventListener('requestEditBranch', handleRequestEditBranch);
     window.addEventListener('configContextHandler', handleConfigContextHandler);
+    window.addEventListener('updateConditionNode', handleUpdateConditionNode);
+    window.addEventListener('updateGhostNode', handleUpdateGhostNode);
 
     return () => {
       window.removeEventListener('deleteNode', handleDeleteNode);
       window.removeEventListener('deleteBranch', handleDeleteBranch);
       window.removeEventListener('configActionParams', handleConfigActionParams);
       window.removeEventListener('requestAddBranch', handleRequestAddBranch);
+      window.removeEventListener('requestEditBranch', handleRequestEditBranch);
       window.removeEventListener('configContextHandler', handleConfigContextHandler);
+      window.removeEventListener('updateConditionNode', handleUpdateConditionNode);
+      window.removeEventListener('updateGhostNode', handleUpdateGhostNode);
     };
   }, [collectDownstreamIds, remapGhostNodes, remapBranchEdges, branchForm]);
 
@@ -657,40 +820,24 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       const { branchTitle, branchCondition } = values;
       const nodeId = branchModalNodeId;
       
+      // 先计算需要的值，在 setNodes 之前
+      const sourceNodeForCalc = nodes.find(n => n.id === nodeId);
+      if (!sourceNodeForCalc) return;
+      
+      const currentBranchesCount = (sourceNodeForCalc.data?.branches || []).length;
+      const newBranchIndex = currentBranchesCount;
+      const branchColor = newBranchIndex === 0 ? '#52c41a' : newBranchIndex === 1 ? '#f5222d' : '#faad14';
+      const ghostId = `ghost-${nodeId}-${newBranchIndex}`;
+      
       setNodes((currentNodes) => {
         const sourceNode = currentNodes.find(n => n.id === nodeId);
         if (!sourceNode) return currentNodes;
         
         const currentBranches = sourceNode.data.branches || [];
-        const newBranchIndex = currentBranches.length;
         const newBranch = { title: branchTitle, condition: branchCondition };
         const newBranches = [...currentBranches, newBranch];
         
-        const ghostId = `ghost-${nodeId}-${newBranchIndex}`;
-        const branchColor = newBranchIndex === 0 ? '#52c41a' : newBranchIndex === 1 ? '#f5222d' : '#faad14';
-        
-        const newEdge = {
-          id: `edge-${nodeId}-${ghostId}-${Date.now()}`,
-          source: nodeId,
-          target: ghostId,
-          sourceHandle: `branch${newBranchIndex}`,
-          targetHandle: 'input',
-          type: 'smoothstep',
-          animated: true,
-          style: { stroke: branchColor, strokeWidth: 2, strokeDasharray: '5,5' },
-          markerEnd: { type: 'arrowclosed', color: branchColor },
-          label: branchTitle,
-          labelStyle: { fill: branchColor, fontWeight: 'bold', fontSize: '12px' },
-          labelBgStyle: { fill: '#fff', fillOpacity: 0.8 },
-        };
-        
-        const newGhostNode = {
-          id: ghostId,
-          type: 'ghost',
-          position: { x: sourceNode.position.x, y: sourceNode.position.y + 200 },
-          data: { label: `${branchTitle} 分支`, parentId: nodeId, branchIndex: newBranchIndex },
-        };
-        
+        // 先添加分支信息但不加 ghost，先布局获取条件节点的新位置
         const updatedNodes = currentNodes.map(n => {
           if (n.id === nodeId) {
             return { ...n, data: { ...n.data, branches: newBranches } };
@@ -698,24 +845,86 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           return n;
         });
         
-        const finalNodes = [...updatedNodes, newGhostNode];
-        const { nodes: layoutedNodes } = getLayoutedElementsRef.current(finalNodes, edgesRef.current, 'TB');
+        // 先对已有节点布局，获取条件节点布局后的位置
+        const { nodes: layoutedNodes } = getLayoutedElementsRef.current(updatedNodes, edgesRef.current, 'TB');
         
-        setTimeout(() => {
-          setEdges((currentEdges) => {
-            const exists = currentEdges.some(e => e.source === newEdge.source && e.target === newEdge.target && e.sourceHandle === newEdge.sourceHandle);
-            if (exists) return currentEdges;
-            return [...currentEdges, newEdge];
-          });
-        }, 50);
+        // 根据布局后的条件节点位置计算 ghost 节点位置
+        const layoutedConditionNode = layoutedNodes.find(n => n.id === nodeId);
+        const nodeWidth = 220;
+        const verticalGap = 120;
+        const horizontalGap = 80;
+        const conditionHeight = getConditionNodeHeight(layoutedConditionNode);
+        const ghostX = layoutedConditionNode.position.x + nodeWidth + newBranchIndex * (nodeWidth + horizontalGap);
+        const ghostY = layoutedConditionNode.position.y + conditionHeight + verticalGap;
         
-        return layoutedNodes;
+        const newGhostNode = {
+          id: ghostId,
+          type: 'ghost',
+          position: { x: ghostX, y: ghostY },
+          data: { label: `${branchTitle} 分支`, parentId: nodeId, branchIndex: newBranchIndex },
+        };
+        
+        // 将 ghost 加入最终节点列表
+        return [...layoutedNodes, newGhostNode];
       });
+      
+      // 在节点添加完成后，再添加边（参考普通节点 onConnect 的延迟逻辑）
+      setTimeout(() => {
+        setEdges((currentEdges) => {
+          // 检查边是否已存在
+          const exists = currentEdges.some(e => 
+            e.source === nodeId && 
+            e.target === ghostId
+          );
+          if (exists) return currentEdges;
+          return [...currentEdges, {
+            id: `edge-${nodeId}-${ghostId}-${Date.now()}`,
+            source: nodeId,
+            target: ghostId,
+            sourceHandle: `branch${newBranchIndex}`,
+            targetHandle: 'input',
+            type: 'smoothstep',
+            animated: true,
+            style: { stroke: branchColor, strokeWidth: 2, strokeDasharray: '5,5' },
+            markerEnd: { type: 'arrowclosed', color: branchColor },
+            label: branchTitle,
+            labelStyle: { fill: branchColor, fontWeight: 'bold', fontSize: '12px' },
+            labelBgStyle: { fill: '#fff', fillOpacity: 0.8 },
+          }];
+        });
+      }, 300);
       
       setBranchModalVisible(false);
       message.success(`已添加分支: ${branchTitle}`);
     } catch {}
-  }, [branchForm, branchModalNodeId, setNodes, setEdges]);
+  }, [branchForm, branchModalNodeId, nodes, setNodes, setEdges]);
+
+  // 保存编辑分支
+  const handleSaveEditBranch = useCallback(async () => {
+    try {
+      const values = await editBranchForm.validateFields();
+      const { branchTitle, branchCondition } = values;
+      
+      if (editBranchNodeId !== null && editBranchIndex !== null) {
+        setNodes((currentNodes) => {
+          return currentNodes.map(n => {
+            if (n.id === editBranchNodeId && n.type === 'condition') {
+              const newBranches = [...(n.data.branches || [])];
+              newBranches[editBranchIndex] = { 
+                title: branchTitle, 
+                condition: branchCondition 
+              };
+              return { ...n, data: { ...n.data, branches: newBranches } };
+            }
+            return n;
+          });
+        });
+      }
+      
+      setEditBranchModalVisible(false);
+      message.success('分支已更新');
+    } catch {}
+  }, [editBranchForm, editBranchNodeId, editBranchIndex, setNodes]);
 
   // 监听添加连线事件
   useEffect(() => {
@@ -725,19 +934,33 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       
       const sourceNode = nodes.find(n => n.id === nodeId);
       if (sourceNode) {
-        let ghostX = sourceNode.position.x;
-        let ghostY = sourceNode.position.y + 150;
+        const nodeWidth = 220;
+        const verticalGap = 120;
+        const horizontalGap = 80;
+        const conditionHeight = getConditionNodeHeight(sourceNode);
         
+        // ghost 节点位置：普通节点在正下方，条件分支在右下侧
+        let ghostX, ghostY;
         if (nodeData.actionType === '条件分支' && branchIndex !== undefined) {
-          const branchCount = nodeData.branches?.length || 2;
-          ghostX = sourceNode.position.x + (branchIndex - (branchCount - 1) / 2) * 280;
+          ghostX = sourceNode.position.x + nodeWidth + branchIndex * (nodeWidth + horizontalGap);
+          ghostY = sourceNode.position.y + conditionHeight + verticalGap;
+        } else {
+          ghostX = sourceNode.position.x;
+          ghostY = sourceNode.position.y + getNodeHeight(sourceNode) + verticalGap;
+        }
+        
+        const ghostNodeData = { label: '拖拽 Action 到这里' };
+        // 保存来源信息，以便 onDrop 中正确判断连线来源
+        if (nodeData.actionType === '条件分支' && branchIndex !== undefined) {
+          ghostNodeData.parentId = nodeId;
+          ghostNodeData.branchIndex = branchIndex;
         }
         
         setGhostNode({
           id: 'ghost-node',
           type: 'ghost',
           position: { x: ghostX, y: ghostY },
-          data: { label: '拖拽 Action 到这里' },
+          data: ghostNodeData,
         });
         
         const sourceHandle = nodeData.actionType === '条件分支' && branchIndex !== undefined ? `branch${branchIndex}` : 'output';
@@ -830,21 +1053,51 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   const displayNodes = useMemo(() => ghostNode ? [...nodes, ghostNode] : nodes, [nodes, ghostNode]);
   const displayEdges = useMemo(() => ghostEdge ? [...edges, ghostEdge] : edges, [edges, ghostEdge]);
 
+  // 计算条件分支节点的动态高度
+  const getConditionNodeHeight = (node) => {
+    const branchCount = node.data?.branches?.length || 0;
+    // 基础高度 + 每个分支行的高度 + 添加按钮高度
+    const baseHeight = 80; // 头部和描述区域
+    const branchRowHeight = 56; // 每个分支行的高度
+    const addButtonHeight = 40; // 添加按钮区域
+    return baseHeight + branchCount * branchRowHeight + addButtonHeight;
+  };
+
+  // 计算节点的高度
+  const getNodeHeight = (node) => {
+    if (node.type === 'condition') {
+      return getConditionNodeHeight(node);
+    }
+    if (node.type === 'merge') {
+      return 100;
+    }
+    return 130; // action node 默认高度
+  };
+
   const getLayoutedElements = useCallback((nodes, edges, direction = 'TB') => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     const nodeWidth = 220;
-    const nodeHeight = 130;
+    const baseNodeHeight = 130;
 
     dagreGraph.setGraph({ 
-      rankdir: direction, nodesep: 60, ranksep: 120, marginx: 80, marginy: 80, align: 'DL', ranker: 'network-simplex', edgesep: 40,
+      rankdir: direction, 
+      nodesep: 80, 
+      ranksep: 150, 
+      marginx: 100, 
+      marginy: 100, 
+      align: 'DL', 
+      ranker: 'network-simplex', 
+      edgesep: 50,
     });
 
-    const layoutNodes = nodes.filter(n => n.id === 'ghost-node' ? false : true);
-    const layoutEdges = edges.filter(e => e.target === 'ghost-node' ? false : true);
+    const layoutNodes = nodes.filter(n => n.id.startsWith('ghost-') ? false : true);
+    const layoutEdges = edges.filter(e => e.target.startsWith('ghost-') ? false : true);
 
+    // 为每个节点设置动态高度
     layoutNodes.forEach((node) => {
-      dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+      const height = getNodeHeight(node);
+      dagreGraph.setNode(node.id, { width: nodeWidth, height });
     });
 
     layoutEdges.forEach((edge) => {
@@ -853,18 +1106,138 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
 
     dagre.layout(dagreGraph);
 
-    const layoutedNodes = nodes.map((node) => {
-      if (node.id === 'ghost-node') return node;
+    // 第一轮布局后，调整条件分支各分支下的子节点位置
+    let layoutedNodes = nodes.map((node) => {
+      if (node.id.startsWith('ghost-')) return node; // ghost node 保持原位置
       const nodeWithPosition = dagreGraph.node(node.id);
       if (!nodeWithPosition) return node;
+      const height = getNodeHeight(node);
       return {
         ...node,
-        position: { x: nodeWithPosition.x - nodeWidth / 2, y: nodeWithPosition.y - nodeHeight / 2 },
-        style: { width: nodeWidth, height: nodeHeight },
+        position: { x: nodeWithPosition.x - nodeWidth / 2, y: nodeWithPosition.y - height / 2 },
+        style: { width: nodeWidth, height },
       };
     });
 
+    // 处理条件分支节点的子节点水平分布
+    layoutedNodes = adjustConditionBranchLayout(layoutedNodes, edges, nodeWidth);
+
+    // 处理普通节点（action/merge）的子节点：确保在父节点正下方
+    layoutedNodes = adjustActionChildLayout(layoutedNodes, edges, nodeWidth);
+
     return { nodes: layoutedNodes, edges };
+  }, []);
+
+  // 调整条件分支下各分支子节点的布局 - 子节点在右下侧水平对齐
+  const adjustConditionBranchLayout = useCallback((nodes, edges, nodeWidth) => {
+    const conditionNodes = nodes.filter(n => n.type === 'condition');
+    let adjustedNodes = [...nodes];
+
+    conditionNodes.forEach(conditionNode => {
+      const branches = conditionNode.data?.branches || [];
+      const branchCount = branches.length;
+      if (branchCount === 0) return;
+
+      // 计算条件分支节点高度
+      const conditionHeight = getConditionNodeHeight(conditionNode);
+      const conditionX = conditionNode.position.x;
+      const conditionY = conditionNode.position.y;
+      
+      // 子节点放在条件分支右下侧，水平对齐
+      const verticalGap = 120; // 垂直间距
+      const horizontalGap = 80; // 水平间距
+      const childY = conditionY + conditionHeight + verticalGap;
+
+      // 获取从该条件分支各分支出来的边和子节点
+      branches.forEach((branch, branchIndex) => {
+        const sourceHandle = `branch${branchIndex}`;
+        const branchEdge = edges.find(e => e.source === conditionNode.id && e.sourceHandle === sourceHandle);
+        if (!branchEdge) return;
+
+        const childNodeId = branchEdge.target;
+        const childNodeIndex = adjustedNodes.findIndex(n => n.id === childNodeId);
+        if (childNodeIndex === -1) return;
+
+        const childNode = adjustedNodes[childNodeIndex];
+
+        // 子节点 x 坐标：从条件分支右侧开始，依次向右排列
+        // conditionX 是条件分支左边界，+nodeWidth 后是右边界
+        // 子节点0在条件分支右侧，子节点1、2...依次向右
+        const childX = conditionX + nodeWidth + branchIndex * (nodeWidth + horizontalGap);
+
+        adjustedNodes[childNodeIndex] = {
+          ...childNode,
+          position: {
+            x: childX,
+            y: childY,
+          },
+        };
+      });
+    });
+
+    return adjustedNodes;
+  }, []);
+
+  // 调整普通节点（action/merge）的子节点布局 - 子节点在父节点正下方
+  const adjustActionChildLayout = useCallback((nodes, edges, nodeWidth) => {
+    let adjustedNodes = [...nodes];
+    const verticalGap = 150; // 与 dagre ranksep 保持一致
+
+    // 找出所有被条件分支调整过的子节点 ID，这些节点不再处理
+    const conditionChildIds = new Set();
+    const conditionNodes = nodes.filter(n => n.type === 'condition');
+    conditionNodes.forEach(condNode => {
+      const branches = condNode.data?.branches || [];
+      branches.forEach((_, branchIndex) => {
+        const sourceHandle = `branch${branchIndex}`;
+        const branchEdge = edges.find(e => e.source === condNode.id && e.sourceHandle === sourceHandle);
+        if (branchEdge) {
+          conditionChildIds.add(branchEdge.target);
+        }
+      });
+    });
+
+    // 收集每个非条件节点的 "output" 边对应的子节点
+    adjustedNodes.forEach((node) => {
+      if (node.type === 'condition') return; // 条件节点由 adjustConditionBranchLayout 处理
+      if (node.id.startsWith('ghost-')) return;
+
+      // 找出从该节点 output 出发的边（排除条件分支的 branch 边）
+      const outputEdges = edges.filter(e => 
+        e.source === node.id && 
+        e.sourceHandle === 'output' &&
+        !conditionChildIds.has(e.target)
+      );
+
+      if (outputEdges.length === 0) return;
+
+      const parentNode = adjustedNodes.find(n => n.id === node.id);
+      if (!parentNode) return;
+
+      const parentHeight = getNodeHeight(parentNode);
+
+      outputEdges.forEach((edge) => {
+        const childIndex = adjustedNodes.findIndex(n => n.id === edge.target);
+        if (childIndex === -1) return;
+
+        const childNode = adjustedNodes[childIndex];
+        if (childNode.id.startsWith('ghost-')) return;
+
+        // 子节点 x 坐标与父节点对齐（正下方）
+        const childX = parentNode.position.x;
+        const childY = parentNode.position.y + parentHeight + verticalGap;
+
+        adjustedNodes[childIndex] = {
+          ...childNode,
+          position: {
+            x: childX,
+            y: childY,
+          },
+        };
+      });
+    });
+
+    return adjustedNodes;
   }, []);
 
   getLayoutedElementsRef.current = getLayoutedElements;
@@ -990,7 +1363,9 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
         nodesWithoutGhost = nodesWithoutGhost.filter(n => n.id !== targetGhostNode.id);
       }
       const updatedNodes = [...nodesWithoutGhost, newNode];
-      const { nodes: layoutedNodes } = getLayoutedElements(updatedNodes, edges, 'TB');
+      // 传入当前最新的边（去除指向 ghost 的边），确保布局时能正确处理条件分支子节点
+      const currentEdges = edgesRef.current.filter(e => e.target !== 'ghost-node' && (!targetGhostNode || e.target !== targetGhostNode.id));
+      const { nodes: layoutedNodes } = getLayoutedElements(updatedNodes, currentEdges, 'TB');
       return layoutedNodes;
     });
     
@@ -1156,17 +1531,25 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     realNodes.forEach((n, idx) => { nodeIndexMap[n.id] = idx; });
 
     return {
-      // nodes 上不保存 condition 和 branches，只保存基本信息
-      nodes: realNodes.map(n => ({
-        id: n.id,
-        type: n.type,
-        position: n.position,
-        data: {
-          actionId: n.data.actionId,
-          paramValues: n.data.paramValues || {},
-          contextHandler: n.data.contextHandler || '',
-        },
-      })),
+      // 保存节点数据，包括条件分支的标签和分支信息
+      nodes: realNodes.map(n => {
+        const nodeData = {
+          id: n.id,
+          type: n.type,
+          position: n.position,
+          data: {
+            actionId: n.data.actionId,
+            paramValues: n.data.paramValues || {},
+            contextHandler: n.data.contextHandler || '',
+          },
+        };
+        // 条件节点保存标签和分支信息
+        if (n.type === 'condition') {
+          nodeData.data.label = n.data.label || '条件分支';
+          nodeData.data.branches = n.data.branches || [];
+        }
+        return nodeData;
+      }),
       // 条件分支的条件放在 edges 上
       edges: realEdges.map(e => {
         const edgeData = {
@@ -1175,7 +1558,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           sourceHandle: e.sourceHandle,
           targetHandle: e.targetHandle,
         };
-        // 如果是从条件分支出来的边，附加该分支的条件
+        // 如果是从条件分支出来的边，附加该分支的条件和标题
         if (e.sourceHandle?.startsWith('branch')) {
           const sourceNode = realNodes.find(n => n.id === e.source);
           if (sourceNode && sourceNode.type === 'condition') {
@@ -1183,6 +1566,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
             const branches = sourceNode.data.branches || [];
             if (branches[branchIndex]) {
               edgeData.condition = branches[branchIndex].condition || '';
+              edgeData.branchTitle = branches[branchIndex].title || '';
             }
           }
         }
@@ -1192,12 +1576,19 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   }, [nodes, edges]);
 
   const handleOpenParamModal = useCallback(() => {
-    paramForm.setFieldsValue({
-      params: workflowParams.length > 0
-        ? workflowParams.map(p => ({ ...p }))
-        : [{ name: '', type: 'string', required: false, defaultValue: '', description: '' }],
-    });
     setParamModalVisible(true);
+  }, []);
+
+  const handleParamModalOpenChange = useCallback((open) => {
+    if (open) {
+      setTimeout(() => {
+        paramForm.setFieldsValue({
+          params: workflowParams.length > 0
+            ? workflowParams.map(p => ({ ...p }))
+            : [{ name: '', type: 'string', required: false, defaultValue: '', description: '' }],
+        });
+      }, 50);
+    }
   }, [workflowParams, paramForm]);
 
   const handleSaveParams = useCallback(async () => {
@@ -1209,6 +1600,24 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       message.success(`已配置 ${params.length} 个入参`);
     } catch {}
   }, [paramForm]);
+
+  // 编辑分支弹窗打开后回显数据
+  const handleEditBranchModalOpenChange = useCallback((open) => {
+    if (open && editBranchNodeId !== null && editBranchIndex !== null) {
+      const node = nodes.find(n => n.id === editBranchNodeId);
+      if (node && node.data.branches && node.data.branches[editBranchIndex]) {
+        const branch = node.data.branches[editBranchIndex];
+        setTimeout(() => {
+          editBranchForm.setFieldsValue({
+            branchTitle: branch.title || '',
+            branchCondition: branch.condition || '',
+          });
+        }, 50);
+      } else {
+        editBranchForm.resetFields();
+      }
+    }
+  }, [editBranchNodeId, editBranchIndex, nodes, editBranchForm]);
 
   const handleSaveActionParams = useCallback(async () => {
     try {
@@ -1392,6 +1801,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
                 zoomOnScroll={true}
                 panOnScroll={true}
                 panOnDrag={false}
+                zoomOnDoubleClick={false}
                 defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
               >
                 <Background color="#aaa" gap={16} />
@@ -1402,7 +1812,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       </div>
 
       {/* 工作流入参配置弹窗 */}
-      <Modal title="工作流入参配置" open={paramModalVisible} onOk={handleSaveParams} onCancel={() => setParamModalVisible(false)} width={720} okText="确认" cancelText="取消">
+      <Modal title="工作流入参配置" open={paramModalVisible} onOk={handleSaveParams} onCancel={() => setParamModalVisible(false)} width={720} okText="确认" cancelText="取消" destroyOnHidden afterOpenChange={handleParamModalOpenChange}>
         <Form form={paramForm} layout="vertical">
           <div className="param-row param-header">
             <span style={{ flex: 2 }}>参数名</span>
@@ -1452,7 +1862,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       </Modal>
 
       {/* Action 节点参数配置弹窗 */}
-      <Modal title="Action 参数配置" open={actionParamModalVisible} onOk={handleSaveActionParams} onCancel={() => setActionParamModalVisible(false)} width={720} okText="确认" cancelText="取消" destroyOnHidden>
+      <Modal title="Action 参数配置" open={actionParamModalVisible} onOk={handleSaveActionParams} onCancel={() => setActionParamModalVisible(false)} width={720} okText="确认" cancelText="取消">
         {actionParamDefs.length > 0 ? (
           <div>
             <div style={{ marginBottom: 16, padding: 12, background: '#e6f7ff', borderRadius: 4, border: '1px solid #91d5ff' }}>
@@ -1493,8 +1903,30 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       </Modal>
 
       {/* 添加分支配置弹窗 */}
-      <Modal title="添加分支" open={branchModalVisible} onOk={handleAddBranch} onCancel={() => setBranchModalVisible(false)} width={480} okText="确认添加" cancelText="取消" destroyOnHidden>
+      <Modal title="添加分支" open={branchModalVisible} onOk={handleAddBranch} onCancel={() => setBranchModalVisible(false)} width={480} okText="确认添加" cancelText="取消">
         <Form form={branchForm} layout="vertical">
+          <Form.Item name="branchTitle" label="分支标题" rules={[{ required: true, message: '请输入分支标题' }]}>
+            <Input placeholder="如: 短缺分支、正常分支" />
+          </Form.Item>
+          <Form.Item name="branchCondition" label="分支条件" rules={[{ required: true, message: '请输入分支条件表达式' }]}>
+            <Input placeholder='如: shortage_ratio > 0.8' />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 编辑分支配置弹窗 */}
+      <Modal 
+        title={`编辑分支 (第 ${editBranchIndex !== null ? editBranchIndex + 1 : ''} 个)`} 
+        open={editBranchModalVisible} 
+        onOk={handleSaveEditBranch} 
+        onCancel={() => setEditBranchModalVisible(false)} 
+        width={480} 
+        okText="确认保存" 
+        cancelText="取消"
+        destroyOnHidden
+        afterOpenChange={handleEditBranchModalOpenChange}
+      >
+        <Form form={editBranchForm} layout="vertical">
           <Form.Item name="branchTitle" label="分支标题" rules={[{ required: true, message: '请输入分支标题' }]}>
             <Input placeholder="如: 短缺分支、正常分支" />
           </Form.Item>
@@ -1513,7 +1945,6 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
         width={640} 
         okText="确认" 
         cancelText="取消"
-        destroyOnHidden
       >
         <div style={{ marginBottom: 16, padding: 12, background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f' }}>
           <Text type="secondary" style={{ fontSize: 12 }}>

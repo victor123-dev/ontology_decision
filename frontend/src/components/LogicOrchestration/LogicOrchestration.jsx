@@ -375,6 +375,15 @@ const LogicOrchestrationContent = () => {
   const edgesRef = useRef(edges);
   edgesRef.current = edges;
   const nodesRef = useRef(nodes);
+
+  // 计算条件分支节点的动态高度
+  const getConditionNodeHeight = (node) => {
+    const branchCount = node.data?.branches?.length || 0;
+    const baseHeight = 80;
+    const branchRowHeight = 56;
+    const addButtonHeight = 40;
+    return baseHeight + branchCount * branchRowHeight + addButtonHeight;
+  };
   nodesRef.current = nodes;
 
   // 辅助函数：沿边向下级联收集所有下游节点 ID
@@ -651,10 +660,18 @@ const LogicOrchestrationContent = () => {
           labelBgStyle: { fill: '#fff', fillOpacity: 0.8 },
         };
         
+        const nodeWidth = 220;
+        const verticalGap = 120;
+        const horizontalGap = 80;
+        const conditionHeight = getConditionNodeHeight(sourceNode);
+        // 与 adjustConditionBranchLayout 保持一致的布局
+        const ghostX = sourceNode.position.x + nodeWidth + newBranchIndex * (nodeWidth + horizontalGap);
+        const ghostY = sourceNode.position.y + conditionHeight + verticalGap;
+        
         const newGhostNode = {
           id: ghostId,
           type: 'ghost',
-          position: { x: sourceNode.position.x, y: sourceNode.position.y + 200 },
+          position: { x: ghostX, y: ghostY },
           data: { 
             label: `${branchTitle} 分支`,
             parentId: nodeId,
@@ -670,7 +687,8 @@ const LogicOrchestrationContent = () => {
         });
         
         const finalNodes = [...updatedNodes, newGhostNode];
-        const { nodes: layoutedNodes } = getLayoutedElementsRef.current(finalNodes, edgesRef.current, 'TB');
+        // 将新创建的 edge 也包含在布局计算中
+        const { nodes: layoutedNodes } = getLayoutedElementsRef.current(finalNodes, [...edgesRef.current, newEdge], 'TB');
         
         // 延迟添加边
         setTimeout(() => {
@@ -700,14 +718,17 @@ const LogicOrchestrationContent = () => {
       // 在源节点下方创建虚线框
       const sourceNode = nodes.find(n => n.id === nodeId);
       if (sourceNode) {
-        // 如果是条件分支节点，根据分支索引偏移虚线框位置
+        const nodeWidth = 220;
+        const verticalGap = 120;
+        const horizontalGap = 80;
         let ghostX = sourceNode.position.x;
         let ghostY = sourceNode.position.y + 150;
         
+        // 与 adjustConditionBranchLayout 保持一致的布局
         if (nodeData.actionType === '条件分支' && branchIndex !== undefined) {
-          // 计算分支对应的水平位置
-          const branchCount = nodeData.branches?.length || 2;
-          ghostX = sourceNode.position.x + (branchIndex - (branchCount - 1) / 2) * 280;
+          const conditionHeight = getConditionNodeHeight(sourceNode);
+          ghostX = sourceNode.position.x + nodeWidth + branchIndex * (nodeWidth + horizontalGap);
+          ghostY = sourceNode.position.y + conditionHeight + verticalGap;
         }
         
         const ghostPosition = {
