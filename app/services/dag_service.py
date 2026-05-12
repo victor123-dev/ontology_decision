@@ -491,6 +491,9 @@ class DAGService:
             # 例如：'300' < 100 -> 300 < 100
             expr_processed = re.sub(r"'(-?\d+\.?\d*)'", r'\1', expr)
             
+            # 转换逻辑运算符：&& -> and, || -> or, ! -> not
+            expr_processed = expr_processed.replace("&&", " and ").replace("||", " or ").replace("!", " not ")
+            
             # 安全执行表达式
             safe_globals = {
                 "__builtins__": {
@@ -502,8 +505,9 @@ class DAGService:
             result = eval(expr_processed, safe_globals, {})
             return result
         except Exception as e:
-            logger.warning(f"Expression evaluation failed: {expr}, error: {e}")
-            return expr
+            error_msg = f"Expression evaluation failed: {expr}, error: {e}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
     def _evaluate_condition(self, condition: str, context: DAGExecutionContext) -> bool:
         """评估条件表达式"""
@@ -525,7 +529,8 @@ class DAGService:
             
             # 替换变量为实际值
             eval_expr = condition
-            for match in re.finditer(var_pattern, condition):
+            # 转换逻辑运算符
+            for match in re.finditer(var_pattern, eval_expr):
                 var_ref = match.group()
                 var_value = context.get(var_ref)
                 eval_expr = eval_expr.replace(var_ref, repr(var_value))
@@ -541,8 +546,9 @@ class DAGService:
             result = eval(eval_expr, safe_globals, {})
             return bool(result)
         except Exception as e:
-            logger.warning(f"Condition evaluation failed: {condition}, error: {e}")
-            return False
+            error_msg = f"Condition evaluation failed: {condition}, error: {e}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
     def _execute_context_handler(self, handler: str, result: Dict[str, Any], context: DAGExecutionContext):
         """执行上下文处理器 - 将handler作为脚本执行，context/res/req作为全局变量"""
@@ -572,9 +578,11 @@ class DAGService:
                 "req": req_accessor
             })
             
-            logger.info(f"Context handler executed: {handler}, context: {context.variables['context']}, req: {context.variables.get("req", {})}")
+            logger.info(f"Context handler executed: {handler}, context: {context.variables['context']}, req: {context.variables.get('req', {})}")
         except Exception as e:
-            logger.warning(f"Context handler execution failed: {handler}, error: {e}")
+            error_msg = f"Context handler execution failed: {handler}, error: {e}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
     def _extract_from_result(self, path: str, result: Dict[str, Any]) -> Any:
         """从结果中提取值"""
