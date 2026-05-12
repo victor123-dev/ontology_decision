@@ -5,9 +5,32 @@ DAG Service - 逻辑编排执行器
 from typing import Dict, Any, Optional, List
 from collections import defaultdict, deque
 import re
+import copy
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class DictAccessor:
+    """字典访问器，支持 .属性 方式访问字典"""
+    
+    def __init__(self, data: dict):
+        self._data = data
+    
+    def __getattr__(self, name: str):
+        if name.startswith('_'):
+            return super().__getattribute__(name)
+        return self._data.get(name)
+    
+    def __setattr__(self, name: str, value):
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        else:
+            self._data[name] = value
+    
+    def __delattr__(self, name: str):
+        if name in self._data:
+            del self._data[name]
 
 
 class DAGExecutionContext:
@@ -89,7 +112,6 @@ class DAGExecutionContext:
                      context_snapshot: Dict = None, error: str = "",
                      selected_branch: str = None):
         """添加节点执行日志"""
-        import copy
         self.node_logs.append({
             "node_id": node_id,
             "node_label": node_label,
@@ -211,24 +233,24 @@ class DAGService:
                 # 执行节点
                 result = self._execute_node(node, context, adjacency, outgoing_edges)
                 
+                # 处理上下文处理器（将结果存入context）
+                context_handler = node_data.get("contextHandler", "")
+                if context_handler:
+                    self._execute_context_handler(context_handler, result, context)
+
                 # 存储节点结果
                 context.set_node_result(node_id, result)
                 context.add_history(node_id, "success")
                 executed_nodes.add(node_id)
                 
-                # 记录节点执行日志
+                # 记录节点执行日志（context_snapshot为上下文处理器处理后的值）
                 selected_branch = result.get("selected_branch") if node_type == "condition" else None
                 context.add_node_log(
                     node_id=node_id, node_label=node_label, node_type=node_type,
                     status="success", input_params=input_params, output=result,
-                    context_snapshot=context.variables.get("context", {}),
+                    context_snapshot=copy.deepcopy(context.variables.get("context", {})),
                     selected_branch=selected_branch,
                 )
-                
-                # 处理上下文处理器
-                context_handler = node_data.get("contextHandler", "")
-                if context_handler:
-                    self._execute_context_handler(context_handler, result, context)
                 
             except Exception as e:
                 logger.error(f"Node execution failed: {node_id}, error: {e}")
@@ -387,20 +409,26 @@ class DAGService:
         # 找到条件分支边
         branch_edges = [e for e in edges if e.get("sourceHandle", "").startswith("branch")]
         
-        # 评估每个分支条件
+        # 按分支顺序排序（branch0, branch1, branch2...）
+        branch_edges = sorted(branch_edges, key=lambda e: e.get("sourceHandle", ""))
+        
+        # 评估每个分支条件，使用表达式解析（与变量/上下文一致）
         selected_branch = None
         for edge in branch_edges:
             condition = edge.get("condition", "")
-            if self._evaluate_condition(condition, context):
+            condition = condition.strip() if condition else ""
+            
+            # 修正常见拼写错误
+            condition = condition.replace("contex.", "context.")
+            
+            # 使用表达式解析器评估条件
+            result = self._resolve_expression(condition, context)
+            logger.info(f"Condition expression: {condition}, resolved result: {result}")
+
+            # 如果表达式结果为 truthy，选择该分支
+            if result and result not in ("False", "false", "0", 0, "null", "None"):
                 selected_branch = edge
                 break
-        
-        if selected_branch is None and branch_edges:
-            # 如果没有条件匹配，尝试默认分支（branch0）
-            for edge in branch_edges:
-                if edge.get("sourceHandle") == "branch0":
-                    selected_branch = edge
-                    break
         
         return {
             "selected_branch": selected_branch["target"] if selected_branch else None,
@@ -452,10 +480,17 @@ class DAGService:
         for match in re.finditer(var_pattern, expr):
             var_ref = match.group()
             var_value = context.get(var_ref)
-            # 将变量替换为repr形式以便安全eval
-            expr = expr.replace(var_ref, repr(var_value))
+            # 数字类型直接使用值，字符串使用repr（带引号）
+            if isinstance(var_value, (int, float)) and var_value is not None:
+                expr = expr.replace(var_ref, str(var_value))
+            else:
+                expr = expr.replace(var_ref, repr(var_value))
         
         try:
+            # 处理数字字符串：尝试将引号包裹的数字转为真正的数字
+            # 例如：'300' < 100 -> 300 < 100
+            expr_processed = re.sub(r"'(-?\d+\.?\d*)'", r'\1', expr)
+            
             # 安全执行表达式
             safe_globals = {
                 "__builtins__": {
@@ -464,7 +499,7 @@ class DAGService:
                     "list": list, "dict": dict, "range": range
                 }
             }
-            result = eval(expr, safe_globals, {})
+            result = eval(expr_processed, safe_globals, {})
             return result
         except Exception as e:
             logger.warning(f"Expression evaluation failed: {expr}, error: {e}")
@@ -510,39 +545,34 @@ class DAGService:
             return False
     
     def _execute_context_handler(self, handler: str, result: Dict[str, Any], context: DAGExecutionContext):
-        """执行上下文处理器"""
+        """执行上下文处理器 - 将handler作为脚本执行，context/res/req作为全局变量"""
         if not handler:
             return
         
         try:
-            # 替换结果引用
-            eval_code = handler
+            # 使用 DictAccessor 包装，支持 .属性 访问字典
+            ctx_accessor = DictAccessor(context.variables["context"])
+            res_accessor = DictAccessor(result)
+            req_accessor = DictAccessor(context.variables.get("req", {}))
             
-            # 处理 res['data']['xxx'] 形式的引用
-            data_pattern = r"res\['data'\]\['([^']+)'\]"
-            for match in re.finditer(data_pattern, handler):
-                path = match.group()
-                value = self._extract_from_result(path, result)
-                eval_code = eval_code.replace(path, repr(value))
+            # 安全执行环境
+            safe_globals = {
+                "__builtins__": {
+                    "len": len, "str": str, "int": int, "float": float,
+                    "bool": bool, "max": max, "min": min, "abs": abs,
+                    "list": list, "dict": dict, "range": range, "type": type,
+                    "True": True, "False": False, "None": None
+                }
+            }
             
-            # 处理 res['xxx'] 形式的引用
-            res_pattern = r"res\['([^']+)'\]"
-            for match in re.finditer(res_pattern, eval_code):
-                key = match.group(1)
-                value = result.get(key)
-                eval_code = eval_code.replace(match.group(), repr(value))
+            # 执行脚本
+            exec(handler, safe_globals, {
+                "context": ctx_accessor,
+                "res": res_accessor,
+                "req": req_accessor
+            })
             
-            # 解析 context.xxx = yyy 形式的赋值
-            assign_pattern = r"context\.(\w+)\s*=\s*(.+)"
-            match = re.match(assign_pattern, handler.strip())
-            if match:
-                var_name = match.group(1)
-                value_expr = match.group(2)
-                
-                # 如果值表达式中包含变量引用，需要进一步解析
-                value = self._resolve_expression(value_expr, context)
-                context.set_context(var_name, value)
-                logger.info(f"Context handler set context.{var_name} = {value}")
+            logger.info(f"Context handler executed: {handler}, context: {context.variables['context']}, req: {context.variables.get("req", {})}")
         except Exception as e:
             logger.warning(f"Context handler execution failed: {handler}, error: {e}")
     
