@@ -1,7 +1,7 @@
 """
-批量导入所有OR-Tools优化Action到本体
+批量导入所有Action到本体
 
-包含7个Action:
+包含9个Action:
 1. predict_material_shortage - 缺料预测 (LP)
 2. calculate_ctp - CTP可承诺量计算 (MIP)
 3. optimize_purchase_plan - 采购计划优化 (MIP)
@@ -9,6 +9,8 @@
 5. optimize_detailed_schedule - 详细排程优化 (CP-SAT)
 6. optimize_capacity_allocation_fast - 产能优化分配 (启发式)
 7. optimize_detailed_schedule_fast - 详细排程优化 (启发式)
+8. recommend_suppliers - 推荐供应商 (紧急采购)
+9. emergency_purchase - 紧急采购 (库存预警响应)
 
 功能:
 - 导入前先删除已存在的Action（避免重复导入报错）
@@ -78,11 +80,25 @@ ACTION_SCRIPTS = [
         "action_id": "optimize_detailed_schedule_fast",
         "difficulty": "2星",
         "solver": "启发式 (贪婪+2-opt)"
+    },
+    {
+        "name": "推荐供应商",
+        "file": "import_action_recommend_suppliers.py",
+        "action_id": "recommend_suppliers",
+        "difficulty": "1星",
+        "solver": "综合评分模型"
+    },
+    {
+        "name": "紧急采购",
+        "file": "import_action_emergency_purchase.py",
+        "action_id": "emergency_purchase",
+        "difficulty": "1星",
+        "solver": "业务逻辑"
     }
 ]
 
 def delete_existing_actions():
-    """删除所有已存在的OR-Tools Action"""
+    """删除所有已存在的Action"""
     print("\n" + "=" * 80)
     print("步骤1: 清理已存在的Action")
     print("=" * 80)
@@ -113,7 +129,7 @@ def delete_existing_actions():
 
 def main():
     print("=" * 80)
-    print("批量导入OR-Tools优化Action到本体")
+    print("批量导入所有Action到本体")
     print("=" * 80)
     
     # 步骤1: 删除已存在的Action
@@ -137,7 +153,7 @@ def main():
     
     for i, action in enumerate(ACTION_SCRIPTS, 1):
         print(f"\n{'='*80}")
-        print(f"[{i}/7] 导入Action: {action['name']}")
+        print(f"[{i}/{len(ACTION_SCRIPTS)}] 导入Action: {action['name']}")
         print(f"{'='*80}")
         print(f"   求解器: {action['solver']}")
         print(f"   难度: {action['difficulty']}")
