@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, message, Popconfirm, Tooltip } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, message, Popconfirm, Tooltip, Typography, InputNumber, Select } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { orchestrationApi } from '../../services/api';
 import './LogicOrchestration.css';
+
+const { Text } = Typography;
 
 const LogicOrchestrationList = () => {
   const navigate = useNavigate();
@@ -12,6 +14,10 @@ const LogicOrchestrationList = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [form] = Form.useForm();
+  const [executeModalVisible, setExecuteModalVisible] = useState(false);
+  const [executingItem, setExecutingItem] = useState(null);
+  const [executeForm] = Form.useForm();
+  const [executing, setExecuting] = useState(false);
 
   // 格式化时间，只显示到秒
   const formatDateTime = (dateStr) => {
@@ -93,6 +99,48 @@ const LogicOrchestrationList = () => {
     }
   };
 
+  const handleExecute = async (record) => {
+    setExecutingItem(record);
+    setExecuteModalVisible(true);
+    try {
+      const res = await orchestrationApi.get(record.id);
+      const detail = res.data || {};
+      const inputs = detail.graph_data?.inputs || [];
+      setExecutingItem({ ...record, inputs });
+      const initialValues = {};
+      inputs.forEach(inp => {
+        if (inp.defaultValue !== undefined && inp.defaultValue !== '') {
+          initialValues[inp.name] = inp.defaultValue;
+        }
+      });
+      setTimeout(() => {
+        executeForm.setFieldsValue(initialValues);
+      }, 0);
+    } catch (err) {
+      console.error('获取编排详情失败:', err);
+    }
+  };
+
+  const handleExecuteConfirm = async () => {
+    if (!executingItem) return;
+    try {
+      const values = await executeForm.validateFields();
+      setExecuting(true);
+      const res = await orchestrationApi.execute(executingItem.id, values);
+      if (res.data?.success) {
+        message.success('执行成功');
+      } else {
+        message.error(`执行失败: ${res.data?.error || '未知错误'}`);
+      }
+      setExecuteModalVisible(false);
+    } catch (err) {
+      if (err.errorFields) return; // 表单校验失败
+      message.error('执行失败: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setExecuting(false);
+    }
+  };
+
   const columns = [
     {
       title: '名称',
@@ -134,6 +182,9 @@ const LogicOrchestrationList = () => {
           <Button type="primary" size="small" onClick={() => handleCanvas(record)} style={{ marginRight: 0 }}>
             编辑
           </Button>
+          <Button size="small" type="primary" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record)}>
+            执行
+          </Button>
           <Button size="small" onClick={() => handleEdit(record)}>
             编辑信息
           </Button>
@@ -162,7 +213,7 @@ const LogicOrchestrationList = () => {
           </Button>
         }
         style={{ height: 'calc(100vh - 32px)' }}
-        bodyStyle={{ height: 'calc(100% - 57px)', overflow: 'auto', padding: '12px 16px' }}
+        styles={{ body: { height: 'calc(100% - 57px)', overflow: 'auto', padding: '12px 16px' } }}
       >
         <Table
           columns={columns}
@@ -200,6 +251,54 @@ const LogicOrchestrationList = () => {
             <Input.TextArea rows={3} placeholder="请输入描述" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={`执行编排 - ${executingItem?.name || ''}`}
+        open={executeModalVisible}
+        onOk={handleExecuteConfirm}
+        onCancel={() => setExecuteModalVisible(false)}
+        okText="执行"
+        cancelText="取消"
+        confirmLoading={executing}
+        width={520}
+      >
+        {(executingItem?.inputs || []).length > 0 ? (
+          <Form form={executeForm} layout="vertical">
+            {executingItem.inputs.map((inp) => (
+              <Form.Item
+                key={inp.name}
+                name={inp.name}
+                label={
+                  <span>
+                    {inp.name}
+                    <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                      ({inp.type}{inp.required ? ', 必填' : ''})
+                    </Text>
+                  </span>
+                }
+                rules={inp.required ? [{ required: true, message: `请输入${inp.name}` }] : []}
+                tooltip={inp.description || undefined}
+                initialValue={inp.defaultValue || undefined}
+              >
+                {inp.type === 'number' || inp.type === 'integer' ? (
+                  <InputNumber placeholder={`请输入${inp.name}`} style={{ width: '100%' }} />
+                ) : inp.type === 'boolean' ? (
+                  <Select placeholder={`请选择${inp.name}`} allowClear>
+                    <Select.Option value={true}>true</Select.Option>
+                    <Select.Option value={false}>false</Select.Option>
+                  </Select>
+                ) : (
+                  <Input placeholder={`请输入${inp.name}`} />
+                )}
+              </Form.Item>
+            ))}
+          </Form>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: '#999' }}>
+            该编排未定义入参，可直接执行
+          </div>
+        )}
       </Modal>
     </div>
   );

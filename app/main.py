@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from app.api import data_source, business_model, business_model_link, business_data, data_sensing, drive_logic, \
     drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk, \
-    alert_dashboard, excel_import_export, orchestration
+    alert_dashboard, excel_import_export, orchestration, orchestration_log
 from app.api.general_mcp import ontology_type_mcp, object_query_mcp, object_query_by_link_mcp
 from app.api import dynamic_mcp
 from app.config import settings
@@ -111,6 +111,7 @@ mcp = FastApiMCP(
 mcp.mount_http()
 app.include_router(alert_dashboard.router, prefix="/api/v1", tags=["Alert Dashboard"])
 app.include_router(orchestration.router, prefix="/api/v1", tags=["Orchestration"])
+app.include_router(orchestration_log.router, prefix="/api/v1", tags=["Orchestration Log"])
 
 # 根路径
 @app.get("/")

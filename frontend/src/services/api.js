@@ -99,6 +99,14 @@ export const orchestrationApi = {
   get: (id) => api.get(`/orchestrations/${id}`),
   update: (id, data) => api.put(`/orchestrations/${id}`, data),
   delete: (id) => api.delete(`/orchestrations/${id}`),
+  execute: (id, data) => api.post(`/orchestrations/${id}/execute`, data),
+};
+
+// 逻辑编排执行日志
+export const orchestrationLogApi = {
+  getAll: (params) => api.get('/orchestration-logs', { params }),
+  get: (id) => api.get(`/orchestration-logs/${id}`),
+  delete: (id) => api.delete(`/orchestration-logs/${id}`),
 };
 
 // SDK生成

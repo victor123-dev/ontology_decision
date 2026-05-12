@@ -154,3 +154,68 @@ def delete_orchestration(orchestration_id: str):
 
     logger.info(f"删除编排: {orchestration_id}")
     return {"message": "删除成功"}
+
+
+@router.post("/orchestrations/{orchestration_id}/execute")
+def execute_orchestration(orchestration_id: str, request_data: Optional[dict] = None):
+    """执行编排并记录日志"""
+    collection = get_collection()
+    if collection is None:
+        raise HTTPException(status_code=500, detail="数据库连接失败")
+
+    from bson import ObjectId
+    try:
+        orchestration = collection.find_one({"_id": ObjectId(orchestration_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="无效的编排ID")
+
+    if not orchestration:
+        raise HTTPException(status_code=404, detail="编排不存在")
+
+    graph_data = orchestration.get("graph_data", {})
+    if not graph_data or not graph_data.get("nodes"):
+        raise HTTPException(status_code=400, detail="编排内容为空，无法执行")
+
+    # 创建执行日志
+    from app.utils.mongo_client import get_mongo_client
+    log_collection = get_mongo_client().get_collection("orchestration_logs")
+    started_at = datetime.now()
+    log_doc = {
+        "orchestration_id": orchestration_id,
+        "orchestration_name": orchestration.get("name", ""),
+        "status": "running",
+        "input_data": request_data or {},
+        "started_at": started_at,
+        "finished_at": None,
+        "node_logs": [],
+        "context": {},
+    }
+    log_result = log_collection.insert_one(log_doc)
+    log_id = str(log_result.inserted_id)
+
+    # 执行 DAG
+    from app.services.dag_service import get_dag_service
+    dag_service = get_dag_service()
+    execution_result = dag_service.execute(graph_data, request_data or {})
+
+    # 更新执行日志
+    finished_at = datetime.now()
+    node_logs = execution_result.get("node_logs", [])
+    context_data = execution_result.get("context", {})
+
+    log_collection.update_one(
+        {"_id": log_result.inserted_id},
+        {"$set": {
+            "status": "success" if execution_result.get("success") else "failed",
+            "finished_at": finished_at,
+            "node_logs": node_logs,
+            "context": context_data,
+            "error": execution_result.get("error", ""),
+        }}
+    )
+
+    return {
+        "log_id": log_id,
+        "success": execution_result.get("success", False),
+        "error": execution_result.get("error", ""),
+    }

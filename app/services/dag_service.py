@@ -21,6 +21,7 @@ class DAGExecutionContext:
         }
         self.node_results: Dict[str, Dict[str, Any]] = {}
         self.execution_history: List[Dict[str, Any]] = []
+        self.node_logs: List[Dict[str, Any]] = []
     
     def get(self, path: str) -> Any:
         """获取变量值，支持链式访问"""
@@ -82,6 +83,24 @@ class DAGExecutionContext:
         """存储节点执行结果"""
         self.node_results[node_id] = result
         self.variables["res"] = result
+
+    def add_node_log(self, node_id: str, node_label: str, node_type: str, 
+                     status: str, input_params: Any = None, output: Any = None, 
+                     context_snapshot: Dict = None, error: str = "",
+                     selected_branch: str = None):
+        """添加节点执行日志"""
+        import copy
+        self.node_logs.append({
+            "node_id": node_id,
+            "node_label": node_label,
+            "node_type": node_type,
+            "status": status,
+            "input_params": input_params,
+            "output": output,
+            "context_snapshot": copy.deepcopy(context_snapshot) if context_snapshot else None,
+            "error": error,
+            "selected_branch": selected_branch,
+        })
     
     def add_history(self, node_id: str, status: str, message: str = ""):
         """添加执行历史"""
@@ -123,7 +142,7 @@ class DAGService:
         edges = dag_definition.get("edges", [])
         
         if not nodes:
-            return {"success": False, "error": "No nodes in DAG definition"}
+            return {"success": False, "error": "No nodes in DAG definition", "node_logs": [], "context": {}}
         
         # 构建节点映射
         node_map = {node["id"]: node for node in nodes}
@@ -147,7 +166,7 @@ class DAGService:
         execution_order = self._topological_sort(node_map, adjacency, in_degree)
         
         if execution_order is None:
-            return {"success": False, "error": "Circular dependency detected in DAG"}
+            return {"success": False, "error": "Circular dependency detected in DAG", "node_logs": [], "context": {}}
         
         # 创建执行上下文
         context = DAGExecutionContext(request_data)
@@ -157,15 +176,37 @@ class DAGService:
         for edge in edges:
             outgoing_edges[edge["source"]].append(edge)
         
-        # 执行节点
+        # 记录所有节点ID，用于后续标记未执行的节点
+        all_node_ids = set(node_map.keys())
         executed_nodes = set()
+        skipped_nodes = set()
         
         for node_id in execution_order:
             node = node_map[node_id]
             node_type = node.get("type", "action")
+            node_data = node.get("data", {})
+            node_label = node_data.get("label", node_id)
+            
+            # 检查条件节点是否应该跳过此分支
+            # 如果节点的入边来自条件节点的未选中分支，则跳过
+            should_skip = self._should_skip_node(node_id, node_map, edges, context, outgoing_edges)
+            if should_skip:
+                skipped_nodes.add(node_id)
+                context.add_node_log(
+                    node_id=node_id, node_label=node_label, node_type=node_type,
+                    status="skipped"
+                )
+                continue
             
             try:
                 logger.info(f"Executing node: {node_id} (type: {node_type})")
+                
+                # 记录执行前的参数
+                if node_type == "action":
+                    param_values = node_data.get("paramValues", {})
+                    input_params = self._resolve_parameters(param_values, context)
+                else:
+                    input_params = None
                 
                 # 执行节点
                 result = self._execute_node(node, context, adjacency, outgoing_edges)
@@ -175,27 +216,100 @@ class DAGService:
                 context.add_history(node_id, "success")
                 executed_nodes.add(node_id)
                 
+                # 记录节点执行日志
+                selected_branch = result.get("selected_branch") if node_type == "condition" else None
+                context.add_node_log(
+                    node_id=node_id, node_label=node_label, node_type=node_type,
+                    status="success", input_params=input_params, output=result,
+                    context_snapshot=context.variables.get("context", {}),
+                    selected_branch=selected_branch,
+                )
+                
                 # 处理上下文处理器
-                context_handler = node.get("data", {}).get("contextHandler", "")
+                context_handler = node_data.get("contextHandler", "")
                 if context_handler:
                     self._execute_context_handler(context_handler, result, context)
                 
             except Exception as e:
                 logger.error(f"Node execution failed: {node_id}, error: {e}")
                 context.add_history(node_id, "failed", str(e))
+                executed_nodes.add(node_id)
+                
+                # 记录失败日志
+                if node_type == "action":
+                    param_values = node_data.get("paramValues", {})
+                    input_params = self._resolve_parameters(param_values, context)
+                else:
+                    input_params = None
+                context.add_node_log(
+                    node_id=node_id, node_label=node_label, node_type=node_type,
+                    status="failed", input_params=input_params, output=None,
+                    context_snapshot=context.variables.get("context", {}),
+                    error=str(e),
+                )
+                
+                # 标记剩余未执行节点
+                for remaining_id in execution_order:
+                    if remaining_id not in executed_nodes and remaining_id not in skipped_nodes:
+                        remaining_node = node_map[remaining_id]
+                        context.add_node_log(
+                            node_id=remaining_id,
+                            node_label=remaining_node.get("data", {}).get("label", remaining_id),
+                            node_type=remaining_node.get("type", "action"),
+                            status="not_reached",
+                        )
+                
                 return {
                     "success": False,
                     "error": f"Node {node_id} execution failed: {str(e)}",
                     "executed_nodes": list(executed_nodes),
-                    "history": context.execution_history
+                    "history": context.execution_history,
+                    "node_logs": context.node_logs,
+                    "context": context.variables.get("context", {}),
                 }
+        
+        # 标记跳过的节点
+        for nid in all_node_ids - executed_nodes - skipped_nodes:
+            n = node_map[nid]
+            context.add_node_log(
+                node_id=nid,
+                node_label=n.get("data", {}).get("label", nid),
+                node_type=n.get("type", "action"),
+                status="skipped",
+            )
         
         return {
             "success": True,
             "result": context.variables.get("context", {}),
             "history": context.execution_history,
-            "all_nodes": list(executed_nodes)
+            "all_nodes": list(executed_nodes),
+            "node_logs": context.node_logs,
+            "context": context.variables.get("context", {}),
         }
+    
+    def _should_skip_node(self, node_id: str, node_map: Dict, edges: List[Dict],
+                          context: DAGExecutionContext, outgoing_edges: Dict) -> bool:
+        """判断节点是否应该跳过（条件分支未选中的下游节点）"""
+        # 查找入边
+        incoming_edges = [e for e in edges if e["target"] == node_id]
+        
+        for edge in incoming_edges:
+            source_id = edge["source"]
+            source_handle = edge.get("sourceHandle", "")
+            
+            # 如果入边来自条件节点的分支
+            if source_handle.startswith("branch"):
+                source_node = node_map.get(source_id)
+                if source_node and source_node.get("type") == "condition":
+                    # 检查条件节点的执行结果
+                    source_result = context.node_results.get(source_id)
+                    if source_result:
+                        selected_branch = source_result.get("selected_branch")
+                        # 如果当前节点不在选中分支上，则跳过
+                        if selected_branch and node_id != selected_branch:
+                            return True
+        
+        return False
     
     def _topological_sort(self, node_map: Dict, adjacency: Dict, in_degree: Dict) -> Optional[List[str]]:
         """拓扑排序，返回执行顺序"""
