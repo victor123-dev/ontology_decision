@@ -92,6 +92,23 @@ export const actionApi = {
   execute: (data) => api.post('/actions/execute', data),
 };
 
+// 逻辑编排管理
+export const orchestrationApi = {
+  create: (data) => api.post('/orchestrations', data),
+  getAll: () => api.get('/orchestrations'),
+  get: (id) => api.get(`/orchestrations/${id}`),
+  update: (id, data) => api.put(`/orchestrations/${id}`, data),
+  delete: (id) => api.delete(`/orchestrations/${id}`),
+  execute: (id, data) => api.post(`/orchestrations/${id}/execute`, data),
+};
+
+// 逻辑编排执行日志
+export const orchestrationLogApi = {
+  getAll: (params) => api.get('/orchestration-logs', { params }),
+  get: (id) => api.get(`/orchestration-logs/${id}`),
+  delete: (id) => api.delete(`/orchestration-logs/${id}`),
+};
+
 // SDK生成
 export const sdkApi = {
   generate: (data) => api.post('/sdk/generate', data),

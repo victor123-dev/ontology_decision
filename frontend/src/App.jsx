@@ -15,6 +15,10 @@ import TestExecution from './components/TestExecution/TestExecution'
 import DocumentImport from './components/DocumentImport/DocumentImport'
 import DriveVisualization from './components/DriveVisualization/DriveVisualization'
 import AlertDashboard from './components/AlertDashboard/AlertDashboard'
+import LogicOrchestration from './components/LogicOrchestration/LogicOrchestrationList'
+import LogicOrchestrationCanvas from './components/LogicOrchestration/LogicOrchestrationCanvas'
+import OrchestrationLog from './components/OrchestrationLog/OrchestrationLog'
+import OrchestrationLogDetail from './components/OrchestrationLog/OrchestrationLogDetail'
 import { AgentButton, AgentPanel } from './components/AgentDialog'
 
 const { Header, Sider, Content } = Layout
@@ -96,6 +100,11 @@ function AppContent() {
                   key: 'drive-logic',
                   icon: <span>⚙️</span>,
                   label: <Link to="/drive-logic">驱动逻辑配置</Link>,
+                },
+                {
+                  key: 'logic-orchestration',
+                  icon: <span>🔗</span>,
+                  label: <Link to="/logic-orchestration">逻辑编排</Link>,
                 }
               ]
             },
@@ -113,6 +122,11 @@ function AppContent() {
                   key: 'drive-log',
                   icon: <span>📋</span>,
                   label: <Link to="/drive-log">驱动日志</Link>,
+                },
+                {
+                  key: 'orchestration-log',
+                  icon: <span>📜</span>,
+                  label: <Link to="/orchestration-log">编排执行日志</Link>,
                 }
               ]
             },
@@ -153,6 +167,10 @@ function AppContent() {
             <Route path="/drive-log" element={<DriveLog />} />
             <Route path="/drive-visualization" element={<DriveVisualization />} />
             <Route path="/alert-dashboard" element={<AlertDashboard />} />
+            <Route path="/logic-orchestration" element={<LogicOrchestration />} />
+            <Route path="/logic-orchestration/:id" element={<LogicOrchestrationCanvas />} />
+            <Route path="/orchestration-log" element={<OrchestrationLog />} />
+            <Route path="/orchestration-log/:id" element={<OrchestrationLogDetail />} />
             <Route path="/" element={<AlertDashboard />} />
           </Routes>
         </Content>
