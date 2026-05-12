@@ -202,7 +202,52 @@ class OperationService:
                 
                 # 只返回低于安全库存的物料
                 if available_qty < safety_stock and safety_stock > 0:
+                    # 计算在途采购数量（基于采购订单行状态）
+                    in_transit_qty = 0
+                    in_transit_details = []
+                    
+                    try:
+                        # 查询该物料的所有采购订单行
+                        all_pol = self.client.models.PurchaseOrderLine.find(material_id=material_id)
+                        
+                        for pol in all_pol:
+                            pol_status = getattr(pol, 'status', '')
+                            # 只统计未开始、待收货、部分到货的订单行（排除全部到货）
+                            if pol_status in ['未开始', '待收货', '部分到货']:
+                                quantity = getattr(pol, 'quantity', 0)
+                                received_qty = getattr(pol, 'received_quantity', 0) or 0
+                                
+                                # 在途数量 = 订单数量 - 已收货数量
+                                transit = quantity - received_qty
+                                if transit > 0:
+                                    in_transit_qty += transit
+                                    
+                                    # 获取PO信息
+                                    po_id = getattr(pol, 'po_id', '')
+                                    in_transit_details.append({
+                                        'po_id': po_id,
+                                        'line_id': getattr(pol, 'line_id', ''),
+                                        'quantity': quantity,
+                                        'received_quantity': received_qty,
+                                        'in_transit': transit,
+                                        'status': pol_status
+                                    })
+                    except Exception as e:
+                        logger.warning(f"查询在途采购失败 {material_id}: {e}")
+                    
+                    # 健康度计算：基于当前库存，但在途数量提供加分
                     health_ratio = round(available_qty / safety_stock * 100, 2)
+                    
+                    # 在途加分：每10%安全库存的在途数量加5分，最多额外加30分
+                    if in_transit_qty > 0:
+                        transit_bonus = min(
+                            round((in_transit_qty / safety_stock) * 50, 2),
+                            30.0
+                        )
+                        adjusted_health_ratio = min(health_ratio + transit_bonus, 100.0)
+                    else:
+                        adjusted_health_ratio = health_ratio
+                    
                     low_inventory_items.append({
                         'inventory_id': getattr(inv, 'inventory_id', ''),
                         'material_id': material_id,
@@ -211,9 +256,12 @@ class OperationService:
                         'available_quantity': available_qty,
                         'safety_stock_level': safety_stock,
                         'reserved_quantity': getattr(inv, 'reserved_quantity', 0),
-                        'in_transit_quantity': getattr(inv, 'in_transit_quantity', 0),
-                        'health_ratio': health_ratio,
-                        'location': getattr(inv, 'location', '')
+                        'in_transit_quantity': in_transit_qty,
+                        'in_transit_details': in_transit_details,  # 在途明细
+                        'health_ratio': health_ratio,  # 基于当前库存的健康度
+                        'adjusted_health_ratio': adjusted_health_ratio,  # 考虑在途后的健康度
+                        'location': getattr(inv, 'location', ''),
+                        'is_healthy': False  # 低于安全库存就是不健康
                     })
             
             # 按健康度排序(越低越紧急)

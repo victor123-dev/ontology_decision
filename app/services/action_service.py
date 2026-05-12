@@ -70,7 +70,7 @@ class ActionService:
             "string": str,
             "text": str,
             "integer": int,
-            "float": float,
+            "float": (int, float),  # float 类型也接受 int（整数可以自动转换为浮点数）
             "boolean": bool,
             "object": dict,
             "array": list,

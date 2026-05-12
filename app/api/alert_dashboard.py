@@ -119,6 +119,58 @@ def get_low_inventory_alerts():
         raise HTTPException(status_code=500, detail=f"获取低库存预警失败: {str(e)}")
 
 
+@router.post("/inventory/recommend-suppliers")
+def recommend_suppliers(material_id: str, quantity_needed: float = None, urgency_level: str = "high"):
+    """
+    推荐供应商 - 通过执行 Action 完成
+    
+    参数:
+    - material_id: 物料ID
+    - quantity_needed: 需要的数量（可选，不填则自动计算）
+    - urgency_level: 紧急程度 (high/normal)
+    """
+    try:
+        from app.services.dashbaord.sdk_client import get_ontology_client
+        
+        # 使用 OntologySDK 执行 Action
+        client = get_ontology_client()
+        result = client.actions.execute("recommend_suppliers", {
+            "material_id": material_id,
+            "quantity_needed": quantity_needed,
+            "urgency_level": urgency_level
+        })
+        
+        return result
+    except Exception as e:
+        logger.error(f"推荐供应商失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"推荐供应商失败: {str(e)}")
+
+
+@router.post("/inventory/emergency-purchase")
+def emergency_purchase(request_data: dict):
+    """
+    创建紧急采购 - 通过执行 Action 完成
+    
+    参数:
+    - material_id: 物料ID
+    - quantity: 采购数量
+    - supplier_id: 供应商ID
+    - urgency_level: 紧急程度 (high/normal)
+    - reason: 采购原因
+    """
+    try:
+        from app.services.dashbaord.sdk_client import get_ontology_client
+        
+        # 使用 OntologySDK 执行 Action
+        client = get_ontology_client()
+        result = client.actions.execute("emergency_purchase", request_data)
+        
+        return result
+    except Exception as e:
+        logger.error(f"创建紧急采购失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"创建紧急采购失败: {str(e)}")
+
+
 # ==================== 工单跟踪 API ====================
 
 @router.get("/work-order/delayed")

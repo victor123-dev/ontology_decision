@@ -719,6 +719,60 @@ class FactorySimulation:
         if self.transaction_buffer:
             self.db.bulk_insert("inventory_transaction", self.transaction_buffer)
             self.transaction_buffer.clear()
+    
+    def _sync_inventory_to_db(self):
+        """
+        仿真结束时将内存中的库存状态同步到数据库
+        
+        解决原问题：仿真过程中只在内存更新库存，结束后inventory表仍是初始数据
+        现在会在仿真结束时将所有物料的最新库存状态写入数据库
+        """
+        print(f"\n[数据同步] 正在将库存状态同步到数据库...")
+        sync_count = 0
+        current_time = self.sim_time_to_datetime(self.env.now)
+        
+        for material_id, inv in self.inventory_state.items():
+            self.db.update(
+                "inventory",
+                {"material_id": material_id},
+                {
+                    "total_quantity": inv["total"],
+                    "available_quantity": inv["available"],
+                    "reserved_quantity": inv["reserved"],
+                    "in_transit_quantity": inv.get("in_transit", 0),
+                    "last_updated": current_time
+                }
+            )
+            sync_count += 1
+        
+        print(f"  ✅ 已同步 {sync_count} 个物料的库存状态到数据库")
+    
+    def _sync_fg_inventory_to_db(self):
+        """
+        仿真结束时将内存中的成品库存状态同步到数据库
+        
+        与 _sync_inventory_to_db 类似，但针对成品库存（finished_goods_inventory）
+        """
+        print(f"[数据同步] 正在将成品库存状态同步到数据库...")
+        sync_count = 0
+        current_time = self.sim_time_to_datetime(self.env.now)
+        
+        for product_id, fg_inv in self.fg_inventory_state.items():
+            fg_inv_id = f"FGI-{product_id}"
+            self.db.update(
+                "finished_goods_inventory",
+                {"fg_inv_id": fg_inv_id},
+                {
+                    "total_quantity": fg_inv["total"],
+                    "available_quantity": fg_inv["available"],
+                    "reserved_quantity": fg_inv["reserved"],
+                    "shipped_quantity": fg_inv.get("shipped", 0),
+                    "last_updated": current_time
+                }
+            )
+            sync_count += 1
+        
+        print(f"  ✅ 已同步 {sync_count} 个产品的成品库存状态到数据库")
 
     # ========================================================================
     # 机台状态管理
@@ -1584,7 +1638,7 @@ class FactorySimulation:
         self.db.insert("purchase_order", po_data)
         
         # 创建多个POL（每行一个物料）
-        for wom in shortage_list:
+        for idx, wom in enumerate(shortage_list, start=1):
             material_id = wom["material_id"]
             shortage_qty = wom.get("shortage_quantity", 0)
             wom_id = wom["wom_id"]
@@ -1613,9 +1667,9 @@ class FactorySimulation:
             if max_order > 0 and po_qty > max_order:
                 po_qty = max_order
             
-            # 创建POL
+            # 创建POL（line_id与po_id关联）
             line_data = {
-                "line_id": self.next_id("POL"),
+                "line_id": f"POL-{po_id}-{idx:03d}",
                 "po_id": po_id,
                 "material_id": material_id,
                 "quantity": po_qty,
@@ -1935,7 +1989,7 @@ class FactorySimulation:
                     self.db.insert("purchase_order", po_data)
 
                     line_data = {
-                        "line_id": self.next_id("POL"),
+                        "line_id": f"POL-{po_id}-001",
                         "po_id": po_id,
                         "material_id": material_id,
                         "quantity": po_qty,
@@ -3573,6 +3627,12 @@ class FactorySimulation:
         # 刷新剩余缓冲区
         self.flush_transactions()
         self.flush_status_logs()
+        
+        # 同步最终库存状态到数据库
+        self._sync_inventory_to_db()
+        
+        # 同步最终成品库存状态到数据库
+        self._sync_fg_inventory_to_db()
 
         print(f"\n仿真完成！总仿真时间: {duration_hours}小时 ({self.config['duration_days']}天)")
 
