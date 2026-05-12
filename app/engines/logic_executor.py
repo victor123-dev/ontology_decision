@@ -29,9 +29,9 @@ class LogicExecutor:
             
             # 记录驱动逻辑执行日志
             logic_log_id = log_event_with_parent(
-                'info', 'drive_logic', 
-                f"执行驱动逻辑: {logic.name}", 
-                {'logic_name': logic.name, 'logic_type': logic_type}, 
+                'info', 'drive_logic',
+                f"执行驱动逻辑: {logic.name}",
+                {'logic_name': logic.name, 'logic_type': logic_type},
                 trace_id, parent_log_id
             )
             
@@ -40,6 +40,15 @@ class LogicExecutor:
             processed_data = event.get('data', {})
             record_data = event.get('data', {}).get('affected_records', {})[0].get('record', {})
             trigger_actions = False
+            
+            # 处理逻辑编排类型
+            if logic_type == 'logic_orchestration':
+                dag_definition = config.get('dag_definition')
+                if dag_definition:
+                    self._execute_dag_logic(dag_definition, event, db, trace_id, logic_log_id)
+                else:
+                    logger.warning(f"驱动逻辑 {logic.name} 配置缺少 dag_definition")
+                return
             
             if logic_type == 'script' and config.get('script_content'):
                 result = self._run_preprocess_script(config.get('script_content'), event)
@@ -161,3 +170,33 @@ class LogicExecutor:
             record_data = event.get('data', {}).get('affected_records', [{}])[0].get('record', {})
         
         return record_data
+    
+    def _execute_dag_logic(self, dag_definition: Dict[str, Any], event: Dict[str, Any], db, trace_id: str = None, parent_log_id: int = None):
+        """执行逻辑编排（DAG）"""
+        from app.services.dag_service import get_dag_service
+        
+        try:
+            # 提取参数
+            parameters = event.get('record_data', {}) or event.get('data', {})
+            
+            # 执行 DAG
+            dag_service = get_dag_service()
+            result = dag_service.execute(dag_definition, parameters)
+            
+            logger.info(f"逻辑编排执行完成，结果: {result}")
+            if result.get('success', False):
+                log_event_with_parent('info', 'drive_logic',
+                    f"逻辑编排执行成功",
+                    {'success': True, 'result': result}, trace_id, parent_log_id)
+            else:
+                logger.error(f"逻辑编排执行失败，结果: {result}")
+                log_event_with_parent('error', 'drive_logic',
+                    f"逻辑编排执行失败: {result.get('error', 'Unknown error')}",
+                    {'success': False, 'result': result}, trace_id, parent_log_id)
+                    
+        except Exception as e:
+            logger.error(f"逻辑编排执行失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            log_event_with_parent('error', 'drive_logic',
+                f"逻辑编排执行失败: {str(e)}",
+                {'error': str(e)}, trace_id, parent_log_id)
