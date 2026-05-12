@@ -19,6 +19,7 @@ import LogicOrchestration from './components/LogicOrchestration/LogicOrchestrati
 import LogicOrchestrationCanvas from './components/LogicOrchestration/LogicOrchestrationCanvas'
 import OrchestrationLog from './components/OrchestrationLog/OrchestrationLog'
 import OrchestrationLogDetail from './components/OrchestrationLog/OrchestrationLogDetail'
+import Solver from './components/Solver/Solver'
 import { AgentButton, AgentPanel } from './components/AgentDialog'
 
 const { Header, Sider, Content } = Layout
@@ -78,6 +79,11 @@ function AppContent() {
                   key: 'business-data',
                   icon: <span>📝</span>,
                   label: <Link to="/business-data">业务数据管理</Link>,
+                },
+                {
+                  key: 'solver',
+                  icon: <span>🧩</span>,
+                  label: <Link to="/solver">求解器</Link>,
                 }
               ]
             },
@@ -171,6 +177,7 @@ function AppContent() {
             <Route path="/logic-orchestration/:id" element={<LogicOrchestrationCanvas />} />
             <Route path="/orchestration-log" element={<OrchestrationLog />} />
             <Route path="/orchestration-log/:id" element={<OrchestrationLogDetail />} />
+            <Route path="/solver" element={<Solver />} />
             <Route path="/" element={<AlertDashboard />} />
           </Routes>
         </Content>
