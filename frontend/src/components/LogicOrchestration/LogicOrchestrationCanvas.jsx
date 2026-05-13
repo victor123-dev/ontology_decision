@@ -1104,7 +1104,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           name: a.name,
           api_name: a.api_name || a.name,
           description: a.description || '',
-          action_type: a.action_type || 'function',
+          action_type: 'Action',
           params: a.parameters || [],
           category: a.category || '其他',
         }));
@@ -1886,14 +1886,14 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       <div className="orchestration-layout">
         <div className="action-list-panel">
           <Card 
-            title="📦 Action 列表" 
+            title="📦 节点列表"
             size="small"
             className="action-list-card"
             loading={actionListLoading}
           >
             <div className="action-list-filters">
               <Search
-                placeholder="搜索 Action"
+                placeholder="搜索 节点"
                 prefix={<SearchOutlined />}
                 size="small"
                 onChange={(e) => setSearchText(e.target.value)}
