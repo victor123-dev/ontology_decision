@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Tooltip, Tag, Card } from 'antd'
 import { ThunderboltOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { driveLogicApi, dataSensingApi, actionApi, orchestrationApi } from '../../services/api'
+import { driveLogicApi, dataSensingApi, actionApi } from '../../services/api'
 
 const { Option } = Select
 
 function DriveLogic() {
   const [logics, setLogics] = useState([])
   const [actions, setActions] = useState([])
-  const [orchestrations, setOrchestrations] = useState([])
-
   const [sensingConfigs, setSensingConfigs] = useState([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -24,7 +22,6 @@ function DriveLogic() {
     fetchLogics()
     fetchActions()
     fetchSensingConfigs()
-    fetchOrchestrations()
   }, [])
 
   const fetchLogics = async () => {
@@ -60,16 +57,6 @@ function DriveLogic() {
     }
   }
 
-  const fetchOrchestrations = async () => {
-    try {
-      const response = await orchestrationApi.getAll()
-      setOrchestrations(response.data)
-    } catch (error) {
-      console.error('获取逻辑编排失败:', error);
-      message.error('获取逻辑编排失败')
-    }
-  }
-
   const handleAdd = () => {
     setEditingLogic(null)
     setSelectedType('first_order')
@@ -98,12 +85,7 @@ function DriveLogic() {
     }
     
     if (record.action_ids && record.action_ids.length > 0) {
-      // 逻辑编排类型为单选，回显时取数组第一个值
-      if (record.type === 'logic_orchestration') {
-        formValues.action_ids = record.action_ids[0]
-      } else {
-        formValues.action_ids = record.action_ids
-      }
+      formValues.action_ids = record.action_ids
     }
     
     form.setFieldsValue(formValues)
@@ -112,7 +94,7 @@ function DriveLogic() {
 
   const handleTypeChange = (value) => {
     setSelectedType(value)
-    // 类型切换时清空关联行动/逻辑编排的已选值
+    // 类型切换时清空关联行动的已选值
     form.setFieldsValue({ action_ids: undefined })
   }
 
@@ -127,8 +109,6 @@ function DriveLogic() {
       return Array.isArray(logic.event_ids) && Array.isArray(logic.action_ids);
     } else if (logic.type === 'script') {
       return logic.config.script_content && Array.isArray(logic.event_ids) && Array.isArray(logic.action_ids);
-    } else if (logic.type === 'logic_orchestration') {
-      return Array.isArray(logic.event_ids) && Array.isArray(logic.action_ids);
     }
     
     return true;
@@ -167,11 +147,6 @@ function DriveLogic() {
           formValues.pre_condition = parsedLogic.config?.pre_condition || '';
         } else if (parsedLogic.type === 'script') {
           formValues.script_content = parsedLogic.config?.script_content || '';
-        }
-        
-        // 逻辑编排类型为单选，回显时取数组第一个值
-        if (parsedLogic.type === 'logic_orchestration' && Array.isArray(formValues.action_ids) && formValues.action_ids.length > 0) {
-          formValues.action_ids = formValues.action_ids[0];
         }
         
         form.setFieldsValue(formValues);
@@ -214,16 +189,11 @@ function DriveLogic() {
         configObj = {
           script_content: values.script_content || ''
         }
-      } else if (values.type === 'logic_orchestration') {
-        configObj = {}
       }
       
-      // 处理 action_ids：逻辑编排类型为单选，需转为数组存储
+      // 处理 action_ids
       let actionIds = values.action_ids || []
-      if (values.type === 'logic_orchestration' && actionIds && !Array.isArray(actionIds)) {
-        actionIds = [actionIds]
-      }
-      if (values.type !== 'logic_orchestration' && !Array.isArray(actionIds)) {
+      if (!Array.isArray(actionIds)) {
         actionIds = actionIds ? [actionIds] : []
       }
       
@@ -272,7 +242,6 @@ function DriveLogic() {
       render: (type) => {
         if (type === 'first_order') return <Tag color="blue">一阶函数</Tag>
         if (type === 'script') return <Tag color="green">脚本函数</Tag>
-        if (type === 'logic_orchestration') return <Tag color="orange">逻辑编排</Tag>
         return <Tag>{type}</Tag>
       }
     },
@@ -291,14 +260,8 @@ function DriveLogic() {
       title: '关联行动',
       dataIndex: 'action_ids',
       key: 'action_ids',
-      render: (actionIds, record) => {
+      render: (actionIds) => {
         if (!actionIds || actionIds.length === 0) return '-'
-        if (record.type === 'logic_orchestration') {
-          return actionIds.map((actionId, idx) => {
-            const orch = orchestrations.find(o => o.id === actionId);
-            return <Tag key={idx} color="orange">{orch ? orch.name : actionId}</Tag>;
-          })
-        }
         return actionIds.map((actionId, idx) => {
           const action = actions.find(a => a.id === actionId);
           return <Tag key={idx} color="cyan">{action ? action.name : actionId}</Tag>;
@@ -382,12 +345,6 @@ function DriveLogic() {
                   <div style={{ fontSize: '12px', color: '#888' }}>使用Python脚本处理复杂逻辑</div>
                 </div>
               </Option>
-              <Option value="logic_orchestration">
-                <div>
-                  <div><strong>逻辑编排</strong></div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>通过可视化编排定义执行流程</div>
-                </div>
-              </Option>
             </Select>
           </Form.Item>
           
@@ -401,24 +358,14 @@ function DriveLogic() {
             </Select>
           </Form.Item>
           
-          <Form.Item name="action_ids" label={selectedType === 'logic_orchestration' ? '关联逻辑编排' : '关联行动'}>
-            {selectedType === 'logic_orchestration' ? (
-              <Select placeholder="选择触发后要执行的逻辑编排">
-                {orchestrations.map(orch => (
-                  <Option key={orch.id} value={orch.id} title={orch.description || ''}>
-                    {orch.name}
-                  </Option>
-                ))}
-              </Select>
-            ) : (
-              <Select mode="multiple" placeholder="选择触发后要执行的行动">
-                {actions.map(action => (
-                  <Option key={action.id} value={action.id}>
-                    {action.name}
-                  </Option>
-                ))}
-              </Select>
-            )}
+          <Form.Item name="action_ids" label="关联行动">
+            <Select mode="multiple" placeholder="选择触发后要执行的行动">
+              {actions.map(action => (
+                <Option key={action.id} value={action.id}>
+                  {action.name}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
           
           {/* 一阶函数可选预处理配置 */}

@@ -2,10 +2,11 @@
 DAG Service - 逻辑编排执行器
 支持节点执行、条件分支、上下文管理
 """
-from typing import Dict, Any, Optional, List
-from collections import defaultdict, deque
-import re
 import copy
+import re
+from collections import defaultdict, deque
+from typing import Dict, Any, Optional, List
+
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -299,10 +300,37 @@ class DAGService:
                 node_type=n.get("type", "action"),
                 status="skipped",
             )
-        
+
+        # 获取最后一个执行的 action 结果
+        last_action_result = None
+        for node_id in reversed(execution_order):
+            node = node_map[node_id]
+            if node.get("type") == "action" and node_id in executed_nodes:
+                last_action_result = context.node_results.get(node_id)
+                break
+
+        # 处理输出脚本
+        output_script = dag_definition.get("output", "")
+        if output_script and output_script.strip():
+            try:
+                final_result = self._execute_output_script(output_script, last_action_result, context)
+            except Exception as e:
+                logger.error(f"Output script execution failed: {e}")
+                return {
+                    "success": False,
+                    "error": f"Output script execution failed: {str(e)}",
+                    "result": last_action_result,
+                    "history": context.execution_history,
+                    "all_nodes": list(executed_nodes),
+                    "node_logs": context.node_logs,
+                    "context": context.variables.get("context", {}),
+                }
+        else:
+            final_result = last_action_result
+
         return {
             "success": True,
-            "result": context.variables.get("context", {}),
+            "result": final_result,
             "history": context.execution_history,
             "all_nodes": list(executed_nodes),
             "node_logs": context.node_logs,
@@ -593,7 +621,158 @@ class DAGService:
             return result.get("data")
         return result.get("data", {}).get(path.replace("res['data']['", "").replace("']", ""))
 
+    def _execute_output_script(self, script: str, last_action_result: Dict[str, Any],
+                                context: DAGExecutionContext) -> Any:
+        """执行输出脚本 - 处理最终输出"""
+        if not script:
+            return last_action_result
+
+        try:
+            # 使用 DictAccessor 包装，支持 .属性 访问字典
+            ctx_accessor = DictAccessor(context.variables["context"])
+            res_accessor = DictAccessor(last_action_result or {})
+            req_accessor = DictAccessor(context.variables.get("req", {}))
+
+            # 安全执行环境
+            safe_globals = {
+                "__builtins__": {
+                    "len": len, "str": str, "int": int, "float": float,
+                    "bool": bool, "max": max, "min": min, "abs": abs,
+                    "list": list, "dict": dict, "range": range, "type": type,
+                    "True": True, "False": False, "None": None, "any": any, "all": all,
+                    "sorted": sorted, "enumerate": enumerate, "isinstance": isinstance
+                }
+            }
+
+            # 将脚本的每一行添加缩进后包装成函数
+            script_lines = script.strip().split('\n')
+            indented_script = '\n'.join('    ' + line for line in script_lines)
+            wrapper_code = f"""
+def _output_func_(context, res, req):
+{indented_script}
+"""
+            local_ns = {"context": ctx_accessor, "res": res_accessor, "req": req_accessor}
+            exec(wrapper_code, safe_globals, local_ns)
+            output_func = local_ns["_output_func_"]
+
+            # 执行函数获取返回值
+            function_result = output_func(ctx_accessor, res_accessor, req_accessor)
+
+            logger.info(f"Output script executed, result: {function_result}")
+
+            # 安全地提取各个字段，构建标准化响应
+            if isinstance(function_result, dict):
+                success = function_result.get("success", True)
+                result_data = function_result.get("result", function_result)
+                message = function_result.get("message")
+                error = function_result.get("error")
+            else:
+                # 如果 function_result 不是字典，视为成功的结果数据
+                success = True
+                result_data = function_result
+                message = "Function executed successfully"
+                error = None
+
+            # 构建最终响应
+            response = {"success": success}
+            if success:
+                response["result"] = result_data
+                if message:
+                    response["message"] = message
+            else:
+                if error:
+                    response["error"] = error
+                elif message:
+                    response["error"] = message
+                else:
+                    response["error"] = "Function execution failed"
+
+            return response
+        except Exception as e:
+            error_msg = f"Output script execution failed: {script}, error: {e}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
 
 def get_dag_service() -> DAGService:
     """获取DAG服务实例"""
     return DAGService()
+
+
+def execute_orchestration_by_id(orchestration_id: str, request_data: dict = None) -> dict:
+    """
+    根据编排ID执行逻辑编排
+
+    Args:
+        orchestration_id: 编排ID
+        request_data: 请求参数
+
+    Returns:
+        执行结果，包含 success, result, error, node_logs, context 等字段
+    """
+    from app.utils.mongo_client import get_mongo_client
+    from bson import ObjectId
+    from datetime import datetime
+
+    client = get_mongo_client()
+    collection = client.get_collection("orchestrations")
+
+    # 获取编排数据
+    try:
+        orchestration = collection.find_one({"_id": ObjectId(orchestration_id)})
+    except Exception:
+        return {"success": False, "error": "无效的编排ID", "node_logs": [], "context": {}}
+
+    if not orchestration:
+        return {"success": False, "error": "编排不存在", "node_logs": [], "context": {}}
+
+    graph_data = orchestration.get("graph_data", {})
+    if not graph_data or not graph_data.get("nodes"):
+        return {"success": False, "error": "编排内容为空", "node_logs": [], "context": {}}
+
+    # 创建执行日志
+    log_collection = client.get_collection("orchestration_logs")
+    started_at = datetime.now()
+    log_doc = {
+        "orchestration_id": orchestration_id,
+        "orchestration_name": orchestration.get("name", ""),
+        "status": "running",
+        "input_data": request_data or {},
+        "started_at": started_at,
+        "finished_at": None,
+        "node_logs": [],
+        "context": {},
+    }
+    log_result = log_collection.insert_one(log_doc)
+    log_id = str(log_result.inserted_id)
+
+    # 执行 DAG
+    dag_service = DAGService()
+    execution_result = dag_service.execute(graph_data, request_data or {})
+
+    # 更新执行日志
+    finished_at = datetime.now()
+    log_collection.update_one(
+        {"_id": log_result.inserted_id},
+        {"$set": {
+            "status": "success" if execution_result.get("success") else "failed",
+            "finished_at": finished_at,
+            "node_logs": execution_result.get("node_logs", []),
+            "context": execution_result.get("context", {}),
+            "error": execution_result.get("error", ""),
+        }}
+    )
+    response = {
+        "success": execution_result.get("success", False),
+    }
+    if execution_result.get("success", False):
+        response["result"] = execution_result.get("result")
+        response["error"] = execution_result.get("error", "")
+    else:
+        response["message"] = execution_result.get("message")
+        response["error"] = execution_result.get("error", "")
+    return response
+
+def execute_orchestration_by_id_for_action(orchestration_id: str, request_data: dict = None) -> dict:
+    result = execute_orchestration_by_id(orchestration_id, request_data)
+    return result.get("result")

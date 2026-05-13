@@ -100,6 +100,7 @@ export const orchestrationApi = {
   update: (id, data) => api.put(`/orchestrations/${id}`, data),
   delete: (id) => api.delete(`/orchestrations/${id}`),
   execute: (id, data) => api.post(`/orchestrations/${id}/execute`, data),
+  saveWithAction: (data) => api.post('/orchestrations/save-with-action', data),
 };
 
 // 逻辑编排执行日志

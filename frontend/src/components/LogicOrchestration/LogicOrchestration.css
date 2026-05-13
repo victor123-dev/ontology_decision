@@ -784,3 +784,84 @@
 .logic-orchestration-list-container .ant-card-head-title {
   padding: 12px 0;
 }
+
+/* 输出处理节点样式 */
+.output-node {
+  background: #fff;
+  border: 2px solid #722ed1;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 180px;
+  min-height: 120px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
+  position: relative;
+}
+
+.output-node:hover {
+  box-shadow: 0 4px 12px rgba(114, 46, 209, 0.3);
+  transform: translateY(-2px);
+}
+
+.output-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  background: #f9f0ff;
+  padding: 8px;
+  border-radius: 4px;
+  position: relative;
+}
+
+.output-node-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #722ed1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+}
+
+.output-node-icon::before {
+  content: '↗';
+}
+
+.output-node-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #262626;
+  flex: 1;
+}
+
+.output-node-body {
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.output-node-action {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px dashed #722ed1;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  color: #722ed1;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.output-node-action:hover {
+  background: #f9f0ff;
+  border-color: #9254de;
+}
+
+/* Output 节点悬停时显示删除按钮 */
+.output-node:hover .node-delete-btn {
+  opacity: 1;
+}

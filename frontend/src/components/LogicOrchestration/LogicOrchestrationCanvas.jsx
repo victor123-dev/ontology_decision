@@ -12,7 +12,7 @@ import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 import { useCallback, useState, useRef, useMemo, useEffect } from 'react';
 import { Card, Typography, Space, Button, message, List, Tag, Input, Select, Modal, Form, Checkbox } from 'antd';
-import { SearchOutlined, SaveOutlined, DownloadOutlined, DeleteOutlined, BranchesOutlined, PlusOutlined, SettingOutlined, UndoOutlined, ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
+import { SearchOutlined, SaveOutlined, DownloadOutlined, DeleteOutlined, BranchesOutlined, PlusOutlined, SettingOutlined, UndoOutlined, ArrowLeftOutlined, EditOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { actionApi, orchestrationApi } from '../../services/api';
 import './LogicOrchestration.css';
@@ -420,6 +420,8 @@ const MergeNode = ({ data, id }) => {
   );
 };
 
+
+
 const nodeTypes = {
   action: ActionNode,
   condition: ConditionNode,
@@ -461,6 +463,11 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   const [contextHandlerNodeId, setContextHandlerNodeId] = useState(null);
   const [contextHandlerForm] = Form.useForm();
   const [contextHandlerValue, setContextHandlerValue] = useState('');  // 当前编辑的脚本内容
+  const [outputScriptModalVisible, setOutputScriptModalVisible] = useState(false);
+  const [outputScriptValue, setOutputScriptValue] = useState('');
+  const [workflowOutput, setWorkflowOutput] = useState('');
+  const [isDirty, setIsDirty] = useState(false);  // 追踪是否有未保存的修改
+  const [blocker, setBlocker] = useState(false);  // 路由切换阻止状态
   const historyRef = useRef([]);
   const historyIndexRef = useRef(-1);
   const isUndoRedoRef = useRef(false);
@@ -469,6 +476,49 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   edgesRef.current = edges;
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
+  const actionListRef = useRef(actionList);
+  actionListRef.current = actionList;
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const [initialData, setInitialData] = useState(null);  // 保存初始数据用于比较
+  const [pendingInitialData, setPendingInitialData] = useState(null);  // 临时保存待设置的初始数据
+
+  // 检查是否有未保存的修改（通过判断撤回存储中是否有可撤回内容）
+  const checkHasChanges = useCallback(() => {
+    // historyIndexRef >= 0 表示有可撤回的历史记录，即有未保存的修改
+    return historyIndexRef.current >= 0;
+  }, []);
+
+  // 监听浏览器关闭/刷新事件
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // 自定义返回按钮处理未保存的修改
+  const handleBack = () => {
+    if (isDirty) {
+      Modal.confirm({
+        title: '提示',
+        content: '您有未保存的修改，确定要离开吗？',
+        okText: '确定离开',
+        cancelText: '取消',
+        okButtonProps: { danger: true },
+        onOk: () => {
+          setIsDirty(false);
+          navigate(-1);
+        }
+      });
+    } else {
+      navigate(-1);
+    }
+  };
 
   // 加载编排数据
   useEffect(() => {
@@ -497,7 +547,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
               // 兼容旧格式（actionId 在根级别）和新格式（actionId 在 data 中）
               const nodeData = node.data || {};
               const actionId = node.actionId || nodeData.actionId;
-              const matchedAction = actionList.find(a => a.id === actionId);
+              const matchedAction = actionListRef.current.find(a => a.id === actionId);
               
               // 计算默认位置，增加间距避免重叠
               const defaultPosition = node.position || { 
@@ -575,30 +625,56 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
               };
             });
             
-            // 触发自动布局
+            // 触发自动布局，并在布局完成后保存初始数据
+            const graphData = orchestration.graph_data || {};
             setTimeout(() => {
               const { nodes: layoutedNodes } = getLayoutedElements(loadedNodes, loadedEdges, 'TB');
               setNodes(layoutedNodes);
+              setEdges(loadedEdges);
+              // 保存布局后的数据，用于后续 useEffect 中设置初始数据
+              setPendingInitialData({
+                nodes: layoutedNodes.map(n => ({ id: n.id, data: n.data })),
+                edges: loadedEdges.map(e => ({ source: e.source, target: e.target, sourceHandle: e.sourceHandle })),
+                params: Array.isArray(graphData.inputs) ? graphData.inputs : [],
+                output: typeof graphData.output === 'string' ? graphData.output : ''
+              });
             }, 100);
-            setEdges(loadedEdges);
           } else {
             setNodes([]);
             setEdges([]);
+            // 保存空数据
+            setInitialData({ nodes: [], edges: [], params: [], output: '' });
+            setInitialDataLoaded(true);
           }
           // inputs 保存在 graph_data 中
           if (orchestration.graph_data?.inputs !== undefined) {
             setWorkflowParams(Array.isArray(orchestration.graph_data.inputs) ? orchestration.graph_data.inputs : []);
+          }
+          // output 脚本保存在 graph_data 中
+          if (orchestration.graph_data?.output !== undefined) {
+            setWorkflowOutput(typeof orchestration.graph_data.output === 'string' ? orchestration.graph_data.output : '');
           }
         } catch (err) {
           console.error('加载编排失败:', err);
           message.error('加载编排失败');
           setNodes([]);
           setEdges([]);
+          setInitialData({ nodes: [], edges: [], params: [], output: '' });
+          setInitialDataLoaded(true);
         }
       };
       loadOrchestration();
     }
-  }, [orchestrationId, actionList, setNodes, setEdges]);
+  }, [orchestrationId, setNodes, setEdges]);
+
+  // 处理 pendingInitialData：当 nodes 更新后，设置初始数据
+  useEffect(() => {
+    if (pendingInitialData && !initialDataLoaded) {
+      setInitialData(pendingInitialData);
+      setInitialDataLoaded(true);
+      setPendingInitialData(null);
+    }
+  }, [nodes, pendingInitialData, initialDataLoaded]);
 
   // 辅助函数
   const collectDownstreamIds = useCallback((startId, currentEdges) => {
@@ -780,6 +856,11 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       setContextHandlerModalVisible(true);
     };
 
+    const handleConfigOutputScript = (event) => {
+      // 不再依赖节点，直接打开弹窗
+      setOutputScriptModalVisible(true);
+    };
+
     const handleUpdateConditionNode = (event) => {
       const { nodeId, updates } = event.detail;
       setNodes((nds) => nds.map(n => {
@@ -812,6 +893,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     window.addEventListener('requestAddBranch', handleRequestAddBranch);
     window.addEventListener('requestEditBranch', handleRequestEditBranch);
     window.addEventListener('configContextHandler', handleConfigContextHandler);
+    window.addEventListener('configOutputScript', handleConfigOutputScript);
     window.addEventListener('updateConditionNode', handleUpdateConditionNode);
     window.addEventListener('updateGhostNode', handleUpdateGhostNode);
     window.addEventListener('cancelGhostNode', handleCancelGhostNode);
@@ -823,6 +905,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       window.removeEventListener('requestAddBranch', handleRequestAddBranch);
       window.removeEventListener('requestEditBranch', handleRequestEditBranch);
       window.removeEventListener('configContextHandler', handleConfigContextHandler);
+      window.removeEventListener('configOutputScript', handleConfigOutputScript);
       window.removeEventListener('updateConditionNode', handleUpdateConditionNode);
       window.removeEventListener('updateGhostNode', handleUpdateGhostNode);
       window.removeEventListener('cancelGhostNode', handleCancelGhostNode);
@@ -1314,6 +1397,45 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     return () => clearTimeout(timer);
   }, [nodes, edges, pushHistory]);
 
+  // 追踪是否有未保存的修改
+  useEffect(() => {
+    if (!initialDataLoaded) {
+      console.log('[dirty check] initialDataLoaded is false');
+      return;
+    }
+    const hasChanges = checkHasChanges(nodes, edges, workflowParams, workflowOutput);
+    console.log('[dirty check] hasChanges:', hasChanges);
+    setIsDirty(hasChanges);
+  }, [nodes, edges, workflowParams, workflowOutput, initialDataLoaded, checkHasChanges]);
+
+  // 监听浏览器关闭/刷新事件
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '您有未保存的修改，确定要离开吗？';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // 处理阻止后的确认逻辑
+  useEffect(() => {
+    if (blocker) {
+      const confirmed = window.confirm('您有未保存的修改，确定要离开吗？');
+      if (confirmed) {
+        setIsDirty(false);
+        setBlocker(false);
+        // 允许导航
+        navigate(-1);
+      } else {
+        setBlocker(false);
+      }
+    }
+  }, [blocker, navigate]);
+
   const onDrop = useCallback((event) => {
     event.preventDefault();
     const actionData = event.dataTransfer.getData('application/reactflow');
@@ -1598,8 +1720,10 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
         }
         return edgeData;
       }),
+      // 输出处理脚本
+      output: workflowOutput,
     };
-  }, [nodes, edges]);
+  }, [nodes, edges, workflowOutput]);
 
   const handleOpenParamModal = useCallback(() => {
     setParamModalVisible(true);
@@ -1623,7 +1747,6 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       const params = (values.params || []).filter(p => p.name);
       setWorkflowParams(params);
       setParamModalVisible(false);
-      message.success(`已配置 ${params.length} 个入参`);
     } catch {}
   }, [paramForm]);
 
@@ -1662,8 +1785,6 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
         return n;
       }));
       setActionParamModalVisible(false);
-      const configured = Object.keys(paramValues).length;
-      message.success(configured > 0 ? `已配置 ${configured} 个参数` : '已清除参数配置');
     } catch {}
   }, [actionParamForm, actionParamNodeId, actionParamDefs, setNodes]);
 
@@ -1674,20 +1795,28 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       const inputValue = contextHandlerValue;
       const hasContent = inputValue.replace(/\s/g, '').length > 0;
       const contextHandler = hasContent ? inputValue : '';
+      console.log('[handleSaveContextHandler] saving:', { contextHandlerNodeId, inputValue, contextHandler });
       setNodes((nds) => nds.map(n => {
         if (n.id === contextHandlerNodeId) {
+          console.log('[handleSaveContextHandler] updating node:', n.id, 'old contextHandler:', n.data?.contextHandler);
           return { ...n, data: { ...n.data, contextHandler } };
         }
         return n;
       }));
       setContextHandlerModalVisible(false);
-      if (contextHandler) {
-        message.success('上下文处理脚本已保存');
-      } else {
-        message.info('已清除上下文处理脚本');
-      }
     } catch {}
   }, [contextHandlerValue, contextHandlerNodeId, setNodes]);
+
+  // 保存输出处理脚本
+  const handleSaveOutputScript = useCallback(async () => {
+    try {
+      const inputValue = outputScriptValue;
+      const hasContent = inputValue.replace(/\s/g, '').length > 0;
+      const script = hasContent ? inputValue : '';
+      setWorkflowOutput(script);
+      setOutputScriptModalVisible(false);
+    } catch {}
+  }, [outputScriptValue]);
 
   // 保存编排
   const handleSave = useCallback(async () => {
@@ -1697,10 +1826,45 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     try {
       await orchestrationApi.update(orchestrationId, { graph_data: flowData });
       message.success('流程已保存');
+      setIsDirty(false);  // 保存成功后清除修改状态
     } catch (err) {
       message.error('保存失败');
     }
   }, [toDAGData, workflowParams, orchestrationId]);
+
+  // 保存并发布 action
+  const handleSaveAndPublishAction = useCallback(async () => {
+    const flowData = toDAGData();
+    flowData.inputs = workflowParams;
+    
+    try {
+      const res = await orchestrationApi.saveWithAction({
+        id: orchestrationId,
+        name: flowData.name || '未命名编排',
+        description: flowData.description || '',
+        graph_data: flowData,
+        inputs: workflowParams,
+        output: workflowOutput,
+        parameters: workflowParams.map(p => ({
+          name: p.name,
+          type: p.type || 'string',
+          required: p.required || false,
+          description: p.description || '',
+          is_enum: false,
+          enum_values: [],
+        })),
+      });
+      if (res.data?.orchestration && res.data?.action) {
+        message.success(`保存并发布 Action 成功！Action ID: ${res.data.action.id}`);
+      } else {
+        message.success('保存并发布 Action 成功');
+      }
+      setIsDirty(false);
+    } catch (err) {
+      console.error('保存并发布 Action 失败:', err);
+      message.error('保存并发布 Action 失败: ' + (err.response?.data?.detail || err.message));
+    }
+  }, [toDAGData, workflowParams, workflowOutput, orchestrationId]);
 
   const handleExport = useCallback(() => {
     const flowData = toDAGData();
@@ -1787,7 +1951,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           <Card
             title={
               <Space>
-                <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/logic-orchestration')} size="small" />
+                <Button icon={<ArrowLeftOutlined />} onClick={handleBack} size="small" />
                 <Title level={4} style={{ margin: 0 }}>DAG 流程编排画布</Title>
               </Space>
             }
@@ -1795,8 +1959,10 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
               <Space>
                 <Button icon={<UndoOutlined />} onClick={handleUndo} size="small" title="撤回 (Ctrl+Z)">撤回</Button>
                 <Button icon={<BranchesOutlined />} draggable onDragStart={onDragStartCondition} size="small" style={{ cursor: 'grab' }}>条件分支</Button>
+                <Button icon={<SettingOutlined />} onClick={() => { setOutputScriptValue(workflowOutput); setOutputScriptModalVisible(true); }} size="small" style={{ color: '#722ed1' }}>输出处理</Button>
                 <Button icon={<SettingOutlined />} onClick={handleOpenParamModal} size="small">入参配置</Button>
                 <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} size="small">保存</Button>
+                <Button type="primary" icon={<CloudUploadOutlined />} onClick={handleSaveAndPublishAction} size="small" style={{ background: '#52c41a', borderColor: '#52c41a' }}>保存并发布 Action</Button>
                 <Button icon={<DownloadOutlined />} onClick={handleExport} size="small">导出</Button>
                 <Button danger icon={<DeleteOutlined />} onClick={handleClear} size="small">清空</Button>
               </Space>
@@ -2003,6 +2169,52 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
               <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, fontFamily: 'Consolas, Monaco, monospace' }}>
                 <div>user_id = context.user_id</div>
                 <div>context.full_data = res['data'][user_id]</div>
+              </div>
+            </div>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 输出处理脚本配置弹窗 */}
+      <Modal
+        title="输出处理脚本配置"
+        open={outputScriptModalVisible}
+        onOk={handleSaveOutputScript}
+        onCancel={() => setOutputScriptModalVisible(false)}
+        width={640}
+        okText="确认"
+        cancelText="取消"
+      >
+        <div style={{ marginBottom: 16, padding: 12, background: '#f9f0ff', borderRadius: 4, border: '1px solid #d3adf7' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            <strong>说明：</strong>此脚本在流程执行完成后运行，用于对整个流程的输出结果进行处理和格式化。该脚本可访问 context（执行过程中保存的上下文数据）。
+          </Text>
+        </div>
+        <Form layout="vertical">
+          <Form.Item label="输出处理脚本">
+            <Input.TextArea
+              rows={8}
+              value={outputScriptValue}
+              onChange={(e) => setOutputScriptValue(e.target.value)}
+              placeholder="# context 为执行过程中保存的上下文对象&#10;# res 为最终输出结果&#10;# 可以对结果进行格式化、过滤、转换等处理&#10;&#10;# 示例：格式化输出&#10;result = context.get('final_data', {})&#10;return {'{'}&#10;    'status': 'success',&#10;    'data': result&#10;{'}'}"
+              style={{ fontFamily: 'Consolas, Monaco, monospace', fontSize: 12 }}
+            />
+            <div style={{ marginTop: 12, fontSize: 12, color: '#8c8c8c' }}>
+              <div style={{ marginBottom: 8 }}><strong>使用说明：</strong></div>
+              <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, fontFamily: 'Consolas, Monaco, monospace', marginBottom: 8 }}>
+                <div style={{ color: '#722ed1' }}>return 处理后的结果</div>
+              </div>
+              <div style={{ marginBottom: 8 }}><strong>示例 1 - 返回上下文数据：</strong></div>
+              <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, fontFamily: 'Consolas, Monaco, monospace', marginBottom: 8 }}>
+                <div>return context.get('final_data', None)</div>
+              </div>
+              <div style={{ marginBottom: 8 }}><strong>示例 2 - 格式化返回：</strong></div>
+              <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, fontFamily: 'Consolas, Monaco, monospace' }}>
+                <div>return {'{'}</div>
+                <div style={{ paddingLeft: 16 }}>'code': 0,</div>
+                <div style={{ paddingLeft: 16 }}>'message': 'success',</div>
+                <div style={{ paddingLeft: 16 }}>'data': context.get('result')</div>
+                <div>{'}'}</div>
               </div>
             </div>
           </Form.Item>
