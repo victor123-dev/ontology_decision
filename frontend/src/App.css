@@ -125,14 +125,27 @@ main {
   transform: translateX(100%);
 }
 
-/* 按钮组容器 */
+/* 按钮组容器 - 默认隐藏在右侧边缘，hover 时滑出 */
 .agent-panel-actions {
   position: absolute;
   top: 12px;
-  right: 12px;
+  right: 0;
   display: flex;
   gap: 8px;
   z-index: 1000;
+  padding: 6px 10px 6px 14px;
+  border-radius: 8px 0 0 8px;
+  transform: translateX(calc(100% - 6px));
+  transition: transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+  /* 左侧边缘细线作为视觉提示 */
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.agent-panel-actions:hover {
+  transform: translateX(0);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.12);
+  border-left-color: transparent;
 }
 
 /* 通用按钮样式 */
