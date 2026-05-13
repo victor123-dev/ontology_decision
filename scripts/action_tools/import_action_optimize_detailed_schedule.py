@@ -36,6 +36,18 @@ ACTION_DATA = {
             "type": "boolean",
             "required": False,
             "description": "是否考虑换线时间。默认true。设为false可加快计算"
+        },
+        {
+            "name": "apply_mode",
+            "type": "string",
+            "required": False,
+            "description": "排程结果应用模式：preview仅返回排程结果；upsert将结果写入本体实例，已有可修改ProductionTask则更新，没有则创建。默认preview"
+        },
+        {
+            "name": "schedule_note",
+            "type": "string",
+            "required": False,
+            "description": "写入ProductionTask.note的备注，默认'CP-SAT详细排程优化Action-自动写入'"
         }
     ],
     "submission_criteria": [],
@@ -44,6 +56,11 @@ import json
 from datetime import datetime, timedelta
 from ortools.sat.python import cp_model
 from my_ontology_sdk import OntologyClient
+
+UPDATABLE_TASK_STATUS = {"已排程", "待执行", "已延期"}
+UPDATABLE_OPERATION_STATUS = {"待开工", "已排程"}
+DEFAULT_SCHEDULE_NOTE = "CP-SAT详细排程优化Action-自动写入"
+
 
 def execute_optimize_detailed_schedule(parameters):
     """
@@ -90,12 +107,14 @@ def execute_optimize_detailed_schedule(parameters):
         if not work_orders:
             return {"success": False, "error": "没有找到工单"}
         work_orders = list(work_orders)
+        wo_lookup = {wo.work_order_id: wo for wo in work_orders}
         
         # 4. 批量查询工序
         # 原方案: for wo in work_orders: ops = client.models.WorkOrderOperation.find(work_order_id=wo.work_order_id)
         # 优化后: 一次性查询所有工单的工序
         wo_ids = [wo.work_order_id for wo in work_orders]
-        all_ops = client.models.WorkOrderOperation.find(work_order_id__in=wo_ids)
+        all_ops = list(client.models.WorkOrderOperation.find(work_order_id__in=wo_ids))
+        op_lookup = {op.wo_op_id: op for op in all_ops}
         
         # 按工单ID分组工序
         ops_by_wo = {}
@@ -150,7 +169,13 @@ def execute_optimize_detailed_schedule(parameters):
                     continue
                 
                 # 计算工序加工时长（分钟）
-                duration_minutes = int((step.standard_time_hours or 1) * 60)
+                std_time = step.standard_time_hours or 1.0
+                wait_time = getattr(step, 'wait_time_hours', 0.0) or 0.0
+                transport_time = getattr(step, 'transport_time_hours', 0.0) or 0.0
+                queue_time = 0.5  # 工序间排队时间
+                
+                # 工序总时长 = 加工时间 + 等待时间 + 转运时间
+                duration_minutes = int((std_time + wait_time + transport_time) * 60)
                 
                 # 找到所需工序类型的机台
                 wc_machines = [m for m in all_machines if m.work_center_id == step.machine_type_required]
@@ -213,8 +238,8 @@ def execute_optimize_detailed_schedule(parameters):
                             machine_tasks[machine_id] = []
                         machine_tasks[machine_id].append((interval, presence, wo.work_order_id, op.wo_op_id))
         
-        # 10. 添加工序顺序约束
-        # 同一工单的工序必须按顺序执行
+        # 10. 添加工序顺序约束 + 排队时间
+        # 同一工单的工序必须按顺序执行，且工序间需要排队时间
         for wo in work_orders:
             ops = ops_by_wo.get(wo.work_order_id, [])
             
@@ -224,10 +249,12 @@ def execute_optimize_detailed_schedule(parameters):
                     next_task = task_data[wo.work_order_id, i+1]
                     
                     # 对于当前工序的每个可能机台和下一工序的每个可能机台
-                    # 如果两个工序都被分配（presence=1），则下一工序必须在当前工序结束后开始
+                    # 如果两个工序都被分配（presence=1），则下一工序必须在当前工序结束后 + 排队时间 开始
                     for curr_machine_id, curr_interval, curr_presence in current_task['optional_intervals']:
                         for next_machine_id, next_interval, next_presence in next_task['optional_intervals']:
-                            model.Add(next_interval.StartExpr() >= curr_interval.EndExpr()).OnlyEnforceIf(
+                            # 下一道工序开始时间 >= 当前工序结束时间 + 排队时间
+                            queue_minutes = int(queue_time * 60)
+                            model.Add(next_interval.StartExpr() >= curr_interval.EndExpr() + queue_minutes).OnlyEnforceIf(
                                 [curr_presence, next_presence]
                             )
         
@@ -298,6 +325,16 @@ def execute_optimize_detailed_schedule(parameters):
             # 按开始时间排序
             schedule.sort(key=lambda x: x['start_time'])
             
+            apply_result = None
+            if apply_mode == "upsert":
+                apply_result = _upsert_schedule_to_ontology(
+                    client,
+                    schedule,
+                    op_lookup,
+                    wo_lookup,
+                    schedule_note
+                )
+            
             # 防上下文膨胀：只返回前50条任务详情
             max_schedule = 50
             schedule_returned = schedule[:max_schedule]
@@ -313,12 +350,16 @@ def execute_optimize_detailed_schedule(parameters):
                     "total_tasks": len(schedule),
                     "returned_tasks": len(schedule_returned),
                     "note": "仅返回前50条任务详情，完整数据可通过数据库查询" if truncated_count > 0 else None
-                }
+                },
+                "apply_mode": apply_mode,
+                "applied": apply_mode == "upsert",
+                "apply_result": apply_result
             }
             
+            message_suffix = "，并已应用到本体实例" if apply_mode == "upsert" else ""
             return {
                 "success": True,
-                "message": f"详细排程完成，总工期: {makespan_hours:.1f}小时",
+                "message": f"详细排程完成{message_suffix}，总工期: {makespan_hours:.1f}小时",
                 "result": result
             }
         else:
@@ -326,6 +367,158 @@ def execute_optimize_detailed_schedule(parameters):
         
     except Exception as e:
         return {"success": False, "error": f"执行失败: {str(e)}"}
+
+def _upsert_schedule_to_ontology(client, schedule, op_lookup, wo_lookup, schedule_note):
+    operation_ids = [item["operation_id"] for item in schedule]
+    existing_tasks_by_op = _load_existing_tasks_by_operation(client, operation_ids)
+    created_tasks = []
+    updated_tasks = []
+    updated_operations = []
+    updated_work_orders = []
+    skipped_locked = []
+    failed_items = []
+    wo_windows = {}
+    
+    for index, item in enumerate(schedule, 1):
+        op_id = item["operation_id"]
+        try:
+            op = op_lookup.get(op_id)
+            if not op:
+                failed_items.append({"operation_id": op_id, "error": "找不到对应工序对象"})
+                continue
+            
+            start_dt = datetime.fromisoformat(item["start_time"])
+            end_dt = datetime.fromisoformat(item["end_time"])
+            shift_id, is_night = _get_shift_info(start_dt)
+            existing_task = existing_tasks_by_op.get(op_id)
+            task_payload = _build_task_payload(item, shift_id, is_night, schedule_note)
+            
+            if existing_task:
+                if _is_task_updatable(existing_task):
+                    existing_task.update(**task_payload)
+                    updated_tasks.append(getattr(existing_task, 'task_id', None))
+                else:
+                    skipped_locked.append({
+                        "operation_id": op_id,
+                        "task_id": getattr(existing_task, 'task_id', None),
+                        "status": getattr(existing_task, 'status', None),
+                        "reason": "已有任务已开始、已完成或不可修改"
+                    })
+                    continue
+            else:
+                task_id = _generate_task_id(index)
+                payload = {"task_id": task_id, **task_payload}
+                client.models.ProductionTask.create(payload)
+                created_tasks.append(task_id)
+            
+            if _is_operation_updatable(op):
+                op.update(
+                    assigned_machine_id=item["machine_id"],
+                    status="已排程",
+                    planned_start=item["start_time"],
+                    planned_end=item["end_time"]
+                )
+                updated_operations.append(op_id)
+            
+            wo_id = item["work_order_id"]
+            current_window = wo_windows.get(wo_id)
+            if current_window:
+                wo_windows[wo_id] = (min(current_window[0], start_dt), max(current_window[1], end_dt))
+            else:
+                wo_windows[wo_id] = (start_dt, end_dt)
+        except Exception as e:
+            failed_items.append({"operation_id": op_id, "error": str(e)})
+    
+    for wo_id, window in wo_windows.items():
+        try:
+            wo = wo_lookup.get(wo_id)
+            if wo:
+                wo.update(
+                    planned_start_date=window[0].isoformat(),
+                    planned_completion_date=window[1].isoformat()
+                )
+                updated_work_orders.append(wo_id)
+        except Exception as e:
+            failed_items.append({"work_order_id": wo_id, "error": str(e)})
+    
+    return {
+        "created_tasks": created_tasks,
+        "updated_tasks": updated_tasks,
+        "updated_operations": updated_operations,
+        "updated_work_orders": updated_work_orders,
+        "skipped_locked": skipped_locked,
+        "failed_items": failed_items
+    }
+
+
+def _load_existing_tasks_by_operation(client, operation_ids):
+    if not operation_ids:
+        return {}
+    existing_tasks = list(client.models.ProductionTask.find(wo_op_id__in=operation_ids))
+    result = {}
+    for task in existing_tasks:
+        status = getattr(task, 'status', None)
+        op_id = getattr(task, 'wo_op_id', None)
+        if not op_id or status == "已取消":
+            continue
+        current = result.get(op_id)
+        if current is None:
+            result[op_id] = task
+            continue
+        current_start = getattr(current, 'planned_start_time', '') or ''
+        task_start = getattr(task, 'planned_start_time', '') or ''
+        if task_start >= current_start:
+            result[op_id] = task
+    return result
+
+
+def _build_task_payload(item, shift_id, is_night, schedule_note):
+    wait_minutes = item.get("wait_time_minutes", 0) or 0
+    return {
+        "wo_op_id": item["operation_id"],
+        "work_order_id": item["work_order_id"],
+        "machine_id": item["machine_id"],
+        "lot_id": None,
+        "planned_start_time": item["start_time"],
+        "planned_end_time": item["end_time"],
+        "planned_quantity": item.get("planned_quantity", 0) or 0,
+        "actual_start_time": None,
+        "actual_end_time": None,
+        "actual_quantity": 0.0,
+        "scrap_quantity": 0.0,
+        "actual_efficiency": None,
+        "actual_yield": None,
+        "setup_time_actual": 0.0,
+        "wait_time_actual": round(wait_minutes / 60, 4),
+        "shift_id": shift_id,
+        "is_night_shift": is_night,
+        "status": "已排程",
+        "note": schedule_note
+    }
+
+
+def _is_task_updatable(task):
+    if getattr(task, 'actual_start_time', None) or getattr(task, 'actual_end_time', None):
+        return False
+    return getattr(task, 'status', None) in UPDATABLE_TASK_STATUS
+
+
+def _is_operation_updatable(op):
+    if getattr(op, 'actual_start', None) or getattr(op, 'actual_end', None):
+        return False
+    return getattr(op, 'status', None) in UPDATABLE_OPERATION_STATUS
+
+
+def _get_shift_info(dt):
+    if 8 <= dt.hour < 20:
+        return "SHIFT-DAY", False
+    return "SHIFT-NIGHT", True
+
+
+def _generate_task_id(index):
+    now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"PT-CPSAT-{now_key}-{index:04d}"
+
 
 result = execute_optimize_detailed_schedule(parameters)
 '''

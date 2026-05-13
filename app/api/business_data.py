@@ -130,7 +130,7 @@ def query_business_data(
         data = data_source_manager.execute_query(
             data_source_id=business_model.data_source_id,
             query=query,
-            max_rows=1000
+            max_rows=2000
         )
         return {"data": data}
     except Exception as e:
