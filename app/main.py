@@ -6,6 +6,7 @@ from app.api import data_source, business_model, business_model_link, business_d
     drive_log, test_execution, nl_rule_interface, document_import, drive_visualization, ontology_view, action, sdk, \
     alert_dashboard, excel_import_export, orchestration, orchestration_log
 from app.api.general_mcp import ontology_type_mcp, object_query_mcp, object_query_by_link_mcp
+from app.api.general_mcp.ontology_management import context_mcp, object_type_mcp, link_type_mcp, action_type_mcp
 from app.api import dynamic_mcp
 from app.config import settings
 from app.middleware_config.middleware import RequestLoggingMiddleware
@@ -79,6 +80,13 @@ app.include_router(sdk.router, prefix="/api/v1", tags=["SDK"])
 app.include_router(ontology_type_mcp.router, prefix="/api/v1", tags=["ontology"])
 app.include_router(object_query_mcp.router, prefix="/api/v1", tags=["ontology"])
 app.include_router(object_query_by_link_mcp.router, prefix="/api/v1", tags=["ontology"])
+
+# 注册 ontology-management MCP 的所有路由（使用独立的 tag）
+app.include_router(context_mcp.router, prefix="/api/v1", tags=["ontology-management"])
+app.include_router(object_type_mcp.router, prefix="/api/v1", tags=["ontology-management"])
+app.include_router(link_type_mcp.router, prefix="/api/v1", tags=["ontology-management"])
+app.include_router(action_type_mcp.router, prefix="/api/v1", tags=["ontology-management"])
+
 app.include_router(excel_import_export.router, prefix="/api/v1", tags=["Excel Import Export"])
 
 # 动态包含所有动态MCP路由器
@@ -100,7 +108,7 @@ def include_all_mcp_routers():
 
 include_all_mcp_routers()
 
-# 添加MCP支持
+# 添加 Ontology MCP 支持
 mcp = FastApiMCP(
     app,
     include_tags=["ontology"],
@@ -109,6 +117,17 @@ mcp = FastApiMCP(
     describe_all_responses=True,
     describe_full_response_schema=True)
 mcp.mount_http()
+
+# 添加 Ontology Management MCP 支持（管理用）
+mcp_management = FastApiMCP(
+    app,
+    include_tags=["ontology-management"],
+    name="Ontology Management MCP",
+    description="MCP Server for ontology CRUD operations (ObjectType, LinkType, ActionType)",
+    describe_all_responses=True,
+    describe_full_response_schema=True)
+mcp_management.mount_http(mount_path="/mcp-management")
+
 app.include_router(alert_dashboard.router, prefix="/api/v1", tags=["Alert Dashboard"])
 app.include_router(orchestration.router, prefix="/api/v1", tags=["Orchestration"])
 app.include_router(orchestration_log.router, prefix="/api/v1", tags=["Orchestration Log"])
