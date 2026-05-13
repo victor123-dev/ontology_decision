@@ -1120,15 +1120,26 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     fetchActions();
   }, []);
 
+  // 获取当前编排中已使用的 actionId 列表
+  const usedActionIds = useMemo(() => {
+    return nodes
+      .filter(n => n.type === 'action' && n.data?.actionId)
+      .map(n => n.data.actionId);
+  }, [nodes]);
+
   const filteredActions = useMemo(() => {
     return actionList.filter(action => {
+      // 过滤掉当前编排中已使用的 action
+      if (usedActionIds.includes(action.id)) {
+        return false;
+      }
       const matchSearch = action.name.toLowerCase().includes(searchText.toLowerCase()) ||
                          action.api_name.toLowerCase().includes(searchText.toLowerCase()) ||
                          action.id.toLowerCase().includes(searchText.toLowerCase());
       const matchCategory = categoryFilter === 'all' || action.action_type === categoryFilter;
       return matchSearch && matchCategory;
     });
-  }, [actionList, searchText, categoryFilter]);
+  }, [actionList, searchText, categoryFilter, usedActionIds]);
 
   const categories = useMemo(() => {
     const cats = [...new Set(actionList.map(a => a.action_type))];
