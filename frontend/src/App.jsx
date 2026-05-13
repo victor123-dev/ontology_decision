@@ -80,11 +80,11 @@ function AppContent() {
                   icon: <span>📝</span>,
                   label: <Link to="/business-data">业务数据管理</Link>,
                 },
-                {
-                  key: 'solver',
-                  icon: <span>🧩</span>,
-                  label: <Link to="/solver">求解器</Link>,
-                }
+                // {
+                //   key: 'solver', TODO
+                //   icon: <span>🧩</span>,
+                //   label: <Link to="/solver">求解器</Link>,
+                // }
               ]
             },
             {
@@ -107,11 +107,11 @@ function AppContent() {
                   icon: <span>⚙️</span>,
                   label: <Link to="/drive-logic">驱动逻辑配置</Link>,
                 },
-                {
-                  key: 'logic-orchestration',
-                  icon: <span>🔗</span>,
-                  label: <Link to="/logic-orchestration">逻辑编排</Link>,
-                }
+                // {
+                //   key: 'logic-orchestration', TODO
+                //   icon: <span>🔗</span>,
+                //   label: <Link to="/logic-orchestration">逻辑编排</Link>,
+                // }
               ]
             },
             {

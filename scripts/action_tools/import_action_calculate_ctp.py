@@ -212,7 +212,8 @@ def execute_calculate_ctp(parameters):
         delivery_hours = delivery_minutes / 60
         delivery_days = delivery_hours / 24
         
-        ctp_date = datetime.now() + __import__('datetime').timedelta(hours=delivery_hours)
+        # TODO ctp_date = datetime.now() + __import__('datetime').timedelta(hours=delivery_hours)
+        ctp_date = datetime(2026, 4, 26) + __import__('datetime').timedelta(hours=delivery_hours)
         
         # 计算各机台加工时间
         machine_times = {}

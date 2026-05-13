@@ -171,7 +171,8 @@ def execute_optimize_capacity_allocation_heuristic(parameters):
         
         # 10. 计算每个工单的调度分数
         scored_work_orders = []
-        now = datetime.now()
+        # TODO now = datetime.now()
+        now = datetime(2026, 4, 26)
         
         for wo in work_orders:
             ops = ops_by_wo.get(wo.work_order_id, [])
@@ -478,7 +479,8 @@ def _get_shift_info(dt):
 
 
 def _generate_task_id(index):
-    now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    # TODO now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    now_key = datetime(2026, 4, 26).strftime("%Y%m%d%H%M%S")
     return f"PT-CAPFAST-{now_key}-{index:04d}"
 
 

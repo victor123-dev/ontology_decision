@@ -14,7 +14,7 @@ ACTION_DATA = {
     "id": "optimize_detailed_schedule",
     "api_name": "OptimizeDetailedSchedule",
     "name": "详细排程优化",
-    "description": "使用 CP-SAT 进行精确排程，支持换线时间等复杂约束。适用于小规模工单（≤20个），需要精确到工序级排程时使用。计算时间较长（1-5分钟）。大规模场景请用 optimize_detailed_schedule_fast。",
+    "description": "使用 CP-SAT 进行精确排程，支持换线时间等复杂约束。适用于小规模工单（≤20个），需要精确到工序级排程时使用。计算时间较长（1-5分钟）。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -30,12 +30,6 @@ ACTION_DATA = {
             "type": "integer",
             "required": False,
             "description": "排程规划天数。时间越长计算越慢，默认7天"
-        },
-        {
-            "name": "consider_setup",
-            "type": "boolean",
-            "required": False,
-            "description": "是否考虑换线时间。默认true。设为false可加快计算"
         },
         {
             "name": "apply_mode",
@@ -88,7 +82,8 @@ def execute_optimize_detailed_schedule(parameters):
         # 1. 解析参数
         work_order_ids = parameters.get("work_order_ids", [])
         planning_horizon_days = parameters.get("planning_horizon_days", 7)
-        consider_setup = parameters.get("consider_setup", True)
+        apply_mode = parameters.get("apply_mode", "preview")
+        schedule_note = parameters.get("schedule_note", DEFAULT_SCHEDULE_NOTE)
         
         if not work_order_ids:
             return {"success": False, "error": "请提供工单ID列表"}
@@ -152,7 +147,8 @@ def execute_optimize_detailed_schedule(parameters):
         
         # 规划时间范围（分钟）
         horizon = planning_horizon_days * 24 * 60
-        start_time = datetime.now()
+        # TODO start_time = datetime.now()
+        start_time = datetime(2026, 4, 26)
         
         # 存储任务数据，用于结果解析
         task_data = {}
@@ -175,6 +171,11 @@ def execute_optimize_detailed_schedule(parameters):
                 queue_time = 0.5  # 工序间排队时间
                 
                 # 工序总时长 = 加工时间 + 等待时间 + 转运时间
+                # 确保所有时间值都不是 None
+                std_time = std_time if std_time is not None else 1.0
+                wait_time = wait_time if wait_time is not None else 0.0
+                transport_time = transport_time if transport_time is not None else 0.0
+                
                 duration_minutes = int((std_time + wait_time + transport_time) * 60)
                 
                 # 找到所需工序类型的机台
@@ -265,12 +266,7 @@ def execute_optimize_detailed_schedule(parameters):
             if intervals:
                 model.AddNoOverlap(intervals)
         
-        # 12. 换线时间约束（当前为简化版本）
-        if consider_setup:
-            print("[INFO] 换线时间约束已启用，但当前为简化版本")
-            # TODO: 可根据实际需要添加换线矩阵约束
-        
-        # 13. 创建makespan变量
+        # 12. 创建makespan变量
         # makespan = 所有工序的最晚结束时间
         makespan = model.NewIntVar(0, horizon, 'makespan')
         
@@ -285,19 +281,20 @@ def execute_optimize_detailed_schedule(parameters):
                     for _, interval, presence in last_task['optional_intervals']:
                         model.Add(makespan >= interval.EndExpr()).OnlyEnforceIf(presence)
         
-        # 14. 目标函数：最小化makespan
+        # 13. 目标函数：最小化makespan
         model.Minimize(makespan)
         
-        # 15. 配置求解器
+        # 14. 配置求解器
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = 300.0  # 5分钟超时
         solver.parameters.num_search_workers = 4       # 多线程搜索
         solver.parameters.log_search_progress = True    # 输出搜索日志
+        solver.parameters.stop_after_first_solution = True  # 找到第一个可行解立即返回
         
-        # 16. 求解
+        # 15. 求解
         status = solver.Solve(model)
         
-        # 17. 解析结果
+        # 16. 解析结果
         if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             schedule = []
             makespan_minutes = solver.Value(makespan)
@@ -349,7 +346,7 @@ def execute_optimize_detailed_schedule(parameters):
                 "schedule_summary": {
                     "total_tasks": len(schedule),
                     "returned_tasks": len(schedule_returned),
-                    "note": "仅返回前50条任务详情，完整数据可通过数据库查询" if truncated_count > 0 else None
+                    "note": "仅返回前50条任务详情，完整数据可通过确认写入后使用upsert，再查询数据" if truncated_count > 0 else None
                 },
                 "apply_mode": apply_mode,
                 "applied": apply_mode == "upsert",
@@ -516,7 +513,8 @@ def _get_shift_info(dt):
 
 
 def _generate_task_id(index):
-    now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    # TODO now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    now_key = datetime(2026, 4, 26).strftime("%Y%m%d%H%M%S")
     return f"PT-CPSAT-{now_key}-{index:04d}"
 
 

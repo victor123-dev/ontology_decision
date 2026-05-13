@@ -306,7 +306,7 @@ class WorkOrder(Base):
     work_order_id = Column(String(255), primary_key=True)
     customer_order_id = Column(String(255), ForeignKey("customer_order.order_id"), nullable=True)
     product_id = Column(String(255), ForeignKey("product.product_id"), nullable=False)
-    work_order_type = Column(String(255), default="正常", comment="工单类型：正常/重工")
+    work_order_type = Column(String(255), default="正常", comment="工单类型：正常/重工/预测")
     planned_quantity = Column(Float, nullable=False)  # 计划投入量（含过量）
     expected_output_qty = Column(Float, nullable=True)  # 预期产出量（订单数量）
     planned_start_date = Column(DateTime, nullable=True)

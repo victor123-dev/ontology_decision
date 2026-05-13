@@ -922,6 +922,7 @@ class FactorySimulation:
             "planned_start_date": planned_start,
             "planned_completion_date": planned_completion,
             "status": "已下达",
+            "work_order_type": "正常",
             "priority": priority,
             "setup_group": self.products.get(product_id, {}).get("setup_group", "DEFAULT"),
             "completed_quantity": 0.0,

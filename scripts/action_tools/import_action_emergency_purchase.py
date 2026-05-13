@@ -127,7 +127,8 @@ def execute_emergency_purchase(parameters):
             priority = 2  # 普通优先级
             order_type = "普通采购"
         
-        expected_delivery_date = datetime.now() + timedelta(days=lead_time_days)
+        # TODO expected_delivery_date = datetime.now() + timedelta(days=lead_time_days)
+        expected_delivery_date = datetime(2026, 4, 26) + timedelta(days=lead_time_days)
         
         # 7. 生成采购订单ID
         # 查询现有采购订单数量，生成新ID
@@ -139,7 +140,7 @@ def execute_emergency_purchase(parameters):
         po_data = {
             "po_id": po_id,
             "supplier_id": supplier_id,
-            "order_date": datetime.now().isoformat(),
+            "order_date": datetime(2026, 4, 26).isoformat(),  # TODO datetime.now().isoformat(),
             "expected_delivery_date": expected_delivery_date.isoformat(),
             "status": "已创建",
             "total_amount": round(quantity * unit_price, 2),

@@ -162,7 +162,8 @@ def execute_recommend_suppliers(parameters):
             )
             
             # 计算预计交期日期
-            expected_delivery_date = (datetime.now() + timedelta(days=actual_lead_time)).strftime('%Y-%m-%d')
+            expected_delivery_date = (datetime(2026, 4, 26) + timedelta(days=actual_lead_time)).strftime('%Y-%m-%d')
+            # TODO expected_delivery_date = (datetime.now() + timedelta(days=actual_lead_time)).strftime('%Y-%m-%d')
             
             scored_suppliers.append({
                 "supplier_id": supplier_id,

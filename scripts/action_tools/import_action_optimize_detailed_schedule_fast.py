@@ -193,7 +193,8 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         schedule = _greedy_schedule(tasks, machines_dict)
         
         # 10. 构建结果
-        start_time = datetime.now()
+        # TODO start_time = datetime.now()
+        start_time = datetime(2026, 4, 26)
         schedule_result = []
         for task in schedule:
             start_dt = start_time + timedelta(minutes=task["start_time"])
@@ -467,7 +468,8 @@ def _get_shift_info(dt):
 
 
 def _generate_task_id(index):
-    now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    # TODO now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    now_key = datetime(2026, 4, 26).strftime("%Y%m%d%H%M%S")
     return f"PT-ACT-{now_key}-{index:04d}"
 
 

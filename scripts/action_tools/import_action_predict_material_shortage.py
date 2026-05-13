@@ -52,9 +52,13 @@ from my_ontology_sdk import OntologyClient
 
 def execute_predict_material_shortage(parameters):
     """
-    缺料预测 - LP模型（批量查询优化版）
+    缺料预测 - LP模型（批量查询优化版 + 静态缺料检测）
     
-    数学模型:
+    【改进算法】双阶段缺料检测：
+    阶段1 - 静态缺料检测：检查当前库存是否低于安全库存（即使未来无需求）
+    阶段2 - 动态缺料预测：基于LP模型预测未来需求导致的缺料
+    
+    数学模型（动态预测）:
     - 决策变量: I[m,t]库存量, G[m,t]缺料量
     - 目标函数: Minimize ΣG[m,t]（虚拟目标，实际值由约束决定）
     - 约束条件:
@@ -66,6 +70,7 @@ def execute_predict_material_shortage(parameters):
     1. 【关键】批量查询所有物料、库存、工单、采购订单数据（避免N+1查询）
     2. 预计算每天的需求和到货量，避免重复查询
     3. 预构建工单日期映射，快速查找影响工单
+    4. 【新增】静态缺料检测：即使未来无需求，当前库存不足也会报警
     """
     try:
         # 1. 解析参数
@@ -135,7 +140,8 @@ def execute_predict_material_shortage(parameters):
         
         # 11. 预计算每天的需求和到货量（使用内存数据，无API调用）
         days = range(forecast_days)
-        today = datetime.now()
+        today = datetime(2026, 4, 26)
+        # TODO today = datetime.now()
         
         # 需求缓存: demand_cache[material_id][day] = demand_qty
         demand_cache = {}
@@ -287,6 +293,50 @@ def execute_predict_material_shortage(parameters):
         critical_count = 0
         warning_count = 0
         
+        # ============================================================
+        # 【改进算法】第一阶段：静态缺料检测（当前库存 vs 安全库存）
+        # 即使未来没有需求，只要当前库存低于安全库存就报警
+        # ============================================================
+        static_shortage_count = 0
+        for m in materials_list:
+            safety_stock = safety_stock_threshold if safety_stock_threshold else (m.safety_stock_level or 0)
+            current_inv = inventory_map.get(m.material_id, 0)
+            
+            # 如果安全库存设置有效且当前库存不足
+            if safety_stock > 0 and current_inv < safety_stock:
+                gap = safety_stock - current_inv
+                static_shortage_count += 1
+                
+                # 严重程度分级
+                severity_ratio = gap / safety_stock if safety_stock > 0 else 1
+                if severity_ratio > 2:
+                    severity = "critical"
+                    critical_count += 1
+                elif severity_ratio > 1:
+                    severity = "warning"
+                    warning_count += 1
+                else:
+                    severity = "info"
+                                
+                shortages.append({
+                    "material_id": m.material_id,
+                    "material_name": m.material_name,
+                    "date_offset_days": 0,  # 当前立即缺料
+                    "shortage_qty": round(gap, 2),
+                    "inventory_level": round(current_inv, 2),
+                    "safety_stock": safety_stock,
+                    "severity": severity,
+                    "shortage_type": "static",  # 标记为静态缺料
+                    "affected_work_orders": [],  # 静态缺料暂不关联工单
+                    "description": f"当前库存({current_inv})低于安全库存({safety_stock})"
+                })
+        
+        # ============================================================
+        # 【原有逻辑】第二阶段：动态缺料预测（LP求解器结果）
+        # 基于未来需求和到货预测未来30天的缺料情况
+        # ============================================================
+        dynamic_shortage_count = 0
+        
         for m in materials_list:
             for t in days:
                 gap = shortage[m.material_id, t].solution_value()
@@ -295,6 +345,17 @@ def execute_predict_material_shortage(parameters):
                 # 过滤微小缺料（数值误差）
                 if gap > 0.1:
                     safety_stock = safety_stock_threshold if safety_stock_threshold else (m.safety_stock_level or 0)
+                    
+                    # 避免重复：如果静态检测已报告t=0的缺料，跳过动态检测的t=0
+                    if t == 0:
+                        already_reported = any(
+                            s["material_id"] == m.material_id and s["date_offset_days"] == 0 
+                            for s in shortages
+                        )
+                        if already_reported:
+                            continue
+                    
+                    dynamic_shortage_count += 1
                     
                     # 严重程度分级
                     if safety_stock > 0:
@@ -322,24 +383,45 @@ def execute_predict_material_shortage(parameters):
                         "inventory_level": round(inv_level, 2),
                         "safety_stock": safety_stock,
                         "severity": severity,
-                        "affected_work_orders": affected_wos
+                        "shortage_type": "dynamic",  # 标记为动态缺料
+                        "affected_work_orders": affected_wos,
+                        "description": f"第{t}天预测缺料（需求驱动）"
                     })
         
         # 生成行动建议
         recommendations = []
         if critical_count > 0:
             critical_items = [s["material_id"] for s in shortages if s["severity"] == "critical"][:5]
+            # 区分静态和动态紧急缺料
+            static_critical = [s["material_id"] for s in shortages if s["severity"] == "critical" and s.get("shortage_type") == "static"]
+            dynamic_critical = [s["material_id"] for s in shortages if s["severity"] == "critical" and s.get("shortage_type") == "dynamic"]
+            
+            recommendation_text = "发现 {} 个严重缺料点（缺口超过安全库存2倍）".format(critical_count)
+            if static_critical:
+                recommendation_text += "，其中 {} 个为当前库存不足".format(len(static_critical))
+            if dynamic_critical:
+                recommendation_text += "，{} 个为未来需求预测".format(len(dynamic_critical))
+            
             recommendations.append({
                 "priority": "urgent",
                 "action": "立即启动紧急采购流程",
-                "reason": f"发现 {critical_count} 个严重缺料点（缺口超过安全库存2倍）",
+                "reason": recommendation_text,
                 "materials": critical_items
             })
         if warning_count > 0:
+            static_warning = [s["material_id"] for s in shortages if s["severity"] == "warning" and s.get("shortage_type") == "static"]
+            dynamic_warning = [s["material_id"] for s in shortages if s["severity"] == "warning" and s.get("shortage_type") == "dynamic"]
+            
+            recommendation_text = "发现 {} 个预警缺料点（缺口超过安全库存）".format(warning_count)
+            if static_warning:
+                recommendation_text += "，其中 {} 个为当前库存不足".format(len(static_warning))
+            if dynamic_warning:
+                recommendation_text += "，{} 个为未来需求预测".format(len(dynamic_warning))
+            
             recommendations.append({
                 "priority": "normal",
                 "action": "安排常规采购补货",
-                "reason": f"发现 {warning_count} 个预警缺料点（缺口超过安全库存）",
+                "reason": recommendation_text,
                 "materials": [s["material_id"] for s in shortages if s["severity"] == "warning"][:10]
             })
         
@@ -352,6 +434,10 @@ def execute_predict_material_shortage(parameters):
         shortage_details_returned = shortages[:max_details]
         truncated_count = max(0, len(shortages) - max_details)
         
+        # 统计静态/动态缺料数量
+        static_shortages = [s for s in shortages if s.get("shortage_type") == "static"]
+        dynamic_shortages = [s for s in shortages if s.get("shortage_type") == "dynamic"]
+        
         result = {
             "forecast_days": forecast_days,
             "total_shortages": len(shortages),
@@ -363,9 +449,17 @@ def execute_predict_material_shortage(parameters):
             "generated_at": datetime.now().isoformat()
         }
         
+        # 构建详细消息
+        message_parts = ["缺料预测完成"]
+        if static_shortages:
+            message_parts.append("当前库存不足{}个物料".format(len(static_shortages)))
+        if dynamic_shortages:
+            message_parts.append("未来需求预测{}个缺料点".format(len(dynamic_shortages)))
+        message_parts.append("严重{}个，预警{}个".format(critical_count, warning_count))
+        
         return {
             "success": True,
-            "message": f"缺料预测完成，发现 {len(shortages)} 个缺料点（严重{critical_count}个，预警{warning_count}个）",
+            "message": "，".join(message_parts),
             "result": result
         }
         

@@ -524,7 +524,7 @@ ALL_FIELDS = {
         {"field_id": "work_order_id", "data_type": "string", "name": "工单ID", "required": True,  "description": "工单唯一标识符"},
         {"field_id": "customer_order_id", "data_type": "string", "name": "关联订单ID", "required": False,  "description": "关联客户订单ID"},
         {"field_id": "product_id", "data_type": "string", "name": "产品ID", "required": True,  "description": "产品唯一标识符"},
-        {"field_id": "work_order_type", "data_type": "string", "name": "工单类型", "required": False,  "description": "工单类型（枚举：正常/重工）", "is_enum": True, "enum_values": ["正常", "重工"]},
+        {"field_id": "work_order_type", "data_type": "string", "name": "工单类型", "required": False,  "description": "工单类型（枚举：正常/重工/预测）", "is_enum": True, "enum_values": ["正常", "重工", "预测"]},
         {"field_id": "planned_quantity", "data_type": "float", "name": "计划投入量", "required": True,  "description": "计划投入量（含过量投入，考虑良率损耗）"},
         {"field_id": "expected_output_qty", "data_type": "float", "name": "预期产出量", "required": False,  "description": "预期产出量（订单需求数量）"},
         {"field_id": "planned_start_date", "data_type": "datetime", "name": "计划开始日期", "required": False,  "description": "计划开始日期"},

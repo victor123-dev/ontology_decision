@@ -67,20 +67,20 @@ ACTION_SCRIPTS = [
         "difficulty": "4星",
         "solver": "CP-SAT"
     },
-    {
-        "name": "产能优化分配（快速）",
-        "file": "import_action_optimize_capacity_allocation_fast.py",
-        "action_id": "optimize_capacity_allocation_fast",
-        "difficulty": "1星",
-        "solver": "启发式 (EDD/SPT/CR)"
-    },
-    {
-        "name": "详细排程优化（快速）",
-        "file": "import_action_optimize_detailed_schedule_fast.py",
-        "action_id": "optimize_detailed_schedule_fast",
-        "difficulty": "2星",
-        "solver": "启发式 (贪婪+2-opt)"
-    },
+    # {  TODO
+    #     "name": "产能优化分配（快速）",
+    #     "file": "import_action_optimize_capacity_allocation_fast.py",
+    #     "action_id": "optimize_capacity_allocation_fast",
+    #     "difficulty": "1星",
+    #     "solver": "启发式 (EDD/SPT/CR)"
+    # },
+    # {
+    #     "name": "详细排程优化（快速）",
+    #     "file": "import_action_optimize_detailed_schedule_fast.py",
+    #     "action_id": "optimize_detailed_schedule_fast",
+    #     "difficulty": "2星",
+    #     "solver": "启发式 (贪婪+2-opt)"
+    # },
     {
         "name": "推荐供应商",
         "file": "import_action_recommend_suppliers.py",
@@ -94,7 +94,14 @@ ACTION_SCRIPTS = [
         "action_id": "emergency_purchase",
         "difficulty": "1星",
         "solver": "业务逻辑"
-    }
+    },
+    {
+        "name": "机会预测工单",
+        "file": "import_action_create_opportunity_work_order.py",
+        "action_id": "create_opportunity_work_order",
+        "difficulty": "1星",
+        "solver": "业务逻辑"
+    },
 ]
 
 def delete_existing_actions():

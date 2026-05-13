@@ -14,7 +14,7 @@ ACTION_DATA = {
     "id": "optimize_capacity_allocation",
     "api_name": "OptimizeCapacityAllocation",
     "name": "产能优化分配",
-    "description": "使用 MIP 优化产能分配，最大化按时交付率。适用于中小规模工单（≤50个），需要最优解时使用。返回工单级分配方案、按时交付率及瓶颈分析。该Action不是工序级排程，仅支持preview，不直接写入ProductionTask。大规模场景请用 optimize_capacity_allocation_fast。",
+    "description": "使用 MIP 优化产能分配，最大化按时交付率。适用于中小规模工单（≤50个），需要最优解时使用。返回工单级分配方案、按时交付率及瓶颈分析。该Action不是工序级排程，仅支持preview，不直接写入ProductionTask。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -75,7 +75,7 @@ def execute_optimize_capacity_allocation(parameters):
         apply_mode = parameters.get("apply_mode", "preview")
         
         if apply_mode != "preview":
-            return {"success": False, "error": "optimize_capacity_allocation仅输出工单级产能分配结果，不支持upsert写入ProductionTask；请使用optimize_detailed_schedule、optimize_detailed_schedule_fast或optimize_capacity_allocation_fast"}
+            return {"success": False, "error": "optimize_capacity_allocation仅输出工单级产能分配结果，不支持upsert写入ProductionTask；请使用optimize_detailed_schedule"}
         
         if not work_order_ids:
             return {"success": False, "error": "请提供工单ID列表"}
@@ -174,7 +174,8 @@ def execute_optimize_capacity_allocation(parameters):
                     total_processing_time += (step.standard_time_hours or 1) * 60
             
             # 计算交期（小时）
-            now = datetime.now()
+            # TODO now = datetime.now()
+            now = datetime(2026, 4, 26)
             if wo.planned_completion_date:
                 due_date = datetime.fromisoformat(wo.planned_completion_date) if isinstance(wo.planned_completion_date, str) else wo.planned_completion_date
                 due_hours = (due_date - now).total_seconds() / 3600
