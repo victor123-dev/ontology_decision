@@ -481,6 +481,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [initialData, setInitialData] = useState(null);  // 保存初始数据用于比较
   const [pendingInitialData, setPendingInitialData] = useState(null);  // 临时保存待设置的初始数据
+  const [orchestrationOld, setOrchestrationOld] = useState(null);  // 编排关联的 action_id
 
   // 检查是否有未保存的修改（通过判断撤回存储中是否有可撤回内容）
   const checkHasChanges = useCallback(() => {
@@ -654,6 +655,8 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
           if (orchestration.graph_data?.output !== undefined) {
             setWorkflowOutput(typeof orchestration.graph_data.output === 'string' ? orchestration.graph_data.output : '');
           }
+          // 设置编排关联的 action_id，用于过滤 Action 列表
+          setOrchestrationOld(orchestration);
         } catch (err) {
           console.error('加载编排失败:', err);
           message.error('加载编排失败');
@@ -1129,8 +1132,8 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
 
   const filteredActions = useMemo(() => {
     return actionList.filter(action => {
-      // 过滤掉当前编排中已使用的 action
-      if (usedActionIds.includes(action.id)) {
+      // 过滤掉编排关联的 action（即该编排发布成的 Action）
+      if (orchestrationOld.action_id && action.id === orchestrationOld.action_id) {
         return false;
       }
       const matchSearch = action.name.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -1139,7 +1142,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
       const matchCategory = categoryFilter === 'all' || action.action_type === categoryFilter;
       return matchSearch && matchCategory;
     });
-  }, [actionList, searchText, categoryFilter, usedActionIds]);
+  }, [actionList, searchText, categoryFilter, orchestrationOld]);
 
   const categories = useMemo(() => {
     const cats = [...new Set(actionList.map(a => a.action_type))];
@@ -1948,19 +1951,19 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
             title={
               <Space>
                 <Button icon={<ArrowLeftOutlined />} onClick={handleBack} size="small" />
-                <Title level={4} style={{ margin: 0 }}>DAG 流程编排画布</Title>
+                <Title level={4} style={{ margin: 0 }}>{orchestrationOld?.name || ''}-逻辑编排</Title>
               </Space>
             }
             extra={
               <Space>
-                <Button icon={<UndoOutlined />} onClick={handleUndo} size="small" title="撤回 (Ctrl+Z)">撤回</Button>
                 <Button icon={<BranchesOutlined />} draggable onDragStart={onDragStartCondition} size="small" style={{ cursor: 'grab' }}>条件分支</Button>
-                <Button icon={<SettingOutlined />} onClick={() => { setOutputScriptValue(workflowOutput); setOutputScriptModalVisible(true); }} size="small" style={{ color: '#722ed1' }}>输出处理</Button>
                 <Button icon={<SettingOutlined />} onClick={handleOpenParamModal} size="small">入参配置</Button>
+                <Button icon={<SettingOutlined />} onClick={() => { setOutputScriptValue(workflowOutput); setOutputScriptModalVisible(true); }} size="small" style={{ color: '#722ed1' }}>输出处理</Button>
                 <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} size="small">保存</Button>
                 <Button type="primary" icon={<CloudUploadOutlined />} onClick={handleSaveAndPublishAction} size="small" style={{ background: '#52c41a', borderColor: '#52c41a' }}>保存并发布 Action</Button>
-                <Button icon={<DownloadOutlined />} onClick={handleExport} size="small">导出</Button>
+                <Button icon={<UndoOutlined />} onClick={handleUndo} size="small" title="撤回 (Ctrl+Z)">撤回</Button>
                 <Button danger icon={<DeleteOutlined />} onClick={handleClear} size="small">清空</Button>
+                <Button icon={<DownloadOutlined />} onClick={handleExport} size="small">导出</Button>
               </Space>
             }
             className="canvas-card"
