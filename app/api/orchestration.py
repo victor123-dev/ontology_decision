@@ -158,64 +158,153 @@ def delete_orchestration(orchestration_id: str):
 
 @router.post("/orchestrations/{orchestration_id}/execute")
 def execute_orchestration(orchestration_id: str, request_data: Optional[dict] = None):
-    """执行编排并记录日志"""
+    """执行编排并返回执行结果"""
+    from app.services.dag_service import execute_orchestration_by_id
+
+    result = execute_orchestration_by_id(orchestration_id, request_data)
+
+    if result.get("error") == "编排不存在":
+        raise HTTPException(status_code=404, detail="编排不存在")
+    elif result.get("error") == "编排内容为空":
+        raise HTTPException(status_code=400, detail="编排内容为空，无法执行")
+    elif result.get("error") == "无效的编排ID":
+        raise HTTPException(status_code=400, detail="无效的编排ID")
+
+    return result
+
+
+class ParameterSchema(BaseModel):
+    name: str
+    type: str = "string"
+    required: bool = False
+    description: str = ""
+    is_enum: bool = False
+    enum_values: list = []
+
+
+class OrchestrationSaveWithActionRequest(BaseModel):
+    id: Optional[str] = None  # 编排ID，更新时传入
+    name: str
+    description: Optional[str] = ""
+    graph_data: Optional[dict] = None
+    inputs: Optional[list] = None  # action的输入参数定义
+    output: Optional[str] = None  # action的输出定义
+    parameters: Optional[list] = None  # action的parameters字段
+
+
+@router.post("/orchestrations/save-with-action")
+def save_orchestration_with_action(data: OrchestrationSaveWithActionRequest):
+    """
+    保存逻辑编排，并将编排包成 action
+    返回编排信息和 action 信息
+    """
+    from bson import ObjectId
+    from app.services.action_service import get_action_service
+
     collection = get_collection()
     if collection is None:
         raise HTTPException(status_code=500, detail="数据库连接失败")
 
-    from bson import ObjectId
-    try:
-        orchestration = collection.find_one({"_id": ObjectId(orchestration_id)})
-    except Exception:
-        raise HTTPException(status_code=400, detail="无效的编排ID")
+    now = datetime.now()
 
-    if not orchestration:
-        raise HTTPException(status_code=404, detail="编排不存在")
+    # 1. 创建或更新编排
+    orchestration_id = data.id
+    if orchestration_id:
+        # 更新已有编排
+        try:
+            obj_id = ObjectId(orchestration_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="无效的编排ID")
 
-    graph_data = orchestration.get("graph_data", {})
-    if not graph_data or not graph_data.get("nodes"):
-        raise HTTPException(status_code=400, detail="编排内容为空，无法执行")
+        update_data = {
+            "name": data.name,
+            "description": data.description or "",
+            "updated_at": now,
+        }
+        if data.graph_data:
+            update_data["graph_data"] = data.graph_data
+        if data.inputs is not None:
+            update_data["inputs"] = data.inputs
+        if data.output is not None:
+            update_data["output"] = data.output
 
-    # 创建执行日志
-    from app.utils.mongo_client import get_mongo_client
-    log_collection = get_mongo_client().get_collection("orchestration_logs")
-    started_at = datetime.now()
-    log_doc = {
-        "orchestration_id": orchestration_id,
-        "orchestration_name": orchestration.get("name", ""),
-        "status": "running",
-        "input_data": request_data or {},
-        "started_at": started_at,
-        "finished_at": None,
-        "node_logs": [],
-        "context": {},
+        result = collection.update_one({"_id": obj_id}, {"$set": update_data})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="编排不存在")
+        orchestration = collection.find_one({"_id": obj_id})
+    else:
+        # 创建新编排
+        orchestration = {
+            "name": data.name,
+            "description": data.description or "",
+            "graph_data": data.graph_data or {"nodes": [], "edges": []},
+            "inputs": data.inputs or [],
+            "output": data.output or "",
+            "created_at": now,
+            "updated_at": now,
+        }
+        result = collection.insert_one(orchestration)
+        orchestration["_id"] = result.inserted_id
+
+    orchestration_id = str(orchestration["_id"])
+
+    # 2. 获取 action_service 创建或更新 action
+    action_service = get_action_service()
+
+    # 生成 api_name（驼峰转下划线再转驼峰）
+    import re
+    api_name = re.sub(r'_([a-z])', lambda m: m.group(1).upper(), data.name)
+
+    # 检查是否已存在关联的 action
+    existing_action = None
+    if orchestration.get("action_id"):
+        existing_action = action_service.get_action(orchestration["action_id"])
+
+    # 确定 action_id：已有则用原有的，没有则生成
+    action_id = orchestration.get("action_id") or f"Logic_{orchestration_id}"
+
+    # 构建 action 数据
+    action_data = {
+        "id": action_id,
+        "api_name": api_name,
+        "name": data.name,
+        "description": data.description or "",
+        "action_type": "function",
+        "function_code": f"""
+from app.services.dag_service import execute_orchestration_by_id_for_action
+
+result = execute_orchestration_by_id_for_action("{orchestration_id}", parameters)
+""",
+        "parameters": data.parameters or [],
+        "submission_criteria": [],
     }
-    log_result = log_collection.insert_one(log_doc)
-    log_id = str(log_result.inserted_id)
 
-    # 执行 DAG
-    from app.services.dag_service import get_dag_service
-    dag_service = get_dag_service()
-    execution_result = dag_service.execute(graph_data, request_data or {})
+    if existing_action:
+        # 更新已有 action
+        action = action_service.update_action(orchestration["action_id"], action_data)
+    else:
+        # 创建新 action
+        action = action_service.create_action(action_data)
 
-    # 更新执行日志
-    finished_at = datetime.now()
-    node_logs = execution_result.get("node_logs", [])
-    context_data = execution_result.get("context", {})
+    action_id = action.get("id")
 
-    log_collection.update_one(
-        {"_id": log_result.inserted_id},
-        {"$set": {
-            "status": "success" if execution_result.get("success") else "failed",
-            "finished_at": finished_at,
-            "node_logs": node_logs,
-            "context": context_data,
-            "error": execution_result.get("error", ""),
-        }}
+    # 3. 将 action_id 存到编排上
+    collection.update_one(
+        {"_id": ObjectId(orchestration_id)},
+        {"$set": {"action_id": action_id, "updated_at": datetime.now()}}
     )
 
+    # 4. 返回结果
+    orchestration["id"] = orchestration_id
+    orchestration["action_id"] = action_id
+    if "_id" in orchestration:
+        orchestration.pop("_id")
+    if "created_at" in orchestration:
+        orchestration["created_at"] = orchestration["created_at"].isoformat()
+    if "updated_at" in orchestration:
+        orchestration["updated_at"] = orchestration["updated_at"].isoformat()
+
     return {
-        "log_id": log_id,
-        "success": execution_result.get("success", False),
-        "error": execution_result.get("error", ""),
+        "orchestration": orchestration,
+        "action": action,
     }

@@ -51,6 +51,37 @@ def update_action(
     return action
 
 
+@router.put("/actions/{action_id}/edit")
+def edit_action(
+    action_id: str,
+    action_data: dict,
+    action_service: ActionService = Depends(get_action_service)
+):
+    """
+    根据ID判断action是否存在，存在则更新，不存在则新增
+    """
+    try:
+        existing = action_service.get_action(action_id)
+        if existing:
+            # 存在则更新
+            action = action_service.update_action(action_id, action_data)
+            if not action:
+                raise HTTPException(status_code=500, detail="更新失败")
+            return {"action": action, "created": False}
+        else:
+            # 不存在则新增（使用指定的 action_id）
+            action_data["id"] = action_id
+            action = action_service.create_action(action_data)
+            if not action:
+                raise HTTPException(status_code=500, detail="创建失败")
+            return {"action": action, "created": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"完整堆栈跟踪:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.delete("/actions/{action_id}")
 def delete_action(action_id: str, action_service: ActionService = Depends(get_action_service)):
     success = action_service.delete_action(action_id)

@@ -287,7 +287,6 @@ class ActionService:
             exec(function_code, local_vars)
             
             function_result = local_vars.get("result")
-            
             # 安全地提取各个字段，构建标准化响应
             if isinstance(function_result, dict):
                 success = function_result.get("success", True)

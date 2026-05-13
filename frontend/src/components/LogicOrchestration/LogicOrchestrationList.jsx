@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, message, Popconfirm, Tooltip, Typography, InputNumber, Select } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, message, Popconfirm, Tooltip, Typography, InputNumber, Select, Result } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { orchestrationApi } from '../../services/api';
@@ -18,6 +18,8 @@ const LogicOrchestrationList = () => {
   const [executingItem, setExecutingItem] = useState(null);
   const [executeForm] = Form.useForm();
   const [executing, setExecuting] = useState(false);
+  const [resultModalVisible, setResultModalVisible] = useState(false);
+  const [executeResult, setExecuteResult] = useState(null);
 
   // 格式化时间，只显示到秒
   const formatDateTime = (dateStr) => {
@@ -127,12 +129,9 @@ const LogicOrchestrationList = () => {
       const values = await executeForm.validateFields();
       setExecuting(true);
       const res = await orchestrationApi.execute(executingItem.id, values);
-      if (res.data?.success) {
-        message.success('执行成功');
-      } else {
-        message.error(`执行失败: ${res.data?.error || '未知错误'}`);
-      }
+      setExecuteResult(res.data);
       setExecuteModalVisible(false);
+      setResultModalVisible(true);
     } catch (err) {
       if (err.errorFields) return; // 表单校验失败
       message.error('执行失败: ' + (err.response?.data?.detail || err.message));
@@ -298,6 +297,46 @@ const LogicOrchestrationList = () => {
           <div style={{ textAlign: 'center', padding: '24px 0', color: '#999' }}>
             该编排未定义入参，可直接执行
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={executeResult?.success ? '执行成功' : '执行失败'}
+        open={resultModalVisible}
+        onCancel={() => setResultModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setResultModalVisible(false)}>
+            关闭
+          </Button>,
+        ]}
+        width={600}
+      >
+        {executeResult?.success ? (
+          <div>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              执行完成，返回结果如下：
+            </Text>
+            <pre
+              style={{
+                background: '#f5f5f5',
+                padding: 16,
+                borderRadius: 4,
+                maxHeight: 400,
+                overflow: 'auto',
+                fontSize: 12,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+              }}
+            >
+              {JSON.stringify(executeResult?.result, null, 2)}
+            </pre>
+          </div>
+        ) : (
+          <Result
+            status="error"
+            title="执行失败"
+            subTitle={executeResult?.error || '未知错误'}
+          />
         )}
       </Modal>
     </div>
