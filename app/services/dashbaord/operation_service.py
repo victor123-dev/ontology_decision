@@ -499,3 +499,263 @@ class OperationService:
         except Exception as e:
             logger.error(f"获取即将到期订单失败: {e}")
             return []
+    
+    # ==================== 生产排产甘特图 ====================
+    
+    def get_production_gantt_data(self, view_type: str = "machine", base_date: str = "2026-04-25", days: int = 7) -> Dict:
+        """
+        获取生产排产甘特图数据
+        
+        参数:
+        - view_type: 视图类型 (machine=机台视图, work_order=工单视图)
+        - base_date: 基准日期 (默认2026-04-25，与仿真数据衔接)
+        - days: 规划天数 (默认7天)
+        
+        返回:
+        - 包含tasks和resources的甘特图数据结构
+        """
+        try:
+            # 解析时间范围
+            base_dt = datetime.fromisoformat(base_date)
+            end_dt = base_dt + timedelta(days=days)
+            
+            # 1. 查询时间范围内的所有生产任务（状态不为"已取消"）
+            all_tasks = self.client.models.ProductionTask.find(
+                planned_start_time__gte=base_dt.isoformat(),
+                planned_start_time__lte=end_dt.isoformat()
+            )
+            
+            if not all_tasks:
+                return {
+                    "view_type": view_type,
+                    "time_range": {
+                        "start": base_dt.isoformat(),
+                        "end": end_dt.isoformat()
+                    },
+                    "resources": [],
+                    "tasks": []
+                }
+            
+            # 过滤时间范围内的任务
+            tasks_in_range = []
+            for task in all_tasks:
+                start_str = getattr(task, 'planned_start_time', '')
+                end_str = getattr(task, 'planned_end_time', '')
+                
+                if not start_str or not end_str:
+                    continue
+                
+                try:
+                    task_start = datetime.fromisoformat(start_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    task_end = datetime.fromisoformat(end_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    
+                    # 检查是否在时间范围内
+                    if task_start < end_dt and task_end > base_dt:
+                        tasks_in_range.append(task)
+                except:
+                    continue
+            
+            # 2. 批量查询关联数据
+            # 查询工单信息
+            wo_ids = list(set([getattr(t, 'work_order_id', '') for t in tasks_in_range]))
+            wo_map = {}
+            if wo_ids:
+                work_orders = self.client.models.WorkOrder.find(work_order_id__in=wo_ids)
+                wo_map = {wo.work_order_id: wo for wo in work_orders}
+            
+            # 查询工单工序信息
+            wo_op_ids = list(set([getattr(t, 'wo_op_id', '') for t in tasks_in_range]))
+            wo_op_map = {}
+            if wo_op_ids:
+                wo_ops = self.client.models.WorkOrderOperation.find(wo_op_id__in=wo_op_ids)
+                wo_op_map = {op.wo_op_id: op for op in wo_ops}
+            
+            # 查询工序步骤信息
+            step_ids = list(set([getattr(op, 'step_id', '') for op in wo_op_map.values() if getattr(op, 'step_id', '')]))
+            step_map = {}
+            if step_ids:
+                steps = self.client.models.RouteStep.find(step_id__in=step_ids)
+                step_map = {s.step_id: s for s in steps}
+            
+            # 查询机台信息
+            machine_ids = list(set([getattr(t, 'machine_id', '') for t in tasks_in_range]))
+            machine_map = {}
+            if machine_ids:
+                machines = self.client.models.Machine.find(machine_id__in=machine_ids)
+                machine_map = {m.machine_id: m for m in machines}
+            
+            # 3. 根据视图类型组织数据
+            resources = []
+            tasks = []
+            
+            if view_type == "machine":
+                # 机台视图：以机台为分组
+                resource_set = {}
+                for task in tasks_in_range:
+                    machine_id = getattr(task, 'machine_id', '')
+                    if machine_id and machine_id not in resource_set:
+                        machine = machine_map.get(machine_id)
+                        machine_name = getattr(machine, 'machine_name', machine_id) if machine else machine_id
+                        resource_set[machine_id] = {
+                            "id": machine_id,
+                            "name": machine_name,
+                            "type": "machine"
+                        }
+                
+                resources = list(resource_set.values())
+                
+                # 构建任务列表
+                for task in tasks_in_range:
+                    machine_id = getattr(task, 'machine_id', '')
+                    work_order_id = getattr(task, 'work_order_id', '')
+                    wo_op_id = getattr(task, 'wo_op_id', '')
+                    
+                    wo = wo_map.get(work_order_id)
+                    wo_op = wo_op_map.get(wo_op_id)
+                    step = step_map.get(getattr(wo_op, 'step_id', '')) if wo_op else None
+                    machine = machine_map.get(machine_id)
+                    
+                    # 计算进度
+                    status = getattr(task, 'status', '已排程')
+                    progress = self._calculate_task_progress(status, task)
+                    
+                    # 构建任务名称
+                    product_id = getattr(wo, 'product_id', '') if wo else ''
+                    step_name = getattr(step, 'step_name', '') if step else ''
+                    sequence_no = getattr(wo_op, 'sequence_no', 0) if wo_op else 0
+                    task_name = f"{work_order_id}-{step_name or '工序'}-S{sequence_no}"
+                    
+                    start_str = getattr(task, 'planned_start_time', '')
+                    end_str = getattr(task, 'planned_end_time', '')
+                    
+                    tasks.append({
+                        "id": getattr(task, 'task_id', ''),
+                        "resource_id": machine_id,
+                        "name": task_name,
+                        "start": start_str,
+                        "end": end_str,
+                        "progress": progress,
+                        "status": status,
+                        "work_order_id": work_order_id,
+                        "product_id": product_id,
+                        "product_name": product_id,
+                        "step_name": step_name,
+                        "sequence_no": sequence_no,
+                        "planned_quantity": getattr(task, 'planned_quantity', 0),
+                        "machine_name": getattr(machine, 'machine_name', machine_id) if machine else machine_id
+                    })
+            
+            elif view_type == "work_order":
+                # 工单视图：以工单为分组
+                resource_set = {}
+                for task in tasks_in_range:
+                    work_order_id = getattr(task, 'work_order_id', '')
+                    if work_order_id and work_order_id not in resource_set:
+                        wo = wo_map.get(work_order_id)
+                        product_id = getattr(wo, 'product_id', '') if wo else ''
+                        resource_set[work_order_id] = {
+                            "id": work_order_id,
+                            "name": f"{work_order_id}-{product_id}",
+                            "type": "work_order"
+                        }
+                
+                resources = list(resource_set.values())
+                
+                # 构建任务列表
+                for task in tasks_in_range:
+                    work_order_id = getattr(task, 'work_order_id', '')
+                    wo_op_id = getattr(task, 'wo_op_id', '')
+                    machine_id = getattr(task, 'machine_id', '')
+                    
+                    wo = wo_map.get(work_order_id)
+                    wo_op = wo_op_map.get(wo_op_id)
+                    step = step_map.get(getattr(wo_op, 'step_id', '')) if wo_op else None
+                    machine = machine_map.get(machine_id)
+                    
+                    # 计算进度
+                    status = getattr(task, 'status', '已排程')
+                    progress = self._calculate_task_progress(status, task)
+                    
+                    # 构建任务名称
+                    step_name = getattr(step, 'step_name', '') if step else ''
+                    sequence_no = getattr(wo_op, 'sequence_no', 0) if wo_op else 0
+                    task_name = f"{step_name or '工序'}-S{sequence_no}({machine_id})"
+                    
+                    start_str = getattr(task, 'planned_start_time', '')
+                    end_str = getattr(task, 'planned_end_time', '')
+                    
+                    tasks.append({
+                        "id": getattr(task, 'task_id', ''),
+                        "resource_id": work_order_id,
+                        "name": task_name,
+                        "start": start_str,
+                        "end": end_str,
+                        "progress": progress,
+                        "status": status,
+                        "work_order_id": work_order_id,
+                        "product_id": getattr(wo, 'product_id', '') if wo else '',
+                        "product_name": getattr(wo, 'product_id', '') if wo else '',
+                        "step_name": step_name,
+                        "sequence_no": sequence_no,
+                        "planned_quantity": getattr(task, 'planned_quantity', 0),
+                        "machine_name": getattr(machine, 'machine_name', machine_id) if machine else machine_id
+                    })
+            
+            # 4. 按时间排序
+            tasks.sort(key=lambda x: x['start'])
+            
+            return {
+                "view_type": view_type,
+                "time_range": {
+                    "start": base_dt.isoformat(),
+                    "end": end_dt.isoformat()
+                },
+                "resources": resources,
+                "tasks": tasks
+            }
+            
+        except Exception as e:
+            logger.error(f"获取生产排产甘特图数据失败: {e}")
+            return {
+                "view_type": view_type,
+                "time_range": {},
+                "resources": [],
+                "tasks": [],
+                "error": str(e)
+            }
+    
+    def _calculate_task_progress(self, status: str, task) -> int:
+        """计算任务进度百分比"""
+        status_progress = {
+            '已排程': 0,
+            '待执行': 0,
+            '执行中': 50,
+            '已完成': 100,
+            '已取消': 0,
+            '已延期': 50
+        }
+        
+        base_progress = status_progress.get(status, 0)
+        
+        # 对于执行中的任务，可以根据实际时间计算更精确的进度
+        if status == '执行中':
+            try:
+                start_str = getattr(task, 'planned_start_time', '')
+                end_str = getattr(task, 'planned_end_time', '')
+                actual_start_str = getattr(task, 'actual_start_time', '')
+                
+                if start_str and end_str and actual_start_str:
+                    start = datetime.fromisoformat(start_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    end = datetime.fromisoformat(end_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    actual_start = datetime.fromisoformat(actual_start_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    
+                    total_duration = (end - start).total_seconds()
+                    elapsed = (datetime.now() - actual_start).total_seconds()
+                    
+                    if total_duration > 0:
+                        time_progress = min(int((elapsed / total_duration) * 100), 100)
+                        return max(base_progress, time_progress)
+            except:
+                pass
+        
+        return base_progress

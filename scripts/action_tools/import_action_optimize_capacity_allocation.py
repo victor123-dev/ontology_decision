@@ -14,7 +14,7 @@ ACTION_DATA = {
     "id": "optimize_capacity_allocation",
     "api_name": "OptimizeCapacityAllocation",
     "name": "产能优化分配",
-    "description": "使用 MIP 优化产能分配，最大化按时交付率。适用于中小规模工单（≤50个），需要最优解时使用。返回工单分配方案、按时交付率及瓶颈分析。大规模场景请用 optimize_capacity_allocation_fast。",
+    "description": "使用 MIP 优化产能分配，最大化按时交付率。适用于中小规模工单（≤50个），需要最优解时使用。返回工单级分配方案、按时交付率及瓶颈分析。该Action不是工序级排程，仅支持preview，不直接写入ProductionTask。大规模场景请用 optimize_capacity_allocation_fast。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -30,6 +30,12 @@ ACTION_DATA = {
             "type": "integer",
             "required": False,
             "description": "排程规划天数。时间越长计算越慢，默认30天"
+        },
+        {
+            "name": "apply_mode",
+            "type": "string",
+            "required": False,
+            "description": "应用模式。该MIP产能分配Action只输出工单级结果，仅支持preview；如需upsert写入ProductionTask，请使用详细排程Action或快速产能分配Action"
         }
     ],
     "submission_criteria": [],
@@ -66,6 +72,10 @@ def execute_optimize_capacity_allocation(parameters):
         # 1. 解析参数
         work_order_ids = parameters.get("work_order_ids", [])
         planning_horizon_days = parameters.get("planning_horizon_days", 30)
+        apply_mode = parameters.get("apply_mode", "preview")
+        
+        if apply_mode != "preview":
+            return {"success": False, "error": "optimize_capacity_allocation仅输出工单级产能分配结果，不支持upsert写入ProductionTask；请使用optimize_detailed_schedule、optimize_detailed_schedule_fast或optimize_capacity_allocation_fast"}
         
         if not work_order_ids:
             return {"success": False, "error": "请提供工单ID列表"}

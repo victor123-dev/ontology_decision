@@ -207,6 +207,19 @@ def get_customer_order_trend():
         raise HTTPException(status_code=500, detail=f"获取客户订单交付趋势失败: {str(e)}")
 
 
+# ==================== 生产排产 API ====================
+
+@router.get("/production/gantt")
+def get_production_gantt(view_type: str = "machine", base_date: str = "2026-04-25", days: int = 7):
+    """获取生产排产甘特图数据"""
+    try:
+        data = operation_service.get_production_gantt_data(view_type, base_date, days)
+        return data
+    except Exception as e:
+        logger.error(f"获取生产排产甘特图失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取生产排产甘特图失败: {str(e)}")
+
+
 # ==================== 风险监控 API ====================
 
 @router.get("/risks/active")

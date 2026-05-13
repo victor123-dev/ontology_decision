@@ -15,7 +15,7 @@ ACTION_DATA = {
     "id": "optimize_detailed_schedule_fast",
     "api_name": "OptimizeDetailedScheduleFast",
     "name": "详细排程优化（快速）",
-    "description": "快速详细排程（贪婪算法），秒级出结果。适用于大规模工单，不保证最优但速度快。小规模追求最优解请用 optimize_detailed_schedule。",
+    "description": "快速详细排程（贪婪算法），秒级出结果。适用于大规模工单，不保证最优但速度快。支持preview预览和upsert写入本体实例数据。小规模追求最优解请用 optimize_detailed_schedule。",
     "action_type": "function",
     "operation": "custom",
     "target_model_id": "work_order",
@@ -37,6 +37,18 @@ ACTION_DATA = {
             "type": "boolean",
             "required": False,
             "description": "是否考虑换线时间。默认false。设为true会更真实但略慢"
+        },
+        {
+            "name": "apply_mode",
+            "type": "string",
+            "required": False,
+            "description": "排程结果应用模式：preview仅返回排程结果；upsert将结果写入本体实例，已有可修改ProductionTask则更新，没有则创建。默认preview"
+        },
+        {
+            "name": "schedule_note",
+            "type": "string",
+            "required": False,
+            "description": "写入ProductionTask.note的备注，默认'快速详细排程优化Action-自动写入'"
         }
     ],
     "submission_criteria": [],
@@ -44,6 +56,11 @@ ACTION_DATA = {
 import json
 from datetime import datetime, timedelta
 from my_ontology_sdk import OntologyClient
+
+UPDATABLE_TASK_STATUS = {"已排程", "待执行", "已延期"}
+UPDATABLE_OPERATION_STATUS = {"待开工", "已排程"}
+DEFAULT_SCHEDULE_NOTE = "快速详细排程优化Action-自动写入"
+
 
 def execute_optimize_detailed_schedule_heuristic(parameters):
     """
@@ -63,9 +80,14 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         # 1. 解析参数
         work_order_ids = parameters.get("work_order_ids", [])
         planning_horizon_days = parameters.get("planning_horizon_days", 30)
+        apply_mode = parameters.get("apply_mode", "preview")
+        schedule_note = parameters.get("schedule_note", DEFAULT_SCHEDULE_NOTE)
         
         if not work_order_ids:
             return {"success": False, "error": "请提供工单ID列表"}
+        
+        if apply_mode not in {"preview", "upsert"}:
+            return {"success": False, "error": "apply_mode仅支持preview或upsert"}
         
         # 2. 初始化SDK客户端
         client = OntologyClient("http://localhost:8080", api_key="your-api-key")
@@ -81,12 +103,14 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         if not work_orders:
             return {"success": False, "error": "没有找到工单"}
         work_orders = list(work_orders)
+        wo_lookup = {wo.work_order_id: wo for wo in work_orders}
         
         # 4. 批量查询工序
         # 原方案: for wo in work_orders: ops = client.models.WorkOrderOperation.find(work_order_id=wo.work_order_id)
         # 优化后: 一次性查询所有工单的工序
         wo_ids = [wo.work_order_id for wo in work_orders]
-        all_ops = client.models.WorkOrderOperation.find(work_order_id__in=wo_ids)
+        all_ops = list(client.models.WorkOrderOperation.find(work_order_id__in=wo_ids))
+        op_lookup = {op.wo_op_id: op for op in all_ops}
         
         # 按工单ID分组工序，并排序
         ops_by_wo = {}
@@ -98,8 +122,8 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
             ops_by_wo[wo_id].sort(key=lambda o: o.sequence_no or 0)
         
         # 5. 批量查询工序步骤
-        step_ids = list(set([op.step_id for op in all_ops]))
-        all_steps = {s.step_id: s for s in client.models.RouteStep.find(step_id__in=step_ids)}
+        step_ids = list(set([op.step_id for op in all_ops if op.step_id]))
+        all_steps = {s.step_id: s for s in client.models.RouteStep.find(step_id__in=step_ids)} if step_ids else {}
         
         # 6. 批量查询机台
         work_center_ids = list(set([step.machine_type_required for step in all_steps.values() if step and step.machine_type_required]))
@@ -111,11 +135,11 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         # 7. 批量查询机台能力
         # 原方案: 在构建任务列表时循环查询每个机台的能力
         # 优化后: 一次性查询所有机台能力，构建集合用于O(1)查找
-        product_ids = list(set([wo.product_id for wo in work_orders]))
+        product_ids = list(set([wo.product_id for wo in work_orders if wo.product_id]))
         all_caps = client.models.MachineCapability.find(
             product_id__in=product_ids,
             machine_id__in=[m.machine_id for m in all_machines]
-        )
+        ) if product_ids and all_machines else []
         capable_set = set([(cap.machine_id, cap.product_id) for cap in all_caps])
         
         # 8. 构建任务列表
@@ -142,16 +166,26 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
                     continue
                 
                 # 计算加工时长（分钟）
-                duration_minutes = int((step.standard_time_hours or 1) * 60)
+                std_time = step.standard_time_hours or 1.0
+                wait_time = getattr(step, 'wait_time_hours', 0.0) or 0.0
+                transport_time = getattr(step, 'transport_time_hours', 0.0) or 0.0
+                queue_time = 0.5  # 工序间排队时间
+                
+                # 工序总时长 = 加工时间 + 等待时间 + 转运时间
+                duration_minutes = max(1, int((std_time + wait_time + transport_time) * 60))
+                planned_quantity = getattr(op, 'required_input_qty', None) or getattr(wo, 'planned_quantity', 0) or 0
                 
                 tasks.append({
                     "wo_id": wo.work_order_id,
                     "op_id": op.wo_op_id,
                     "step_id": op.step_id,
                     "seq": seq,
+                    "sequence_no": op.sequence_no or seq + 1,
                     "product_id": wo.product_id,
                     "priority": wo.priority or 3,
                     "duration": duration_minutes,
+                    "planned_quantity": planned_quantity,
+                    "wait_time_minutes": int((wait_time + transport_time) * 60),
                     "valid_machine_ids": valid_machine_ids
                 })
         
@@ -162,15 +196,19 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         start_time = datetime.now()
         schedule_result = []
         for task in schedule:
+            start_dt = start_time + timedelta(minutes=task["start_time"])
+            end_dt = start_time + timedelta(minutes=task["end_time"])
             schedule_result.append({
                 "work_order_id": task["wo_id"],
                 "operation_id": task["op_id"],
                 "step_id": task["step_id"],
-                "sequence_no": task["seq"],
+                "sequence_no": task["sequence_no"],
                 "machine_id": task["machine_id"],
-                "start_time": (start_time + timedelta(minutes=task["start_time"])).isoformat(),
-                "end_time": (start_time + timedelta(minutes=task["end_time"])).isoformat(),
-                "duration_minutes": task["duration"]
+                "start_time": start_dt.isoformat(),
+                "end_time": end_dt.isoformat(),
+                "duration_minutes": task["duration"],
+                "planned_quantity": task["planned_quantity"],
+                "wait_time_minutes": task.get("wait_time_minutes", 0)
             })
         
         # 按开始时间排序
@@ -179,15 +217,26 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
         # 计算总工期（makespan）
         makespan = max(t.get("end_time", 0) for t in schedule) if schedule else 0
         makespan_hours = makespan / 60
+        apply_result = None
+        
+        if apply_mode == "upsert":
+            apply_result = _upsert_schedule_to_ontology(
+                client,
+                schedule_result,
+                op_lookup,
+                wo_lookup,
+                schedule_note
+            )
         
         # 防上下文膨胀：只返回前50条任务详情
         max_schedule = 50
         schedule_returned = schedule_result[:max_schedule]
         truncated_count = max(0, len(schedule_result) - max_schedule)
+        message_suffix = "，并已应用到本体实例" if apply_mode == "upsert" else ""
         
         return {
             "success": True,
-            "message": f"快速排程完成，总工期: {makespan_hours:.1f}小时，共{len(schedule_result)}个任务",
+            "message": f"快速排程完成{message_suffix}，总工期: {makespan_hours:.1f}小时，共{len(schedule_result)}个任务",
             "result": {
                 "makespan_hours": round(makespan_hours, 2),
                 "makespan_days": round(makespan_hours / 24, 2),
@@ -195,6 +244,9 @@ def execute_optimize_detailed_schedule_heuristic(parameters):
                 "schedule": schedule_returned,
                 "truncated_count": truncated_count,
                 "algorithm": "Greedy Scheduling",
+                "apply_mode": apply_mode,
+                "applied": apply_mode == "upsert",
+                "apply_result": apply_result,
                 "note": "仅返回前50条任务详情" if truncated_count > 0 else None
             }
         }
@@ -231,12 +283,13 @@ def _greedy_schedule(tasks, machines_dict):
         seq = task["seq"]
         duration = task["duration"]
         
-        # 计算最早开始时间（考虑工序顺序约束）
+        # 计算最早开始时间（考虑工序顺序约束 + 排队时间）
         earliest_start = 0
         if seq > 0:
             prev_key = (wo_id, seq - 1)
             if prev_key in wo_op_end_time:
-                earliest_start = wo_op_end_time[prev_key]
+                # 下一道工序 = 上一道工序结束时间 + 排队时间
+                earliest_start = wo_op_end_time[prev_key] + int(queue_time * 60)
         
         # 找到最佳机台（最早可用）
         best_machine_id = None
@@ -264,6 +317,158 @@ def _greedy_schedule(tasks, machines_dict):
             schedule.append(task)
     
     return schedule
+
+
+def _upsert_schedule_to_ontology(client, schedule, op_lookup, wo_lookup, schedule_note):
+    operation_ids = [item["operation_id"] for item in schedule]
+    existing_tasks_by_op = _load_existing_tasks_by_operation(client, operation_ids)
+    created_tasks = []
+    updated_tasks = []
+    updated_operations = []
+    updated_work_orders = []
+    skipped_locked = []
+    failed_items = []
+    wo_windows = {}
+    
+    for index, item in enumerate(schedule, 1):
+        op_id = item["operation_id"]
+        try:
+            op = op_lookup.get(op_id)
+            if not op:
+                failed_items.append({"operation_id": op_id, "error": "找不到对应工序对象"})
+                continue
+            
+            start_dt = datetime.fromisoformat(item["start_time"])
+            end_dt = datetime.fromisoformat(item["end_time"])
+            shift_id, is_night = _get_shift_info(start_dt)
+            existing_task = existing_tasks_by_op.get(op_id)
+            task_payload = _build_task_payload(item, shift_id, is_night, schedule_note)
+            
+            if existing_task:
+                if _is_task_updatable(existing_task):
+                    existing_task.update(**task_payload)
+                    updated_tasks.append(getattr(existing_task, 'task_id', None))
+                else:
+                    skipped_locked.append({
+                        "operation_id": op_id,
+                        "task_id": getattr(existing_task, 'task_id', None),
+                        "status": getattr(existing_task, 'status', None),
+                        "reason": "已有任务已开始、已完成或不可修改"
+                    })
+                    continue
+            else:
+                task_id = _generate_task_id(index)
+                payload = {"task_id": task_id, **task_payload}
+                client.models.ProductionTask.create(payload)
+                created_tasks.append(task_id)
+            
+            if _is_operation_updatable(op):
+                op.update(
+                    assigned_machine_id=item["machine_id"],
+                    status="已排程",
+                    planned_start=item["start_time"],
+                    planned_end=item["end_time"]
+                )
+                updated_operations.append(op_id)
+            
+            wo_id = item["work_order_id"]
+            current_window = wo_windows.get(wo_id)
+            if current_window:
+                wo_windows[wo_id] = (min(current_window[0], start_dt), max(current_window[1], end_dt))
+            else:
+                wo_windows[wo_id] = (start_dt, end_dt)
+        except Exception as e:
+            failed_items.append({"operation_id": op_id, "error": str(e)})
+    
+    for wo_id, window in wo_windows.items():
+        try:
+            wo = wo_lookup.get(wo_id)
+            if wo:
+                wo.update(
+                    planned_start_date=window[0].isoformat(),
+                    planned_completion_date=window[1].isoformat()
+                )
+                updated_work_orders.append(wo_id)
+        except Exception as e:
+            failed_items.append({"work_order_id": wo_id, "error": str(e)})
+    
+    return {
+        "created_tasks": created_tasks,
+        "updated_tasks": updated_tasks,
+        "updated_operations": updated_operations,
+        "updated_work_orders": updated_work_orders,
+        "skipped_locked": skipped_locked,
+        "failed_items": failed_items
+    }
+
+
+def _load_existing_tasks_by_operation(client, operation_ids):
+    if not operation_ids:
+        return {}
+    existing_tasks = list(client.models.ProductionTask.find(wo_op_id__in=operation_ids))
+    result = {}
+    for task in existing_tasks:
+        status = getattr(task, 'status', None)
+        op_id = getattr(task, 'wo_op_id', None)
+        if not op_id or status == "已取消":
+            continue
+        current = result.get(op_id)
+        if current is None:
+            result[op_id] = task
+            continue
+        current_start = getattr(current, 'planned_start_time', '') or ''
+        task_start = getattr(task, 'planned_start_time', '') or ''
+        if task_start >= current_start:
+            result[op_id] = task
+    return result
+
+
+def _build_task_payload(item, shift_id, is_night, schedule_note):
+    wait_minutes = item.get("wait_time_minutes", 0) or 0
+    return {
+        "wo_op_id": item["operation_id"],
+        "work_order_id": item["work_order_id"],
+        "machine_id": item["machine_id"],
+        "lot_id": None,
+        "planned_start_time": item["start_time"],
+        "planned_end_time": item["end_time"],
+        "planned_quantity": item.get("planned_quantity", 0) or 0,
+        "actual_start_time": None,
+        "actual_end_time": None,
+        "actual_quantity": 0.0,
+        "scrap_quantity": 0.0,
+        "actual_efficiency": None,
+        "actual_yield": None,
+        "setup_time_actual": 0.0,
+        "wait_time_actual": round(wait_minutes / 60, 4),
+        "shift_id": shift_id,
+        "is_night_shift": is_night,
+        "status": "已排程",
+        "note": schedule_note
+    }
+
+
+def _is_task_updatable(task):
+    if getattr(task, 'actual_start_time', None) or getattr(task, 'actual_end_time', None):
+        return False
+    return getattr(task, 'status', None) in UPDATABLE_TASK_STATUS
+
+
+def _is_operation_updatable(op):
+    if getattr(op, 'actual_start', None) or getattr(op, 'actual_end', None):
+        return False
+    return getattr(op, 'status', None) in UPDATABLE_OPERATION_STATUS
+
+
+def _get_shift_info(dt):
+    if 8 <= dt.hour < 20:
+        return "SHIFT-DAY", False
+    return "SHIFT-NIGHT", True
+
+
+def _generate_task_id(index):
+    now_key = datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"PT-ACT-{now_key}-{index:04d}"
 
 
 result = execute_optimize_detailed_schedule_heuristic(parameters)

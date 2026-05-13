@@ -56,7 +56,7 @@ class CreateActionTypeParameters(BaseModel):
     )
     function_code: Optional[str] = Field(
         default=None, 
-        description="Python函数代码（function/custom类型必需）。"
+        description="Python函数代码（function类型必需）。"
                     "代码结构: 1)引入库 2)定义函数def execute_xxx(parameters: dict) -> dict: 3)使用OntologySDK处理数据 "
                     "4)返回{'success':True/False,'message/error':'xxx','result':xxx} 5)最后调用result=execute_xxx(parameters)"
     )

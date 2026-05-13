@@ -31,6 +31,12 @@ export const alertDashboardApi = {
   // ==================== 工单跟踪 API ====================
   getDelayedWorkOrders: () => api.get('/work-order/delayed'),
 
+  // ==================== 生产排产 API ====================
+  getProductionGantt: (viewType = 'machine', baseDate = '2026-04-25', days = 7, signal) => api.get('/production/gantt', {
+    params: { view_type: viewType, base_date: baseDate, days },
+    signal,
+  }),
+
   // ==================== 销售订单 API ====================
   getUpcomingCustomerOrders: () => api.get('/customer-order/upcoming'),
   getCustomerOrderTrend: () => api.get('/customer-order/trend'),

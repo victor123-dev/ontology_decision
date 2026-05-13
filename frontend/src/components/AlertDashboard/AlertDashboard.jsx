@@ -21,6 +21,7 @@ import ProductionTracking from './components/ProductionTracking';
 import SalesOverview from './components/SalesOverview';
 import RiskCharts from './components/RiskCharts';
 import CustomerOrderTrend from './components/CustomerOrderTrend';
+import ProductionGantt from './components/ProductionGantt';
 
 // 运营和风险数据hooks
 import { usePOExecutionRate, useInventoryHealthRate, useWOOnTimeDeliveryRate, useMonthlyCustomerOrderAmount, useDelayedPurchaseOrders, useSupplierPerformance, useLowInventoryAlerts, useDelayedWorkOrders, useUpcomingCustomerOrders, useCustomerOrderTrend } from './hooks/useOperationData';
@@ -39,10 +40,13 @@ const INITIAL_LAYOUT = [
   // 第二行: 库存健康(左) + 客户订单趋势(中) + 生产交付(右)
   { i: 'inventoryHealth', x: 0, y: 28, w: 8, h: 22, minH: 16, minW: 6 },
   { i: 'customerOrderTrend', x: 8, y: 28, w: 8, h: 22, minH: 16, minW: 4 },
-  { i: 'productionTracking', x: 16, y: 36, w: 8, h: 22, minH: 16, minW: 8 },
+  { i: 'productionTracking', x: 16, y: 28, w: 8, h: 22, minH: 16, minW: 8 },
+  
+  // 第三行: 生产排产甘特图(全宽) - 新增
+  { i: 'productionGantt', x: 0, y: 50, w: 24, h: 24, minH: 18, minW: 12 },
   
   // 第四行: 销售订单概览(全宽)
-  { i: 'salesOverview', x: 0, y: 50, w: 24, h: 18, minH: 14, minW: 12 },
+  { i: 'salesOverview', x: 0, y: 74, w: 24, h: 18, minH: 14, minW: 12 },
 ];
 
 const ROW_HEIGHT = 8; // px per grid row unit
@@ -421,6 +425,13 @@ export default function AlertDashboard() {
               <div key="customerOrderTrend">
                 <Widget title="客户订单交付趋势" subtitle="近30天状态分布">
                   <CustomerOrderTrend refreshTrigger={refreshTrigger} />
+                </Widget>
+              </div>
+
+              {/* ── 生产排产甘特图 ── */}
+              <div key="productionGantt">
+                <Widget title="生产排产甘特图" subtitle="2026-04-25起7天排程计划">
+                  <ProductionGantt refreshTrigger={refreshTrigger} />
                 </Widget>
               </div>
 
