@@ -1,9 +1,12 @@
+from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
-from app.utils.mongo_client import get_mongo_client
+
+from app.services.action_service import get_action_service
 from app.utils.logger import get_logger
+from app.utils.mongo_client import get_mongo_client
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -182,78 +185,38 @@ class ParameterSchema(BaseModel):
     enum_values: list = []
 
 
-class OrchestrationSaveWithActionRequest(BaseModel):
-    id: Optional[str] = None  # 编排ID，更新时传入
-    name: str
-    description: Optional[str] = ""
-    graph_data: Optional[dict] = None
-    inputs: Optional[list] = None  # action的输入参数定义
-    output: Optional[str] = None  # action的输出定义
-    parameters: Optional[list] = None  # action的parameters字段
-
-
-@router.post("/orchestrations/save-with-action")
-def save_orchestration_with_action(data: OrchestrationSaveWithActionRequest):
-    """
-    保存逻辑编排，并将编排包成 action
-    返回编排信息和 action 信息
-    """
-    from bson import ObjectId
-    from app.services.action_service import get_action_service
-
+@router.put("/orchestrations/save-with-action/{orchestration_id}")
+def save_with_action(orchestration_id: str, data: OrchestrationUpdate):
+    """更新编排"""
     collection = get_collection()
     if collection is None:
         raise HTTPException(status_code=500, detail="数据库连接失败")
 
-    now = datetime.now()
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(orchestration_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="无效的编排ID")
 
-    # 1. 创建或更新编排
-    orchestration_id = data.id
-    if orchestration_id:
-        # 更新已有编排
-        try:
-            obj_id = ObjectId(orchestration_id)
-        except Exception:
-            raise HTTPException(status_code=400, detail="无效的编排ID")
+    update_data = {"updated_at": datetime.now()}
+    if data.name is not None:
+        update_data["name"] = data.name
+    if data.description is not None:
+        update_data["description"] = data.description
+    if data.graph_data is not None:
+        update_data["graph_data"] = data.graph_data
 
-        update_data = {
-            "name": data.name,
-            "description": data.description or "",
-            "updated_at": now,
-        }
-        if data.graph_data:
-            update_data["graph_data"] = data.graph_data
-        if data.inputs is not None:
-            update_data["inputs"] = data.inputs
-        if data.output is not None:
-            update_data["output"] = data.output
+    result = collection.update_one({"_id": obj_id}, {"$set": update_data})
 
-        result = collection.update_one({"_id": obj_id}, {"$set": update_data})
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="编排不存在")
-        orchestration = collection.find_one({"_id": obj_id})
-    else:
-        # 创建新编排
-        orchestration = {
-            "name": data.name,
-            "description": data.description or "",
-            "graph_data": data.graph_data or {"nodes": [], "edges": []},
-            "inputs": data.inputs or [],
-            "output": data.output or "",
-            "created_at": now,
-            "updated_at": now,
-        }
-        result = collection.insert_one(orchestration)
-        orchestration["_id"] = result.inserted_id
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="编排不存在")
+
+    orchestration = collection.find_one({"_id": obj_id})
 
     orchestration_id = str(orchestration["_id"])
 
     # 2. 获取 action_service 创建或更新 action
     action_service = get_action_service()
-
-    # 生成 api_name（驼峰转下划线再转驼峰）
-    import re
-    api_name = re.sub(r'_([a-z])', lambda m: m.group(1).upper(), data.name)
 
     # 检查是否已存在关联的 action
     existing_action = None
@@ -266,18 +229,19 @@ def save_orchestration_with_action(data: OrchestrationSaveWithActionRequest):
     # 构建 action 数据
     action_data = {
         "id": action_id,
-        "api_name": api_name,
-        "name": data.name,
-        "description": data.description or "",
+        "api_name": action_id,
+        "name": orchestration.get("name"),
+        "description": orchestration.get("description", ""),
         "action_type": "function",
         "function_code": f"""
 from app.services.dag_service import execute_orchestration_by_id_for_action
 
 result = execute_orchestration_by_id_for_action("{orchestration_id}", parameters)
 """,
-        "parameters": data.parameters or [],
+        "parameters": data.graph_data.get("inputs") or [],
         "submission_criteria": [],
     }
+    logger.info(f"action_data: {action_data}")
 
     if existing_action:
         # 更新已有 action

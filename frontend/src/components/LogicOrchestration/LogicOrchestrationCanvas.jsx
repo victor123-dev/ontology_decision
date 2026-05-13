@@ -1838,22 +1838,7 @@ const LogicOrchestrationCanvasContent = ({ orchestrationId }) => {
     flowData.inputs = workflowParams;
     
     try {
-      const res = await orchestrationApi.saveWithAction({
-        id: orchestrationId,
-        name: flowData.name || '未命名编排',
-        description: flowData.description || '',
-        graph_data: flowData,
-        inputs: workflowParams,
-        output: workflowOutput,
-        parameters: workflowParams.map(p => ({
-          name: p.name,
-          type: p.type || 'string',
-          required: p.required || false,
-          description: p.description || '',
-          is_enum: false,
-          enum_values: [],
-        })),
-      });
+      const res = await orchestrationApi.saveWithAction(orchestrationId, { graph_data: flowData });
       if (res.data?.orchestration && res.data?.action) {
         message.success(`保存并发布 Action 成功！Action ID: ${res.data.action.id}`);
       } else {
