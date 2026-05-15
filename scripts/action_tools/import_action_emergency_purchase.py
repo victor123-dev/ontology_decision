@@ -7,6 +7,7 @@ Action: emergencyPurchase
 """
 import requests
 from datetime import datetime
+import uuid
 
 API_URL = "http://localhost:8080/api/v1"
 
@@ -53,6 +54,7 @@ ACTION_DATA = {
     "submission_criteria": [],
     "function_code": '''# 紧急采购 - 创建紧急采购订单
 import json
+import uuid
 from datetime import datetime, timedelta
 from my_ontology_sdk import OntologyClient
 
@@ -131,10 +133,8 @@ def execute_emergency_purchase(parameters):
         expected_delivery_date = datetime(2026, 4, 26) + timedelta(days=lead_time_days)
         
         # 7. 生成采购订单ID
-        # 查询现有采购订单数量，生成新ID
-        all_pos = client.models.PurchaseOrder.find()
-        po_count = len(list(all_pos)) if all_pos else 0
-        po_id = f"PO-EMG-{po_count + 1:04d}"
+        # 使用UUID避免并发冲突
+        po_id = f"PO-EMG-{uuid.uuid4().hex[:8].upper()}"
         
         # 8. 创建采购订单
         po_data = {

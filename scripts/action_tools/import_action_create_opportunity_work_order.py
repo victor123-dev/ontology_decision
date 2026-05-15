@@ -7,6 +7,7 @@ Action: createWorkOrder
 """
 import requests
 from datetime import datetime
+import uuid
 
 API_URL = "http://localhost:8080/api/v1"
 
@@ -59,6 +60,7 @@ ACTION_DATA = {
     "submission_criteria": [],
     "function_code": '''# 新建工单（机会预测）- 创建生产工单并展开工序、物料、批次
 import json
+import uuid
 import math
 from datetime import datetime, timedelta
 from my_ontology_sdk import OntologyClient
@@ -179,9 +181,8 @@ def execute_create_work_order(parameters):
         planned_completion = planned_start + timedelta(hours=total_hours)
         
         # 7. 生成工单ID
-        all_wos = client.models.WorkOrder.find()
-        wo_count = len(list(all_wos)) if all_wos else 0
-        wo_id = f"WO-FORECAST-{wo_count + 1:04d}"
+        # 使用UUID避免并发冲突
+        wo_id = f"WO-FORECAST-{uuid.uuid4().hex[:8].upper()}"
         
         # 8. 创建工单主记录
         wo_data = {

@@ -118,6 +118,7 @@ class DataSourceManager:
             columns = ', '.join(serialized_data.keys())
             placeholders = ', '.join(['?' for _ in serialized_data.values()])
             query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+            logger.info(f"Executing insert: {query}")
             # SQLite的execute_query方法支持执行非查询语句
             client.execute_query(query, list(serialized_data.values()))
             return True
@@ -148,7 +149,7 @@ class DataSourceManager:
             set_clause = ', '.join([f"{key} = ?" for key in serialized_values.keys()])
             query = f"UPDATE {table_name} SET {set_clause} WHERE {primary_key} = ?"
             values = list(serialized_values.values()) + [primary_value]
-            
+            logger.info(f"Executing update: {query}")
             client.execute_query(query, values)
             return True
         except Exception as e:
@@ -168,7 +169,7 @@ class DataSourceManager:
         try:
             # 使用client的execute_query方法来执行DELETE
             query = f"DELETE FROM {table_name} WHERE {primary_key} = ?"
-            
+            logger.info(f"Executing delete: {query}")
             client.execute_query(query, [primary_value])
             return True
         except Exception as e:

@@ -10,6 +10,9 @@ from enum import Enum
 from app.models.business_model import BusinessModel
 from app.utils.shared_utils import get_db
 from app.utils.data_source_manager import data_source_manager
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -329,7 +332,7 @@ def query_objects(
                     limit_clause = f" LIMIT {actual_limit}"
             
             query = f"SELECT * FROM {request.object_type_id}{where_clause}{order_clause}{limit_clause}"
-            
+            logger.info(f"Executing query: {query}")
             try:
                 data = data_source_manager.execute_query(
                     data_source_id=business_model.data_source_id,

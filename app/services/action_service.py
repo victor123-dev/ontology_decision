@@ -284,9 +284,10 @@ class ActionService:
             local_vars = {
                 "parameters": parameters,
             }
+            logger.info(f"Executing function with parameters: {parameters}")
             exec(function_code, local_vars)
-            
             function_result = local_vars.get("result")
+            logger.info(f"Function execution completed with result: {function_result}")
             # 安全地提取各个字段，构建标准化响应
             if isinstance(function_result, dict):
                 success = function_result.get("success", True)

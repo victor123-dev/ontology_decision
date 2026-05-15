@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.business_model import BusinessModel
 from app.utils.data_source_manager import data_source_manager
 from app.utils.shared_utils import get_db
+from app.utils.logger import logger
 
 router = APIRouter()
 
@@ -125,7 +126,7 @@ def query_business_data(
             raise HTTPException(status_code=400, detail="Invalid limit or offset value")
     
     query = f"SELECT * FROM {model_name}{where_clause}{order_clause}{limit_clause}"
-    
+    logger.info(f"Executing query: {query}")
     try:
         data = data_source_manager.execute_query(
             data_source_id=business_model.data_source_id,
@@ -175,6 +176,7 @@ def count_business_data_query(
     where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
     query = f"SELECT COUNT(*) as count FROM {model_name}{where_clause}"
     
+    logger.info(f"Executing query: {query}")
     try:
         result = data_source_manager.execute_query(
             data_source_id=business_model.data_source_id,
