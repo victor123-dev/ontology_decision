@@ -118,7 +118,7 @@ export default function InventoryHealth({ refreshTrigger }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ marginBottom: '8px', fontSize: '11px', color: '#64748b' }}>
+      <div style={{ marginBottom: '8px', fontSize: '11px', color: '#8aa3c0' }}>
         共 {alerts.length} 个物料低于安全库存
       </div>
       
@@ -126,12 +126,12 @@ export default function InventoryHealth({ refreshTrigger }) {
         <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(59,130,246,0.15)' }}>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>物料</th>
-              <th style={{ padding: '6px', textAlign: 'right', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>可用</th>
-              <th style={{ padding: '6px', textAlign: 'right', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>已采未到</th>
-              <th style={{ padding: '6px', textAlign: 'right', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>安全</th>
-              <th style={{ padding: '6px', textAlign: 'center', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>健康度</th>
-              <th style={{ padding: '6px', textAlign: 'center', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>建议行动</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>物料</th>
+              <th style={{ padding: '6px', textAlign: 'right', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>可用</th>
+              <th style={{ padding: '6px', textAlign: 'right', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>已采未到</th>
+              <th style={{ padding: '6px', textAlign: 'right', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>安全</th>
+              <th style={{ padding: '6px', textAlign: 'center', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>健康度</th>
+              <th style={{ padding: '6px', textAlign: 'center', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>建议行动</th>
             </tr>
           </thead>
           <tbody>
@@ -144,10 +144,10 @@ export default function InventoryHealth({ refreshTrigger }) {
               const adjustedHealthColor = getInventoryHealthColor(adjustedHealthRatio);
               
               return (
-                <tr key={item.inventory_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <tr key={item.inventory_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                   <td style={{ padding: '6px' }}>
-                    <div style={{ color: '#e2e8f0', fontSize: '11px' }}>{item.material_name}</div>
-                    <div style={{ color: '#64748b', fontSize: '9px' }}>{item.material_id}</div>
+                    <div style={{ color: '#2c5282', fontSize: '11px' }}>{item.material_name}</div>
+                    <div style={{ color: '#8aa3c0', fontSize: '9px' }}>{item.material_id}</div>
                   </td>
                   <td style={{ padding: '6px', textAlign: 'right', color: healthColor, fontWeight: 'bold' }}>
                     {item.available_quantity.toFixed(0)}
@@ -158,15 +158,15 @@ export default function InventoryHealth({ refreshTrigger }) {
                         {item.in_transit_quantity.toFixed(0)}
                       </span>
                     ) : (
-                      <span style={{ color: '#475569' }}>-</span>
+                      <span style={{ color: '#8aa3c0' }}>-</span>
                     )}
                   </td>
-                  <td style={{ padding: '6px', textAlign: 'right', color: '#94a3b8' }}>
+                  <td style={{ padding: '6px', textAlign: 'right', color: '#6b8cae' }}>
                     {item.safety_stock_level.toFixed(0)}
                   </td>
                   <td style={{ padding: '6px', textAlign: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                      <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ width: '40px', height: '4px', background: 'rgba(0,0,0,0.06)', borderRadius: '2px', overflow: 'hidden' }}>
                         <div
                           style={{
                             height: '100%',
@@ -183,7 +183,7 @@ export default function InventoryHealth({ refreshTrigger }) {
                   </td>
                   <td style={{ padding: '6px', textAlign: 'center' }}>
                     {adjustedHealthRatio > 70 ? (
-                      <span style={{ color: '#64748b' }}>-</span>
+                      <span style={{ color: '#8aa3c0' }}>-</span>
                     ) : (
                       <Button
                         type="primary"
@@ -208,7 +208,7 @@ export default function InventoryHealth({ refreshTrigger }) {
             
             {alerts.length === 0 && (
               <tr>
-                <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#8aa3c0' }}>
                   ✓ 所有物料库存充足
                 </td>
               </tr>
@@ -236,39 +236,39 @@ export default function InventoryHealth({ refreshTrigger }) {
         {loadingSuppliers ? (
           <div style={{ textAlign: 'center', padding: '40px' }}>
             <Spin size="large" />
-            <div style={{ marginTop: '16px', color: '#64748b' }}>正在获取推荐供应商...</div>
+            <div style={{ marginTop: '16px', color: '#8aa3c0' }}>正在获取推荐供应商...</div>
           </div>
         ) : selectedMaterial && (
           <div style={{ padding: '16px 0' }}>
             {/* 物料信息 */}
-            <div style={{ marginBottom: '24px', padding: '16px', background: '#1e293b', borderRadius: '8px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#e2e8f0', marginBottom: '8px' }}>
+            <div style={{ marginBottom: '24px', padding: '16px', background: '#f0f7ff', borderRadius: '8px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#2c5282', marginBottom: '8px' }}>
                 {selectedMaterial.material_name}
               </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>
+              <div style={{ fontSize: '12px', color: '#6b8cae', marginBottom: '4px' }}>
                 物料ID: {selectedMaterial.material_id}
               </div>
               <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>当前可用</div>
+                  <div style={{ fontSize: '11px', color: '#8aa3c0' }}>当前可用</div>
                   <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ef4444' }}>
                     {selectedMaterial.available_quantity.toFixed(0)}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>已采未到</div>
+                  <div style={{ fontSize: '11px', color: '#8aa3c0' }}>已采未到</div>
                   <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#3b82f6' }}>
                     {selectedMaterial.in_transit_quantity > 0 ? selectedMaterial.in_transit_quantity.toFixed(0) : '-'}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>安全库存</div>
+                  <div style={{ fontSize: '11px', color: '#8aa3c0' }}>安全库存</div>
                   <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>
                     {selectedMaterial.safety_stock_level.toFixed(0)}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>缺口</div>
+                  <div style={{ fontSize: '11px', color: '#8aa3c0' }}>缺口</div>
                   <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#f59e0b' }}>
                     {Math.max(0, selectedMaterial.safety_stock_level - selectedMaterial.available_quantity).toFixed(0)}
                   </div>
@@ -278,7 +278,7 @@ export default function InventoryHealth({ refreshTrigger }) {
             
             {/* 采购数量 */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>采购数量</div>
+              <div style={{ fontSize: '12px', color: '#6b8cae', marginBottom: '8px' }}>采购数量</div>
               <InputNumber
                 value={purchaseQuantity}
                 onChange={setPurchaseQuantity}
@@ -291,7 +291,7 @@ export default function InventoryHealth({ refreshTrigger }) {
             
             {/* 推荐供应商 */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>推荐供应商</div>
+              <div style={{ fontSize: '12px', color: '#6b8cae', marginBottom: '8px' }}>推荐供应商</div>
               <Select
                 value={selectedSupplier?.supplier_id}
                 onChange={(value) => {
@@ -316,32 +316,32 @@ export default function InventoryHealth({ refreshTrigger }) {
             
             {/* 选中供应商详情 */}
             {selectedSupplier && (
-              <div style={{ padding: '12px', background: '#1e293b', borderRadius: '6px', fontSize: '12px' }}>
+              <div style={{ padding: '12px', background: '#f0f7ff', borderRadius: '6px', fontSize: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <div>
-                    <span style={{ color: '#64748b' }}>单价: </span>
-                    <span style={{ color: '#e2e8f0' }}>¥{selectedSupplier.unit_price}</span>
+                    <span style={{ color: '#8aa3c0' }}>单价: </span>
+                    <span style={{ color: '#2c5282' }}>¥{selectedSupplier.unit_price}</span>
                   </div>
                   <div>
-                    <span style={{ color: '#64748b' }}>交期: </span>
-                    <span style={{ color: '#e2e8f0' }}>{selectedSupplier.lead_time_days}天</span>
+                    <span style={{ color: '#8aa3c0' }}>交期: </span>
+                    <span style={{ color: '#2c5282' }}>{selectedSupplier.lead_time_days}天</span>
                   </div>
                   <div>
-                    <span style={{ color: '#64748b' }}>预计金额: </span>
+                    <span style={{ color: '#8aa3c0' }}>预计金额: </span>
                     <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>
                       ¥{(purchaseQuantity * selectedSupplier.unit_price).toFixed(2)}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: '#64748b' }}>预计到货: </span>
-                    <span style={{ color: '#e2e8f0' }}>{selectedSupplier.expected_delivery_date}</span>
+                    <span style={{ color: '#8aa3c0' }}>预计到货: </span>
+                    <span style={{ color: '#2c5282' }}>{selectedSupplier.expected_delivery_date}</span>
                   </div>
                 </div>
               </div>
             )}
             
             {recommendedSuppliers.length === 0 && !loadingSuppliers && (
-              <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+              <div style={{ textAlign: 'center', padding: '20px', color: '#8aa3c0' }}>
                 没有找到可用供应商
               </div>
             )}

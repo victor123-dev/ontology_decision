@@ -61,8 +61,8 @@ export default function RiskList({ refreshTrigger }) {
           onChange={e => setFilterLevel(e.target.value)}
           style={{
             padding: '4px 8px', fontSize: '11px', borderRadius: '4px',
-            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#cbd5e1'
+            background: 'rgba(24,144,255,0.04)', border: '1px solid rgba(24,144,255,0.12)',
+            color: '#4a6fa5'
           }}
         >
           <option value="全部等级">全部等级</option>
@@ -77,8 +77,8 @@ export default function RiskList({ refreshTrigger }) {
           onChange={e => setFilterCategory(e.target.value)}
           style={{
             padding: '4px 8px', fontSize: '11px', borderRadius: '4px',
-            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#cbd5e1'
+            background: 'rgba(24,144,255,0.04)', border: '1px solid rgba(24,144,255,0.12)',
+            color: '#4a6fa5'
           }}
         >
           <option value="全部类别">全部类别</option>
@@ -90,7 +90,7 @@ export default function RiskList({ refreshTrigger }) {
           <option value="运营风险">运营风险</option>
         </select>
 
-        <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#64748b' }}>
+        <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#8aa3c0' }}>
           共 {filteredRisks.length} 条
         </span>
       </div>
@@ -100,22 +100,22 @@ export default function RiskList({ refreshTrigger }) {
         <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(59,130,246,0.15)' }}>
-              <th style={{ padding: '8px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>等级</th>
-              <th style={{ padding: '8px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>标题</th>
-              <th style={{ padding: '8px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>类别</th>
-              <th style={{ padding: '8px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>供应商</th>
-              <th style={{ padding: '8px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>状态</th>
-              <th style={{ padding: '8px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>检测时间</th>
-              <th style={{ padding: '8px', textAlign: 'center', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>操作</th>
+              <th style={{ padding: '8px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>等级</th>
+              <th style={{ padding: '8px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>标题</th>
+              <th style={{ padding: '8px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>类别</th>
+              <th style={{ padding: '8px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>供应商</th>
+              <th style={{ padding: '8px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>状态</th>
+              <th style={{ padding: '8px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>检测时间</th>
+              <th style={{ padding: '8px', textAlign: 'center', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>操作</th>
             </tr>
           </thead>
           <tbody>
             {filteredRisks.map(risk => (
               <React.Fragment key={risk.risk_id}>
                 <tr
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}
+                  style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', cursor: 'pointer' }}
                   onClick={() => setExpandedRisk(expandedRisk === risk.risk_id ? null : risk.risk_id)}
-                  onMouseOver={e => e.currentTarget.style.background = 'rgba(59,130,246,0.05)'}
+                  onMouseOver={e => e.currentTarget.style.background = 'rgba(24,144,255,0.06)'}
                   onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <td style={{ padding: '8px' }}>
@@ -126,15 +126,15 @@ export default function RiskList({ refreshTrigger }) {
                       {risk.risk_level.toUpperCase()}
                     </span>
                   </td>
-                  <td style={{ padding: '8px', color: '#e2e8f0', maxWidth: '200px' }}>
+                  <td style={{ padding: '8px', color: '#2c5282', maxWidth: '200px' }}>
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={risk.title}>
                       {risk.title}
                     </div>
                   </td>
-                  <td style={{ padding: '8px', color: '#cbd5e1' }}>
+                  <td style={{ padding: '8px', color: '#4a6fa5' }}>
                     {formatRiskCategory(risk.risk_category)}
                   </td>
-                  <td style={{ padding: '8px', color: '#cbd5e1' }}>
+                  <td style={{ padding: '8px', color: '#4a6fa5' }}>
                     {risk.supplier_name || '-'}
                   </td>
                   <td style={{ padding: '8px' }}>
@@ -145,14 +145,14 @@ export default function RiskList({ refreshTrigger }) {
                       {formatRiskStatus(risk.status)}
                     </span>
                   </td>
-                  <td style={{ padding: '8px', color: '#94a3b8', fontSize: '10px' }}>
+                  <td style={{ padding: '8px', color: '#6b8cae', fontSize: '10px' }}>
                     {formatDate(risk.detected_at)}
                   </td>
                   <td style={{ padding: '8px', textAlign: 'center' }}>
                     <button
                       style={{
                         padding: '2px 8px', fontSize: '10px', borderRadius: '4px',
-                        background: 'rgba(59,130,246,0.1)', color: '#60a5fa',
+                        background: 'rgba(24,144,255,0.1)', color: '#1890ff',
                         border: '1px solid rgba(59,130,246,0.3)'
                       }}
                       onClick={e => {
@@ -167,25 +167,25 @@ export default function RiskList({ refreshTrigger }) {
                 
                 {/* 展开详情 */}
                 {expandedRisk === risk.risk_id && (
-                  <tr style={{ background: 'rgba(59,130,246,0.03)' }}>
+                  <tr style={{ background: 'rgba(24,144,255,0.04)' }}>
                     <td colSpan={7} style={{ padding: '12px' }}>
-                      <div style={{ fontSize: '11px', color: '#cbd5e1' }}>
+                      <div style={{ fontSize: '11px', color: '#4a6fa5' }}>
                         <div style={{ marginBottom: '8px' }}>
-                          <strong style={{ color: '#94a3b8' }}>描述:</strong>
+                          <strong style={{ color: '#6b8cae' }}>描述:</strong>
                           <p style={{ margin: '4px 0 0 0', lineHeight: '1.6' }}>{risk.description}</p>
                         </div>
                         
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '8px' }}>
                           <div>
-                            <strong style={{ color: '#94a3b8' }}>影响范围:</strong>
+                            <strong style={{ color: '#6b8cae' }}>影响范围:</strong>
                             <span style={{ marginLeft: '4px' }}>{formatImpactScope(risk.impact_scope)}</span>
                           </div>
                           <div>
-                            <strong style={{ color: '#94a3b8' }}>预估影响天数:</strong>
+                            <strong style={{ color: '#6b8cae' }}>预估影响天数:</strong>
                             <span style={{ marginLeft: '4px' }}>{risk.estimated_impact_days} 天</span>
                           </div>
                           <div>
-                            <strong style={{ color: '#94a3b8' }}>置信度:</strong>
+                            <strong style={{ color: '#6b8cae' }}>置信度:</strong>
                             <span style={{ marginLeft: '4px', color: risk.confidence_score >= 0.8 ? '#10b981' : risk.confidence_score >= 0.6 ? '#f59e0b' : '#ef4444' }}>
                               {(risk.confidence_score * 100).toFixed(0)}%
                             </span>
@@ -194,14 +194,14 @@ export default function RiskList({ refreshTrigger }) {
 
                         {risk.affected_suppliers && risk.affected_suppliers.length > 0 && (
                           <div>
-                            <strong style={{ color: '#94a3b8' }}>关联供应商 ({risk.affected_suppliers.length}):</strong>
+                            <strong style={{ color: '#6b8cae' }}>关联供应商 ({risk.affected_suppliers.length}):</strong>
                             <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                               {risk.affected_suppliers.map((supplier, idx) => (
                                 <span
                                   key={idx}
                                   style={{
                                     padding: '2px 8px', borderRadius: '4px', fontSize: '10px',
-                                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)'
+                                    background: 'rgba(24,144,255,0.04)', border: '1px solid rgba(24,144,255,0.12)'
                                   }}
                                 >
                                   {supplier.supplier_name} 
@@ -222,7 +222,7 @@ export default function RiskList({ refreshTrigger }) {
             
             {filteredRisks.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#8aa3c0' }}>
                   暂无风险数据
                 </td>
               </tr>

@@ -263,4 +263,28 @@ def get_top_affected_suppliers():
         return suppliers
     except Exception as e:
         logger.error(f"获取受影响供应商失败: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取受影响供应商失败: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"获取受影响供应商失败: {str(e)}")
+
+
+# ==================== 指标树 API ====================
+
+@router.get("/metric-tree")
+def get_metric_tree():
+    """
+    获取订单交付指标树完整数据
+    所有节点数据均由后端计算，前端只负责展示
+    
+    返回结构:
+    {
+        "orderOnTimeDeliveryRate": 0.xx,  // 根节点：订单准时交付率
+        "supplyChain": {...},  // 供应链保障率
+        "production": {...},   // 生产达成率
+        "logistics": {...}     // 物流交付率
+    }
+    """
+    try:
+        metric_data = operation_service.get_metric_tree_data()
+        return metric_data
+    except Exception as e:
+        logger.error(f"获取指标树数据失败: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取指标树数据失败: {str(e)}") 

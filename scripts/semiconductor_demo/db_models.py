@@ -638,7 +638,7 @@ class ExternalSupplyChainRisk(Base):
     material_id = Column(String(255), ForeignKey("material.material_id"), nullable=True)  # 关联物料
     
     # 风险分类
-    risk_category = Column(String(255), nullable=False)  # 风险类别：自然灾害，政治事件，财务风险，质量风险，法律风险，运营风险
+    risk_category = Column(String(255), nullable=False)  # 风险类别：自然灾害、物流延期、原材料供应短缺、原材料价格波动、政治事件、财务风险、质量风险、法律风险、运营风险
     risk_level = Column(String(255), nullable=False)  # 风险等级： 严重，高，中，低
     
     # 风险详情
@@ -658,7 +658,7 @@ class ExternalSupplyChainRisk(Base):
     detected_at = Column(DateTime, default=datetime.utcnow)  # 检测时间
     
     # 处理状态
-    status = Column(String(255), default="new")  # 状态：新发现，分析中，缓解中，已解决，已忽略
+    status = Column(String(255), default="new")  # 状态：新发现，待处理，分析中，缓解中，已解决，已忽略
     assigned_to = Column(String(255), nullable=True)  # 负责人
     mitigation_plan = Column(Text, nullable=True)  # 缓解计划
     resolved_at = Column(DateTime, nullable=True)  # 解决时间

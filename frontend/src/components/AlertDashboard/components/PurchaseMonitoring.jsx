@@ -23,9 +23,9 @@ export default function PurchaseMonitoring({ refreshTrigger }) {
           onClick={() => setActiveTab('delayed')}
           style={{
             padding: '4px 12px', fontSize: '11px', borderRadius: '4px',
-            background: activeTab === 'delayed' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'delayed' ? '#ef4444' : '#94a3b8',
-            border: `1px solid ${activeTab === 'delayed' ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.1)'}`
+            background: activeTab === 'delayed' ? 'rgba(239,68,68,0.1)' : 'rgba(24,144,255,0.04)',
+            color: activeTab === 'delayed' ? '#ef4444' : '#4a6fa5',
+            border: `1px solid ${activeTab === 'delayed' ? 'rgba(239,68,68,0.3)' : 'rgba(24,144,255,0.12)'}`
           }}
         >
           延迟订单 ({delayedOrders.length})
@@ -34,9 +34,9 @@ export default function PurchaseMonitoring({ refreshTrigger }) {
           onClick={() => setActiveTab('performance')}
           style={{
             padding: '4px 12px', fontSize: '11px', borderRadius: '4px',
-            background: activeTab === 'performance' ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'performance' ? '#3b82f6' : '#94a3b8',
-            border: `1px solid ${activeTab === 'performance' ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.1)'}`
+            background: activeTab === 'performance' ? 'rgba(59,130,246,0.1)' : 'rgba(24,144,255,0.04)',
+            color: activeTab === 'performance' ? '#3b82f6' : '#4a6fa5',
+            border: `1px solid ${activeTab === 'performance' ? 'rgba(59,130,246,0.3)' : 'rgba(24,144,255,0.12)'}`
           }}
         >
           供应商表现
@@ -57,26 +57,26 @@ export default function PurchaseMonitoring({ refreshTrigger }) {
               }} />
             </div>
           ) : delayedOrders.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
+            <div style={{ padding: '32px', textAlign: 'center', color: '#8aa3c0', fontSize: '12px' }}>
               ✓ 所有采购订单均按时交付
             </div>
           ) : (
             <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(239,68,68,0.15)' }}>
-                  <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>PO号</th>
-                  <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>供应商</th>
-                  <th style={{ padding: '6px', textAlign: 'right', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>金额</th>
-                  <th style={{ padding: '6px', textAlign: 'center', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>延迟天数</th>
-                  <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>期望交付</th>
+                  <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>PO号</th>
+                  <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>供应商</th>
+                  <th style={{ padding: '6px', textAlign: 'right', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>金额</th>
+                  <th style={{ padding: '6px', textAlign: 'center', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>延迟天数</th>
+                  <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>期望交付</th>
                 </tr>
               </thead>
               <tbody>
                 {delayedOrders.map(order => (
-                  <tr key={order.po_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '6px', color: '#60a5fa', fontSize: '10px' }}>{order.po_id}</td>
-                    <td style={{ padding: '6px', color: '#cbd5e1' }}>{order.supplier_name}</td>
-                    <td style={{ padding: '6px', color: '#e2e8f0', textAlign: 'right' }}>{formatCurrency(order.total_amount)}</td>
+                  <tr key={order.po_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                    <td style={{ padding: '6px', color: '#1890ff', fontSize: '10px' }}>{order.po_id}</td>
+                    <td style={{ padding: '6px', color: '#2c5282' }}>{order.supplier_name}</td>
+                    <td style={{ padding: '6px', color: '#1a3a5c', textAlign: 'right' }}>{formatCurrency(order.total_amount)}</td>
                     <td style={{ padding: '6px', textAlign: 'center' }}>
                       <span style={{
                         padding: '2px 6px', borderRadius: '4px', fontSize: '10px',
@@ -85,7 +85,7 @@ export default function PurchaseMonitoring({ refreshTrigger }) {
                         {order.delay_days}天
                       </span>
                     </td>
-                    <td style={{ padding: '6px', color: '#94a3b8', fontSize: '10px' }}>{formatDate(order.expected_delivery_date)}</td>
+                    <td style={{ padding: '6px', color: '#8aa3c0', fontSize: '10px' }}>{formatDate(order.expected_delivery_date)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -114,22 +114,22 @@ export default function PurchaseMonitoring({ refreshTrigger }) {
                   key={supplier.supplier_id}
                   style={{
                     padding: '10px', borderRadius: '6px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.06)'
+                    background: 'rgba(240,247,255,0.8)',
+                    border: '1px solid rgba(24,144,255,0.12)'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{
                         width: '20px', height: '20px', borderRadius: '50%',
-                        background: idx < 3 ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                        color: idx < 3 ? '#60a5fa' : '#94a3b8',
+                        background: idx < 3 ? 'rgba(59,130,246,0.1)' : 'rgba(24,144,255,0.06)',
+                        color: idx < 3 ? '#1890ff' : '#6b8cae',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '10px', fontWeight: 'bold'
                       }}>
                         {idx + 1}
                       </span>
-                      <span style={{ color: '#e2e8f0', fontSize: '12px' }}>{supplier.supplier_name}</span>
+                      <span style={{ color: '#1a3a5c', fontSize: '12px' }}>{supplier.supplier_name}</span>
                     </div>
                     <span style={{
                       padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
@@ -143,7 +143,7 @@ export default function PurchaseMonitoring({ refreshTrigger }) {
                   </div>
                   
                   {/* 进度条 */}
-                  <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ height: '4px', background: 'rgba(24,144,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
                     <div
                       style={{
                         height: '100%',
@@ -156,7 +156,7 @@ export default function PurchaseMonitoring({ refreshTrigger }) {
                     />
                   </div>
                   
-                  <div style={{ marginTop: '4px', fontSize: '10px', color: '#64748b' }}>
+                  <div style={{ marginTop: '4px', fontSize: '10px', color: '#8aa3c0' }}>
                     总订单: {supplier.total_orders} | 准时: {supplier.on_time_count}
                   </div>
                 </div>

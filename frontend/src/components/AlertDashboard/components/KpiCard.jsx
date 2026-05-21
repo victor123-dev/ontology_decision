@@ -21,7 +21,8 @@ function useCountUp(target, duration = 1500, delay = 0) { const [current, setCur
 
   return current; }
 
-export default function KpiCard({ title, value, unit, format = 'number', trend = 'flat', trendValue, icon, color = '#3b82f6', delay = 0, loading = false }) { 
+export default function KpiCard({ title, value, unit, format = 'number', trend = 'flat', trendValue, icon, color = '#3b82f6', delay = 0, loading = false, size = 'normal' }) {
+  const isCompact = size === 'compact'; 
   // 使用数字跳动动画,但保持高度固定避免布局抖动
   const animatedValue = useCountUp(value || 0, 1500, delay);
 
@@ -30,21 +31,21 @@ export default function KpiCard({ title, value, unit, format = 'number', trend =
     return (
       <div
         style={{
-          background: '#0f1d35',
-          borderRadius: '8px',
-          border: '1px solid rgba(59,130,246,0.12)',
-          padding: '8px 12px',
+          background: '#ffffff',
+          borderRadius: isCompact ? '6px' : '8px',
+          border: '1px solid rgba(59,130,246,0.15)',
+          padding: isCompact ? '4px 8px' : '8px 12px',
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
           height: '100%',
           borderTop: `2px solid ${color}`,
-          boxShadow: '0 0 20px rgba(59,130,246,0.15), 0 4px 16px rgba(0,0,0,0.4)'
+          boxShadow: '0 0 20px rgba(59,130,246,0.08), 0 4px 16px rgba(0,0,0,0.06)'
         }}
       >
         {/* 顶部：标题 + 图标 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 500, color: '#94a3b8', letterSpacing: '0.05em', lineHeight: '1.2' }}>{title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCompact ? '2px' : '2px' }}>
+          <span style={{ fontSize: isCompact ? '9px' : '11px', fontWeight: 500, color: '#6b8cae', letterSpacing: '0.05em', lineHeight: '1.2' }}>{title}</span>
           <div
-            style={{ width: '24px', height: '24px', borderRadius: '6px',
+            style={{ width: isCompact ? '20px' : '24px', height: isCompact ? '20px' : '24px', borderRadius: isCompact ? '5px' : '6px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0, background: `${color}20`, color }}
           >
@@ -53,10 +54,10 @@ export default function KpiCard({ title, value, unit, format = 'number', trend =
         </div>
 
         {/* 加载中动画 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '40px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: isCompact ? '30px' : '40px' }}>
           <div style={{
-            width: '24px',
-            height: '24px',
+            width: isCompact ? '18px' : '24px',
+            height: isCompact ? '18px' : '24px',
             border: `2px solid ${color}30`,
             borderTop: `2px solid ${color}`,
             borderRadius: '50%',
@@ -65,7 +66,7 @@ export default function KpiCard({ title, value, unit, format = 'number', trend =
         </div>
 
         {/* 趋势占位 */}
-        <div style={{ height: '17px' }} />
+        <div style={{ height: isCompact ? '12px' : '17px' }} />
       </div>
     );
   }
@@ -86,25 +87,25 @@ export default function KpiCard({ title, value, unit, format = 'number', trend =
   return (
     <div
       style={{
-        background: '#0f1d35',
-        borderRadius: '8px',
-        border: '1px solid rgba(59,130,246,0.12)',
-        padding: '8px 12px',
+        background: '#ffffff',
+        borderRadius: isCompact ? '6px' : '8px',
+        border: '1px solid rgba(59,130,246,0.15)',
+        padding: isCompact ? '4px 8px' : '8px 12px',
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         height: '100%',
         borderTop: `2px solid ${color}`,
-        boxShadow: '0 0 20px rgba(59,130,246,0.15), 0 4px 16px rgba(0,0,0,0.4)',
+        boxShadow: '0 0 20px rgba(59,130,246,0.08), 0 4px 16px rgba(0,0,0,0.06)',
         transition: 'transform 0.2s',
         cursor: 'pointer'
       }}
-      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+      onMouseOver={e => e.currentTarget.style.transform = isCompact ? 'none' : 'scale(1.02)'}
       onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
     >
       {/* 顶部：标题 + 图标 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 500, color: '#94a3b8', letterSpacing: '0.05em', lineHeight: '1.2' }}>{title}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCompact ? '2px' : '2px' }}>
+        <span style={{ fontSize: isCompact ? '9px' : '11px', fontWeight: 500, color: '#6b8cae', letterSpacing: '0.05em', lineHeight: '1.2' }}>{title}</span>
         <div
-          style={{ width: '24px', height: '24px', borderRadius: '6px',
+          style={{ width: isCompact ? '20px' : '24px', height: isCompact ? '20px' : '24px', borderRadius: isCompact ? '5px' : '6px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0, background: `${color}20`, color }}
         >
@@ -112,29 +113,29 @@ export default function KpiCard({ title, value, unit, format = 'number', trend =
         </div>
       </div>
 
-      {/* 数值 - 保持与loading状态相同的高度40px */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '40px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+      {/* 数值 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: isCompact ? '30px' : '40px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: isCompact ? '4px' : '6px' }}>
           <span
-            style={{ color, fontSize: '20px', fontWeight: 'bold',
+            style={{ color, fontSize: isCompact ? '16px' : '20px', fontWeight: 'bold',
               fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
               letterSpacing: '-0.02em' }}
           >
             {formatValue(animatedValue)}
           </span>
           {unit && (
-            <span style={{ fontSize: '12px', color: '#94a3b8' }}>{unit}</span>
+            <span style={{ fontSize: isCompact ? '10px' : '12px', color: '#6b8cae' }}>{unit}</span>
           )}
         </div>
       </div>
 
-      {/* 趋势 - 保持与loading状态相同的高度17px */}
-      <div style={{ height: '17px' }}>
+      {/* 趋势 */}
+      <div style={{ height: isCompact ? '12px' : '17px' }}>
         {trendValue && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <TrendIcon size={11} style={{ color: trendColor }} />
-            <span style={{ fontSize: '11px', color: trendColor }}>{trendValue}</span>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>较上月</span>
+            <TrendIcon size={isCompact ? 9 : 11} style={{ color: trendColor }} />
+            <span style={{ fontSize: isCompact ? '9px' : '11px', color: trendColor }}>{trendValue}</span>
+            <span style={{ fontSize: isCompact ? '9px' : '11px', color: '#8aa3c0' }}>较上月</span>
           </div>
         )}
       </div>

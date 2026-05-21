@@ -178,6 +178,27 @@ class DataSourceManager:
         finally:
             client.close()
     
+    def execute_truncate(self, data_source_id: int = None, data_source_name: str = None, table_name: str = None) -> bool:
+        """清空表中所有数据"""
+        if data_source_name:
+            data_source = self.get_data_source_by_name(data_source_name)
+            if not data_source:
+                raise ValueError(f"DataSource not found: {data_source_name}")
+            data_source_id = data_source.id
+        
+        client = self.get_client(data_source_id=data_source_id)
+        try:
+            # 使用DELETE语句清空表（SQLite不支持TRUNCATE）
+            query = f"DELETE FROM {table_name}"
+            logger.info(f"Executing truncate: {query}")
+            client.execute_query(query)
+            return True
+        except Exception as e:
+            logger.error(f"Execute truncate failed: {str(e)}")
+            return False
+        finally:
+            client.close()
+    
     def execute_upsert(self, data_source_id: int = None, data_source_name: str = None, table_name: str = None, data: Dict[str, Any] = None, primary_key: str = None) -> bool:
         """执行UPSERT操作（存在则更新，不存在则插入）"""
         if data_source_name:

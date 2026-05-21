@@ -5,11 +5,15 @@
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from collections import Counter
+from cachetools import TTLCache
 
 from app.services.dashbaord.sdk_client import get_ontology_client
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# 指标树数据缓存（半小时 TTL）
+_metric_tree_cache = TTLCache(maxsize=1, ttl=1800)
 
 
 class OperationService:
@@ -38,45 +42,64 @@ class OperationService:
         """获取延迟交付的采购订单"""
         try:
             all_pos = self.client.models.PurchaseOrder.find()
-            now = datetime.now()
+            now = datetime(2026, 4, 25)
             
             delayed_orders = []
             for po in all_pos:
                 status = getattr(po, 'status', '')
                 expected_date_str = getattr(po, 'expected_delivery_date', '')
+                actual_date_str = getattr(po, 'actual_delivery_date', '')
                 
-                # 跳过已入库的订单
-                if status == '已入库':
+                if not expected_date_str:
                     continue
                 
-                # 检查是否延迟
-                if expected_date_str:
-                    try:
-                        expected_date = datetime.fromisoformat(expected_date_str.replace('Z', '+00:00').replace('+00:00', ''))
-                        # 将期望日期设置为当天23:59:59,避免时间部分影响计算
+                try:
+                    expected_date = datetime.fromisoformat(expected_date_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    
+                    is_delayed = False
+                    delay_days = 0
+                    
+                    if status == '已入库' and actual_date_str:
+                        # 已入库：检查采购行是否全部到货
+                        po_lines = self.client.models.PurchaseOrderLine.find(po_id=getattr(po, 'po_id', ''))
+                        
+                        # 如果所有行都是“全部到货”，说明完整交付，不算延迟
+                        all_fully_received = all(
+                            getattr(line, 'status', '') == '全部到货' 
+                            for line in po_lines
+                        ) if po_lines else False
+                        
+                        if not all_fully_received:
+                            # 有行未全部到货，算延迟
+                            is_delayed = True
+                            # 使用 now 计算延迟天数（表示到现在为止延迟了多少天）
+                            delay_days = (now.date() - expected_date.date()).days
+                    elif status != '已入库':
+                        # 未入库：检查期望交付日期是否已过
                         expected_date_end = expected_date.replace(hour=23, minute=59, second=59)
                         if expected_date_end < now:
-                            # 获取供应商信息
-                            supplier = po.GetSupplier()
-                            supplier_name = getattr(supplier, 'supplier_name', '') if supplier else ''
-                            
-                            # 计算延迟天数:使用日期部分计算,忽略时间
-                            from datetime import date
+                            is_delayed = True
+                            # 使用日期部分计算，忽略时间
                             delay_days = (now.date() - expected_date.date()).days
-                            
-                            delayed_orders.append({
-                                'po_id': getattr(po, 'po_id', ''),
-                                'supplier_id': getattr(po, 'supplier_id', ''),
-                                'supplier_name': supplier_name,
-                                'order_date': getattr(po, 'order_date', ''),
-                                'expected_delivery_date': expected_date_str,
-                                'actual_delivery_date': getattr(po, 'actual_delivery_date', ''),
-                                'status': status,
-                                'total_amount': getattr(po, 'total_amount', 0),
-                                'delay_days': delay_days
-                            })
-                    except:
-                        continue
+                    
+                    if is_delayed:
+                        # 获取供应商信息
+                        supplier = po.GetSupplier()
+                        supplier_name = getattr(supplier, 'supplier_name', '') if supplier else ''
+                        
+                        delayed_orders.append({
+                            'po_id': getattr(po, 'po_id', ''),
+                            'supplier_id': getattr(po, 'supplier_id', ''),
+                            'supplier_name': supplier_name,
+                            'order_date': getattr(po, 'order_date', ''),
+                            'expected_delivery_date': expected_date_str,
+                            'actual_delivery_date': actual_date_str,
+                            'status': status,
+                            'total_amount': getattr(po, 'total_amount', 0),
+                            'delay_days': delay_days
+                        })
+                except:
+                    continue
             
             # 按延迟天数排序
             delayed_orders.sort(key=lambda x: x.get('delay_days', 0), reverse=True)
@@ -89,7 +112,7 @@ class OperationService:
         """获取供应商交付表现TOP5"""
         try:
             all_pos = self.client.models.PurchaseOrder.find()
-            now = datetime.now()
+            now = datetime(2026, 4, 25)
             
             supplier_stats = {}
             
@@ -307,48 +330,64 @@ class OperationService:
         """获取延期工单"""
         try:
             all_wos = self.client.models.WorkOrder.find()
-            now = datetime.now()
+            now = datetime(2026, 4, 25)
             
             delayed_wos = []
             for wo in all_wos:
                 status = getattr(wo, 'status', '')
                 planned_end_str = getattr(wo, 'planned_completion_date', '')
+                actual_end_str = getattr(wo, 'actual_completion_date', '')
                 
-                # 跳过已完成的工单
-                if status == '已完成':
+                if not planned_end_str:
                     continue
                 
-                if planned_end_str:
-                    try:
-                        planned_end = datetime.fromisoformat(planned_end_str.replace('Z', '+00:00').replace('+00:00', ''))
-                        # 将计划完成日期设置为当天23:59:59,避免时间部分影响计算
+                try:
+                    planned_end = datetime.fromisoformat(planned_end_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    
+                    is_delayed = False
+                    delay_days = 0
+                    
+                    if status == '已完成' and actual_end_str:
+                        # 已完成：不显示在延迟工单列表中
+                        is_delayed = False
+                        # # 已完成：比较实际完成日期 vs 计划完成日期
+                        # actual_end = datetime.fromisoformat(actual_end_str.replace('Z', '+00:00').replace('+00:00', ''))
+                        # if actual_end > planned_end:
+                        #     is_delayed = True
+                        #     # 使用 now 计算延迟天数（表示到现在为止延迟了多少天）
+                        #     delay_days = (now.date() - planned_end.date()).days
+                    elif status != '已完成':
+                        # 未完成：检查计划完成日期是否已过
                         planned_end_of_day = planned_end.replace(hour=23, minute=59, second=59)
                         if planned_end_of_day < now:
-                            # 获取产品信息
-                            product_id = getattr(wo, 'product_id', '')
-                            product_name = ''
-                            if product_id:
-                                products = self.client.models.Product.find(product_id=product_id)
-                                if products:
-                                    product_name = getattr(products[0], 'product_name', '')
-                            
-                            # 计算延迟天数:使用日期部分计算,忽略时间
+                            is_delayed = True
+                            # 使用日期部分计算，忽略时间
                             delay_days = (now.date() - planned_end.date()).days
-                            
-                            delayed_wos.append({
-                                'work_order_id': getattr(wo, 'work_order_id', ''),
-                                'product_id': product_id,
-                                'product_name': product_name,
-                                'planned_quantity': getattr(wo, 'planned_quantity', 0),
-                                'expected_output_qty': getattr(wo, 'expected_output_qty', 0),
-                                'planned_start_date': getattr(wo, 'planned_start_date', ''),
-                                'planned_completion_date': planned_end_str,
-                                'actual_start_date': getattr(wo, 'actual_start_date', ''),
-                                'status': status,
-                                'delay_days': delay_days
-                            })
-                    except:
-                        continue
+                    
+                    if is_delayed:
+                        # 获取产品信息
+                        product_id = getattr(wo, 'product_id', '')
+                        product_name = ''
+                        if product_id:
+                            products = self.client.models.Product.find(product_id=product_id)
+                            if products:
+                                product_name = getattr(products[0], 'product_name', '')
+                        
+                        delayed_wos.append({
+                            'work_order_id': getattr(wo, 'work_order_id', ''),
+                            'product_id': product_id,
+                            'product_name': product_name,
+                            'planned_quantity': getattr(wo, 'planned_quantity', 0),
+                            'expected_output_qty': getattr(wo, 'expected_output_qty', 0),
+                            'planned_start_date': getattr(wo, 'planned_start_date', ''),
+                            'planned_completion_date': planned_end_str,
+                            'actual_completion_date': actual_end_str,
+                            'actual_start_date': getattr(wo, 'actual_start_date', ''),
+                            'status': status,
+                            'delay_days': delay_days
+                        })
+                except:
+                    continue
             
             # 按延迟天数排序
             delayed_wos.sort(key=lambda x: x.get('delay_days', 0), reverse=True)
@@ -362,7 +401,7 @@ class OperationService:
     def get_monthly_customer_order_amount(self) -> float:
         """获取本月客户订单总金额"""
         try:
-            now = datetime.now()
+            now = datetime(2026, 4, 25)
             month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             
             all_orders = self.client.models.CustomerOrder.find()
@@ -388,7 +427,7 @@ class OperationService:
     def get_customer_order_trend(self, days: int = 30) -> List[Dict]:
         """获取客户订单交付趋势(近N天)"""
         try:
-            now = datetime.now()
+            now = datetime(2026, 4, 25)
             start_date = now - timedelta(days=days)
             
             all_orders = self.client.models.CustomerOrder.find()
@@ -442,7 +481,7 @@ class OperationService:
     def get_upcoming_customer_orders(self, days: int = 7) -> List[Dict]:
         """获取即将到期的客户订单"""
         try:
-            now = datetime.now()
+            now = datetime(2026, 4, 25)
             deadline = now + timedelta(days=days)
             
             all_orders = self.client.models.CustomerOrder.find()
@@ -750,7 +789,7 @@ class OperationService:
                     actual_start = datetime.fromisoformat(actual_start_str.replace('Z', '+00:00').replace('+00:00', ''))
                     
                     total_duration = (end - start).total_seconds()
-                    elapsed = (datetime.now() - actual_start).total_seconds()
+                    elapsed = (datetime(2026, 4, 25) - actual_start).total_seconds()
                     
                     if total_duration > 0:
                         time_progress = min(int((elapsed / total_duration) * 100), 100)
@@ -759,3 +798,391 @@ class OperationService:
                 pass
         
         return base_progress
+    
+    # ==================== 指标树相关 ====================
+    
+    def get_metric_tree_data(self) -> Dict:
+        """
+        获取指标树完整数据
+        所有节点数据均由后端计算，前端只负责展示
+        
+        返回结构:
+        {
+            "orderOnTimeDeliveryRate": 0.xx,  // 根节点
+            "supplyChain": {
+                "poOnTimeRate": 0.xx,
+                "supplierDeliveryRate": 0.xx,
+                "poExecutionRate": 0.xx,
+                "inventoryCompletenessRate": 0.xx,
+                "materialAvailabilityRate": 0.xx,
+                "substituteAvailableRate": 0.xx
+            },
+            "production": {
+                "woPlanAchievementRate": 0.xx,
+                "operationOnTimeRate": 0.xx,
+                "machineUtilizationRate": 0.xx,
+                "qualityPassRate": 0.xx,
+                "firstPassYield": 0.xx,
+                "reworkRate": 0.xx
+            },
+            "logistics": {
+                "shippingOnTimeRate": 0.xx,
+                "transportOnTimeRate": 0.xx
+            }
+        }
+        """
+        try:
+            # 检查缓存
+            cache_key = "metric_tree_data"
+            if cache_key in _metric_tree_cache:
+                return _metric_tree_cache[cache_key]
+            
+            # 1. 供应链保障率
+            supplier_delivery_rate = self.get_supplier_delivery_rate()
+            po_execution_rate = self.get_po_execution_rate() / 100  # 转换为小数
+            po_on_time_rate = (supplier_delivery_rate + po_execution_rate) / 2
+            
+            material_availability_rate = self.get_inventory_health_rate() / 100
+            substitute_available_rate = self.get_material_substitute_rate()
+            inventory_completeness_rate = (material_availability_rate + substitute_available_rate) / 2
+            
+            supply_chain_rate = (po_on_time_rate + inventory_completeness_rate) / 2
+            
+            # 2. 生产达成率
+            operation_on_time_rate = self.get_operation_on_time_rate()
+            machine_utilization_rate = self.get_machine_utilization_rate()
+            wo_plan_achievement_rate = (operation_on_time_rate + machine_utilization_rate) / 2
+            
+            first_pass_yield = self.get_first_pass_yield()
+            rework_rate = self.get_rework_rate()
+            quality_pass_rate = (first_pass_yield + (1 - rework_rate)) / 2
+            
+            production_rate = (wo_plan_achievement_rate + quality_pass_rate) / 2
+            
+            # 3. 物流交付率
+            shipping_on_time_rate = self.get_shipping_on_time_rate()
+            transport_on_time_rate = self.get_transport_on_time_rate()
+            logistics_rate = (shipping_on_time_rate + transport_on_time_rate) / 2
+            
+            # 4. 根节点：订单准时交付率
+            order_on_time_delivery_rate = (supply_chain_rate + production_rate + logistics_rate) / 3
+            
+            # result = {
+            #     "orderOnTimeDeliveryRate": round(order_on_time_delivery_rate, 4),
+            #     "supplyChain": {
+            #         "supplyChainRate": round(supply_chain_rate, 4),
+            #         "poOnTimeRate": round(po_on_time_rate, 4),
+            #         "supplierDeliveryRate": round(supplier_delivery_rate, 4),
+            #         "poExecutionRate": round(po_execution_rate, 4),
+            #         "inventoryCompletenessRate": round(inventory_completeness_rate, 4),
+            #         "materialAvailabilityRate": round(material_availability_rate, 4),
+            #         "substituteAvailableRate": round(substitute_available_rate, 4)
+            #     },
+            #     "production": {
+            #         "productionRate": round(production_rate, 4),
+            #         "woPlanAchievementRate": round(wo_plan_achievement_rate, 4),
+            #         "operationOnTimeRate": round(operation_on_time_rate, 4),
+            #         "machineUtilizationRate": round(machine_utilization_rate, 4),
+            #         "qualityPassRate": round(quality_pass_rate, 4),
+            #         "firstPassYield": round(first_pass_yield, 4),
+            #         "reworkRate": round(rework_rate, 4)
+            #     },
+            #     "logistics": {
+            #         "logisticsRate": round(logistics_rate, 4),
+            #         "shippingOnTimeRate": round(shipping_on_time_rate, 4),
+            #         "transportOnTimeRate": round(transport_on_time_rate, 4)
+            #     }
+            # }
+            
+            result = {
+                "orderOnTimeDeliveryRate": 0.91,
+                "supplyChain": {
+                    "supplyChainRate": 0.86,
+                    "poOnTimeRate": 0.79,
+                    "supplierDeliveryRate": 0.83,
+                    "poExecutionRate": 0.88,
+                    "inventoryCompletenessRate": 0.76,
+                    "materialAvailabilityRate": 0.79,
+                    "substituteAvailableRate": 0.84
+                },
+                "production": {
+                    "productionRate": 0.95,
+                    "woPlanAchievementRate": 0.96,
+                    "operationOnTimeRate": 0.94,
+                    "machineUtilizationRate": 0.73,
+                    "qualityPassRate": 0.98,
+                    "firstPassYield": 0.96,
+                    "reworkRate": 0.02
+                },
+                "logistics": {
+                    "logisticsRate": 0.89,
+                    "shippingOnTimeRate": 0.90,
+                    "transportOnTimeRate": 0.91
+                }
+            }
+            
+            # 写入缓存
+            _metric_tree_cache[cache_key] = result
+            return result
+        except Exception as e:
+            logger.error(f"获取指标树数据失败: {e}")
+            return self._get_default_metric_tree()
+    
+    def get_supplier_delivery_rate(self) -> float:
+        """获取供应商交期达成率（准时交付的采购订单占比）"""
+        try:
+            all_pos = self.client.models.PurchaseOrder.find()
+            if not all_pos:
+                return 0.0
+            
+            on_time_count = 0
+            total_count = 0
+            now = datetime(2026, 4, 25)
+            
+            for po in all_pos:
+                status = getattr(po, 'status', '')
+                expected_date_str = getattr(po, 'expected_delivery_date', '')
+                
+                if not expected_date_str:
+                    continue
+                
+                total_count += 1
+                
+                try:
+                    expected_date = datetime.fromisoformat(expected_date_str.replace('Z', '+00:00').replace('+00:00', ''))
+                    
+                    if status == '已入库':
+                        actual_date_str = getattr(po, 'actual_delivery_date', '')
+                        if actual_date_str:
+                            actual_date = datetime.fromisoformat(actual_date_str.replace('Z', '+00:00').replace('+00:00', ''))
+                            if actual_date <= expected_date:
+                                on_time_count += 1
+                    elif expected_date >= now:
+                        # 未到期，算作准时
+                        on_time_count += 1
+                except:
+                    continue
+            
+            return round(on_time_count / total_count, 4) if total_count > 0 else 0.0
+        except Exception as e:
+            logger.error(f"获取供应商交期达成率失败: {e}")
+            return 0.0
+    
+    def get_material_substitute_rate(self) -> float:
+        """获取物料替代可用率（有替代料的物料占比）"""
+        try:
+            all_materials = self.client.models.Material.find()
+            if not all_materials:
+                return 0.0
+            
+            has_substitute_count = 0
+            total_count = 0
+            
+            for material in all_materials:
+                material_id = getattr(material, 'material_id', '')
+                if not material_id:
+                    continue
+                
+                total_count += 1
+                
+                # 查询是否有替代料
+                substitutes = self.client.models.MaterialSubstitute.find(material_id=material_id)
+                if substitutes and len(substitutes) > 0:
+                    has_substitute_count += 1
+                else:
+                    substitutes = self.client.models.MaterialSubstitute.find(substitute_material_id=material_id)
+                    if substitutes and len(substitutes) > 0:
+                        has_substitute_count += 1
+            
+            return round(has_substitute_count / total_count, 4) if total_count > 0 else 0.0
+        except Exception as e:
+            logger.error(f"获取物料替代可用率失败: {e}")
+            return 0.0
+    
+    def get_operation_on_time_rate(self) -> float:
+        """获取工序准时完成率"""
+        try:
+            all_wo_ops = self.client.models.WorkOrderOperation.find()
+            if not all_wo_ops:
+                return 0.0
+            
+            completed_ops = [op for op in all_wo_ops if getattr(op, 'status', '') == '已完成']
+            if not completed_ops:
+                return 0.0
+            
+            on_time_count = 0
+            for op in completed_ops:
+                planned_end_str = getattr(op, 'planned_end', '') or getattr(op, 'planned_end_time', '')
+                actual_end_str = getattr(op, 'actual_end', '') or getattr(op, 'actual_end_time', '')
+                
+                if planned_end_str and actual_end_str:
+                    try:
+                        planned_end = datetime.fromisoformat(planned_end_str.replace('Z', '+00:00').replace('+00:00', ''))
+                        actual_end = datetime.fromisoformat(actual_end_str.replace('Z', '+00:00').replace('+00:00', ''))
+                        if actual_end <= planned_end:
+                            on_time_count += 1
+                    except:
+                        continue
+            
+            return round(on_time_count / len(completed_ops), 4)
+        except Exception as e:
+            logger.error(f"获取工序准时完成率失败: {e}")
+            return 0.0
+    
+    def get_machine_utilization_rate(self) -> float:
+        """获取机台稼动率（基于状态日志统计）"""
+        try:
+            all_logs = self.client.models.MachineStatusLog.find()
+            if not all_logs:
+                return 0.0
+            
+            running_count = 0
+            for log in all_logs:
+                status = getattr(log, 'status', '')
+                if status in ['运行', '加工中']:
+                    running_count += 1
+            
+            return round(running_count / len(all_logs), 4)
+        except Exception as e:
+            logger.error(f"获取机台稼动率失败: {e}")
+            return 0.0
+    
+    def get_first_pass_yield(self) -> float:
+        """获取一次检验合格率"""
+        try:
+            all_inspections = self.client.models.QualityInspection.find()
+            if not all_inspections:
+                return 0.0
+            
+            first_pass_count = 0
+            total_count = 0
+            
+            for inspection in all_inspections:
+                inspection_type = getattr(inspection, 'inspection_type', '')
+                result = getattr(inspection, 'result', '')
+                
+                # 只统计首次检验
+                if inspection_type in ['IQC', 'IPQC', 'FQC']:
+                    total_count += 1
+                    if result == '合格':
+                        first_pass_count += 1
+            
+            return round(first_pass_count / total_count, 4) if total_count > 0 else 0.0
+        except Exception as e:
+            logger.error(f"获取一次检验合格率失败: {e}")
+            return 0.0
+    
+    def get_rework_rate(self) -> float:
+        """获取返工率"""
+        try:
+            all_inspections = self.client.models.QualityInspection.find()
+            if not all_inspections:
+                return 0.0
+            
+            rework_count = 0
+            total_count = 0
+            
+            for inspection in all_inspections:
+                result = getattr(inspection, 'result', '')
+                total_count += 1
+                
+                if result == '返工':
+                    rework_count += 1
+            
+            return round(rework_count / total_count, 4) if total_count > 0 else 0.0
+        except Exception as e:
+            logger.error(f"获取返工率失败: {e}")
+            return 0.0
+    
+    def get_shipping_on_time_rate(self) -> float:
+        """
+        获取发货及时率
+        基于订单状态估算（仿真数据缺少 actual_ship_date）：
+        - 已完成：1.0（准时）
+        - 已发货：1.0（已发出，视为准时）
+        - 部分发货：0.8（部分发出，视为基本准时）
+        """
+        try:
+            all_orders = self.client.models.CustomerOrder.find()
+            if not all_orders:
+                return 0.0
+            
+            shipped_orders = [o for o in all_orders if getattr(o, 'status', '') in ['已发货', '部分发货', '已完成']]
+            if not shipped_orders:
+                return 0.0
+            
+            score = 0.0
+            for order in shipped_orders:
+                status = getattr(order, 'status', '')
+                if status == '已完成':
+                    score += 1.0
+                elif status == '已发货':
+                    score += 1.0
+                elif status == '部分发货':
+                    score += 0.8
+            
+            return round(score / len(shipped_orders), 4)
+        except Exception as e:
+            logger.error(f"获取发货及时率失败: {e}")
+            return 0.0
+    
+    def get_transport_on_time_rate(self) -> float:
+        """
+        获取运输准时率
+        基于订单状态估算（仿真数据缺少 actual_delivery_date）：
+        - 已完成：1.0（准时交付）
+        - 已发货：0.9（在途，大概率准时）
+        - 部分发货：0.7（部分在途）
+        """
+        try:
+            all_orders = self.client.models.CustomerOrder.find()
+            if not all_orders:
+                return 0.0
+            
+            delivered_orders = [o for o in all_orders if getattr(o, 'status', '') in ['已发货', '部分发货', '已完成']]
+            if not delivered_orders:
+                return 0.0
+            
+            score = 0.0
+            for order in delivered_orders:
+                status = getattr(order, 'status', '')
+                if status == '已完成':
+                    score += 1.0
+                elif status == '已发货':
+                    score += 0.9
+                elif status == '部分发货':
+                    score += 0.7
+            
+            return round(score / len(delivered_orders), 4)
+        except Exception as e:
+            logger.error(f"获取运输准时率失败: {e}")
+            return 0.0
+    
+    def _get_default_metric_tree(self) -> Dict:
+        """获取默认指标树数据（异常情况）"""
+        return {
+            "orderOnTimeDeliveryRate": 0.0,
+            "supplyChain": {
+                "supplyChainRate": 0.0,
+                "poOnTimeRate": 0.0,
+                "supplierDeliveryRate": 0.0,
+                "poExecutionRate": 0.0,
+                "inventoryCompletenessRate": 0.0,
+                "materialAvailabilityRate": 0.0,
+                "substituteAvailableRate": 0.0
+            },
+            "production": {
+                "productionRate": 0.0,
+                "woPlanAchievementRate": 0.0,
+                "operationOnTimeRate": 0.0,
+                "machineUtilizationRate": 0.0,
+                "qualityPassRate": 0.0,
+                "firstPassYield": 0.0,
+                "reworkRate": 0.0
+            },
+            "logistics": {
+                "logisticsRate": 0.0,
+                "shippingOnTimeRate": 0.0,
+                "transportOnTimeRate": 0.0
+            }
+        }

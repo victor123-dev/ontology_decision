@@ -31,7 +31,7 @@ export default function ProductionTracking({ refreshTrigger }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ marginBottom: '8px', fontSize: '11px', color: '#64748b' }}>
+      <div style={{ marginBottom: '8px', fontSize: '11px', color: '#8aa3c0' }}>
         共 {delayedOrders.length} 个工单延期
       </div>
       
@@ -39,22 +39,22 @@ export default function ProductionTracking({ refreshTrigger }) {
         <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(239,68,68,0.15)' }}>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>工单号</th>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>产品</th>
-              <th style={{ padding: '6px', textAlign: 'right', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>数量</th>
-              <th style={{ padding: '6px', textAlign: 'center', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>延期</th>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>状态</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>工单号</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>产品</th>
+              <th style={{ padding: '6px', textAlign: 'right', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>数量</th>
+              <th style={{ padding: '6px', textAlign: 'center', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>延期</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>状态</th>
             </tr>
           </thead>
           <tbody>
             {delayedOrders.map(order => (
-              <tr key={order.work_order_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <td style={{ padding: '6px', color: '#60a5fa', fontSize: '10px' }}>{order.work_order_id}</td>
-                <td style={{ padding: '6px', color: '#e2e8f0' }}>
+              <tr key={order.work_order_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                <td style={{ padding: '6px', color: '#1890ff', fontSize: '10px' }}>{order.work_order_id}</td>
+                <td style={{ padding: '6px', color: '#2c5282' }}>
                   <div style={{ fontSize: '11px' }}>{order.product_name}</div>
-                  <div style={{ fontSize: '9px', color: '#64748b' }}>{order.product_id}</div>
+                  <div style={{ fontSize: '9px', color: '#8aa3c0' }}>{order.product_id}</div>
                 </td>
-                <td style={{ padding: '6px', textAlign: 'right', color: '#cbd5e1' }}>
+                <td style={{ padding: '6px', textAlign: 'right', color: '#4a6fa5' }}>
                   {order.planned_quantity.toFixed(0)}
                 </td>
                 <td style={{ padding: '6px', textAlign: 'center' }}>
@@ -78,7 +78,7 @@ export default function ProductionTracking({ refreshTrigger }) {
             
             {delayedOrders.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#8aa3c0' }}>
                   ✓ 所有工单按时进行中
                 </td>
               </tr>

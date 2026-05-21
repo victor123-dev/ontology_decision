@@ -40,14 +40,14 @@ export default function SalesOverview({ refreshTrigger }) {
           flex: 1, padding: '10px', borderRadius: '6px',
           background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)'
         }}>
-          <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>即将到期订单</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#60a5fa' }}>{upcomingOrders.length}</div>
+          <div style={{ fontSize: '10px', color: '#6b8cae', marginBottom: '4px' }}>即将到期订单</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>{upcomingOrders.length}</div>
         </div>
         <div style={{
           flex: 1, padding: '10px', borderRadius: '6px',
           background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)'
         }}>
-          <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>总金额</div>
+          <div style={{ fontSize: '10px', color: '#6b8cae', marginBottom: '4px' }}>总金额</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{formatCurrency(totalAmount)}</div>
         </div>
       </div>
@@ -57,12 +57,12 @@ export default function SalesOverview({ refreshTrigger }) {
         <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(59,130,246,0.15)' }}>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>订单号</th>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>客户</th>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>产品</th>
-              <th style={{ padding: '6px', textAlign: 'right', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>金额</th>
-              <th style={{ padding: '6px', textAlign: 'center', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>剩余天数</th>
-              <th style={{ padding: '6px', textAlign: 'left', color: '#94a3b8', fontWeight: 500, position: 'sticky', top: 0, background: '#0f172a' }}>要求交期</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>订单号</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>客户</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>产品</th>
+              <th style={{ padding: '6px', textAlign: 'right', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>金额</th>
+              <th style={{ padding: '6px', textAlign: 'center', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>剩余天数</th>
+              <th style={{ padding: '6px', textAlign: 'left', color: '#6b8cae', fontWeight: 500, position: 'sticky', top: 0, background: '#e8f4fc' }}>要求交期</th>
             </tr>
           </thead>
           <tbody>
@@ -71,13 +71,13 @@ export default function SalesOverview({ refreshTrigger }) {
               const urgencyColor = daysRemaining <= 2 ? '#ef4444' : daysRemaining <= 5 ? '#f59e0b' : '#3b82f6';
               
               return (
-                <tr key={order.order_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '6px', color: '#60a5fa', fontSize: '10px' }}>{order.order_id}</td>
-                  <td style={{ padding: '6px', color: '#cbd5e1' }}>
+                <tr key={order.order_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                  <td style={{ padding: '6px', color: '#1890ff', fontSize: '10px' }}>{order.order_id}</td>
+                  <td style={{ padding: '6px', color: '#4a6fa5' }}>
                     <div style={{ fontSize: '11px' }}>{order.customer_name}</div>
-                    <div style={{ fontSize: '9px', color: '#64748b' }}>{order.customer_po_number}</div>
+                    <div style={{ fontSize: '9px', color: '#8aa3c0' }}>{order.customer_po_number}</div>
                   </td>
-                  <td style={{ padding: '6px', color: '#e2e8f0', fontSize: '11px' }}>{order.product_name}</td>
+                  <td style={{ padding: '6px', color: '#2c5282', fontSize: '11px' }}>{order.product_name}</td>
                   <td style={{ padding: '6px', textAlign: 'right', color: '#10b981', fontWeight: 'bold' }}>
                     {formatCurrency(order.total_amount)}
                   </td>
@@ -89,7 +89,7 @@ export default function SalesOverview({ refreshTrigger }) {
                       {daysRemaining}天
                     </span>
                   </td>
-                  <td style={{ padding: '6px', color: '#94a3b8', fontSize: '10px' }}>
+                  <td style={{ padding: '6px', color: '#6b8cae', fontSize: '10px' }}>
                     {formatDate(order.required_date)}
                   </td>
                 </tr>
@@ -98,7 +98,7 @@ export default function SalesOverview({ refreshTrigger }) {
             
             {upcomingOrders.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#8aa3c0' }}>
                   暂无即将到期的订单
                 </td>
               </tr>

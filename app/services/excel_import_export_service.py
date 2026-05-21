@@ -813,6 +813,16 @@ class ExcelImportExportService:
             
             logger.info(f"批量导入 {len(records_to_import)} 条记录到模型 {model.id}")
             
+            # 在批量导入前清空表中所有数据
+            try:
+                data_source_manager.execute_truncate(
+                    data_source_id=model.data_source_id,
+                    table_name=model.id
+                )
+                logger.info(f"已清空表 {model.id} 中的所有数据")
+            except Exception as e:
+                logger.warning(f"清空表 {model.id} 失败: {str(e)}，将继续执行导入操作")
+            
             # 批量执行UPSERT操作
             primary_key_field = model.primary_key_id
             batch_result = data_source_manager.execute_batch_upsert(

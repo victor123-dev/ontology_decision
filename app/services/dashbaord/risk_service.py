@@ -19,14 +19,14 @@ class RiskService:
         self.client = get_ontology_client()
     
     def get_active_risks(self, limit: int = 50) -> List[Dict]:
-        """获取活跃风险事件(status in ['新发现', '分析中', '缓解中'])"""
+        """获取活跃风险事件(status in ['新发现', '待处理', '分析中', '缓解中'])"""
         try:
             all_risks = self.client.models.ExternalSupplyChainRisk.find()
             
             active_risks = []
             for risk in all_risks:
                 status = getattr(risk, 'status', '')
-                if status in ['新发现', '分析中', '缓解中']:
+                if status in ['新发现', '待处理', '分析中', '缓解中']:
                     # 获取供应商信息
                     supplier_id = getattr(risk, 'supplier_id', '')
                     supplier_name = ''
@@ -213,7 +213,7 @@ class RiskService:
         """获取活跃风险事件数量"""
         try:
             all_risks = self.client.models.ExternalSupplyChainRisk.find()
-            count = sum(1 for risk in all_risks if getattr(risk, 'status', '') in ['新发现', '分析中', '缓解中'])
+            count = sum(1 for risk in all_risks if getattr(risk, 'status', '') in ['新发现', '待处理', '分析中', '缓解中'])
             return count
         except Exception as e:
             logger.error(f"获取活跃风险数量失败: {e}")

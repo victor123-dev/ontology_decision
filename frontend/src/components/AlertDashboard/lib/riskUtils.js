@@ -3,6 +3,9 @@
 // 风险类别映射
 export const RISK_CATEGORY_MAP = {
   自然灾害: '自然灾害',
+  物流延期: '物流延期',
+  原材料供应短缺: '原材料供应短缺',
+  原材料价格波动: '原材料价格波动',
   地缘政治: '地缘政治',
   财务风险: '财务风险',
   质量风险: '质量风险',
@@ -21,6 +24,7 @@ export const RISK_LEVEL_MAP = {
 // 风险状态映射
 export const RISK_STATUS_MAP = {
   新发现: { label: '新发现', color: '#ef4444' },
+  待处理: { label: '待处理', color: '#ef4444' },
   分析中: { label: '分析中', color: '#f59e0b' },
   缓解中: { label: '缓解中', color: '#3b82f6' },
   已解决: { label: '已解决', color: '#10b981' },

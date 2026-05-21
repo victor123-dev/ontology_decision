@@ -433,7 +433,7 @@ function BusinessModel() {
 
   const columns = [
     {
-      title: '模型ID',
+      title: '对象ID',
       dataIndex: 'id',
       key: 'id',
       width: 100,
@@ -635,10 +635,10 @@ function BusinessModel() {
         };
         // 使用更直观的emoji图标
         const icons = {
-          'one-to-one': '🔗',        // 链接图标，表示一对一连接
-          'one-to-many': '➡️',       // 右箭头，表示一对多
-          'many-to-one': '⬅️',       // 左箭头，表示多对一
-          'many-to-many': '🔄'       // 循环图标，表示多对多关系
+          'one-to-one': '',        // 链接图标，表示一对一连接
+          'one-to-many': '',       // 右箭头，表示一对多
+          'many-to-one': '',       // 左箭头，表示多对一
+          'many-to-many': ''       // 循环图标，表示多对多关系
         };
         return (
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -812,13 +812,13 @@ function BusinessModel() {
   };
 
   return (
-    <div style={{ width: '100%', height: '100%' }}>
+    <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, #e8f4fc 0%, #d6ebf7 50%, #c8e3f3 100%)', padding: '16px', overflow: 'auto' }}>
       <Tabs
         defaultActiveKey="1"
         items={[
           {
             key: '1',
-            label: '🧠 本体视图',
+            label: '本体视图',
             children: (
               <div style={{ height: 'calc(100vh - 80px)' }}>
                 <OntologyView />
@@ -827,17 +827,17 @@ function BusinessModel() {
           },
           {
             key: '2',
-            label: '📋 业务模型',
+            label: '业务对象',
             children: (
               <Card style={{ marginTop: 16 }}>
                 <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3>业务模型列表</h3>
+                  <h3>业务对象列表</h3>
                   <div>
                     <Button type="primary" icon={<PlusOutlined />} style={{ marginRight: 8 }} onClick={handleAdd}>
-                      添加模型
+                      添加对象
                     </Button>
                     <Button icon={<ImportOutlined />} onClick={handleImportModal}>
-                      导入模型
+                      导入对象
                     </Button>
                   </div>
                 </div>
@@ -856,11 +856,11 @@ function BusinessModel() {
           },
           {
             key: '3',
-            label: '🔗 模型关系',
+            label: '对象关系',
             children: (
               <Card style={{ marginTop: 16 }}>
                 <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3>模型关系列表</h3>
+                  <h3>对象关系列表</h3>
                   <Button type="primary" icon={<PlusOutlined />} onClick={handleAddLink}>
                     添加关系
                   </Button>
@@ -880,7 +880,7 @@ function BusinessModel() {
           },
           {
             key: '4',
-            label: '🚀 行动管理',
+            label: '行动管理',
             children: (
               <ActionManager businessModels={businessModels} modelLinks={modelLinks} />
             ),

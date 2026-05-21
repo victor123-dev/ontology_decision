@@ -19,7 +19,7 @@ const statusColors = {
   已完成: { background: '#10b981', border: '#34d399' },
   已延迟: { background: '#ef4444', border: '#f87171' },
   暂停: { background: '#8b5cf6', border: '#a78bfa' },
-  未开始: { background: '#64748b', border: '#94a3b8' },
+  未开始: { background: '#8aa3c0', border: '#6b8cae' },
 };
 
 function addDays(date, days) {
@@ -286,13 +286,13 @@ export default function ProductionGantt({ refreshTrigger }) {
   const empty = !loading && !error && resourcesWithTasks.length === 0;
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', color: '#cbd5e1', fontSize: 11, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderBottom: '1px solid rgba(59,130,246,0.16)', flexWrap: 'wrap' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', color: '#2c5282', fontSize: 11, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderBottom: '1px solid rgba(59,130,246,0.16)', flexWrap: 'wrap', background: '#ffffff' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <button onMouseDown={e => e.stopPropagation()} onClick={() => setViewType('machine')} style={viewType === 'machine' ? styles.activeButton : styles.button}>机台视图</button>
           <button onMouseDown={e => e.stopPropagation()} onClick={() => setViewType('work_order')} style={viewType === 'work_order' ? styles.activeButton : styles.button}>工单视图</button>
-          <span style={{ color: '#64748b', padding: '0 4px' }}>|</span>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#94a3b8' }}>
+          <span style={{ color: '#8aa3c0', padding: '0 4px' }}>|</span>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#6b8cae' }}>
             基准日期
             <input
               type="date"
@@ -302,27 +302,27 @@ export default function ProductionGantt({ refreshTrigger }) {
               style={styles.dateInput}
             />
           </label>
-          <span style={{ color: '#64748b' }}>起 {days} 天</span>
+          <span style={{ color: '#8aa3c0' }}>起 {days} 天</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button onMouseDown={e => e.stopPropagation()} onClick={() => setZoomIndex(value => Math.max(0, value - 1))} style={styles.iconButton} title="缩小"><ZoomOut size={13} /></button>
-          <span style={{ color: '#64748b', minWidth: 52, textAlign: 'center' }}>{pxPerHour}px/h</span>
+          <span style={{ color: '#8aa3c0', minWidth: 52, textAlign: 'center' }}>{pxPerHour}px/h</span>
           <button onMouseDown={e => e.stopPropagation()} onClick={() => setZoomIndex(value => Math.min(ZOOM_LEVELS.length - 1, value + 1))} style={styles.iconButton} title="放大"><ZoomIn size={13} /></button>
           <button onMouseDown={e => e.stopPropagation()} onClick={() => loadData(true)} style={styles.button}><RefreshCw size={12} />刷新</button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: `${RESOURCE_WIDTH}px minmax(0, 1fr)`, height: HEADER_HEIGHT, borderBottom: '1px solid rgba(59,130,246,0.18)', flexShrink: 0, background: 'rgba(15,23,42,0.86)' }}>
-        <div style={{ padding: '8px 10px', borderRight: '1px solid rgba(59,130,246,0.18)', color: '#93c5fd', fontWeight: 600 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `${RESOURCE_WIDTH}px minmax(0, 1fr)`, height: HEADER_HEIGHT, borderBottom: '1px solid rgba(59,130,246,0.18)', flexShrink: 0, background: '#e8f4fc' }}>
+        <div style={{ padding: '8px 10px', borderRight: '1px solid rgba(59,130,246,0.18)', color: '#1890ff', fontWeight: 600 }}>
           资源（{viewType === 'machine' ? '机台' : '工单'}）
-          <div style={{ color: '#64748b', fontWeight: 400, marginTop: 4 }}>共 {resourcesWithTasks.length} 行 / {localTasks.length} 个任务</div>
+          <div style={{ color: '#8aa3c0', fontWeight: 400, marginTop: 4 }}>共 {resourcesWithTasks.length} 行 / {localTasks.length} 个任务</div>
         </div>
         <div style={{ overflow: 'hidden' }}>
           <div style={{ position: 'relative', width: timelineWidth, height: '100%', transform: `translateX(${-scrollLeft}px)` }}>
             {Array.from({ length: days }).map((_, index) => {
               const day = addDays(timeRange.start, index);
               return (
-                <div key={formatDateOnly(day)} style={{ position: 'absolute', left: index * 24 * pxPerHour, top: 0, width: 24 * pxPerHour, height: 24, borderRight: '1px solid rgba(59,130,246,0.18)', paddingLeft: 6, color: '#bfdbfe', fontWeight: 600 }}>
+                <div key={formatDateOnly(day)} style={{ position: 'absolute', left: index * 24 * pxPerHour, top: 0, width: 24 * pxPerHour, height: 24, borderRight: '1px solid rgba(59,130,246,0.18)', paddingLeft: 6, color: '#1a3a5c', fontWeight: 600 }}>
                   {formatDateLabel(day)}
                 </div>
               );
@@ -330,7 +330,7 @@ export default function ProductionGantt({ refreshTrigger }) {
             {timeline.ticks.map(tick => {
               const left = (tick - timeRange.start) / 3600000 * pxPerHour;
               return (
-                <div key={tick.toISOString()} style={{ position: 'absolute', left, top: 26, width: Math.max(timeline.hourStep * pxPerHour, 1), height: 26, borderLeft: '1px solid rgba(148,163,184,0.15)', paddingLeft: 4, color: '#64748b' }}>
+                <div key={tick.toISOString()} style={{ position: 'absolute', left, top: 26, width: Math.max(timeline.hourStep * pxPerHour, 1), height: 26, borderLeft: '1px solid rgba(148,163,184,0.15)', paddingLeft: 4, color: '#8aa3c0' }}>
                   {formatTimeLabel(tick)}
                 </div>
               );
@@ -350,10 +350,10 @@ export default function ProductionGantt({ refreshTrigger }) {
               {visibleResources.map((resource, offset) => {
                 const rowIndex = visibleRange.start + offset;
                 return (
-                  <div key={resource.id} style={{ display: 'grid', gridTemplateColumns: `${RESOURCE_WIDTH}px ${timelineWidth}px`, height: ROW_HEIGHT, background: rowIndex % 2 === 0 ? 'rgba(15,23,42,0.42)' : 'rgba(30,41,59,0.34)', borderBottom: '1px solid rgba(59,130,246,0.08)' }}>
-                    <div style={{ position: 'sticky', left: 0, zIndex: 3, padding: '8px 10px', borderRight: '1px solid rgba(59,130,246,0.16)', background: rowIndex % 2 === 0 ? '#101b31' : '#132038', overflow: 'hidden' }}>
-                      <div style={{ color: '#e2e8f0', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{resource.id}</div>
-                      <div style={{ color: '#94a3b8', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{resource.name}</div>
+                  <div key={resource.id} style={{ display: 'grid', gridTemplateColumns: `${RESOURCE_WIDTH}px ${timelineWidth}px`, height: ROW_HEIGHT, background: rowIndex % 2 === 0 ? '#ffffff' : '#f5fbff', borderBottom: '1px solid rgba(59,130,246,0.08)' }}>
+                    <div style={{ position: 'sticky', left: 0, zIndex: 3, padding: '8px 10px', borderRight: '1px solid rgba(59,130,246,0.16)', background: rowIndex % 2 === 0 ? '#ffffff' : '#f0f7ff', overflow: 'hidden' }}>
+                      <div style={{ color: '#1a3a5c', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{resource.id}</div>
+                      <div style={{ color: '#6b8cae', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{resource.name}</div>
                     </div>
                     <div style={{ position: 'relative', overflow: 'hidden' }}>
                       {timeline.ticks.map(tick => {
@@ -369,13 +369,13 @@ export default function ProductionGantt({ refreshTrigger }) {
                         const color = getStatusColor(task.status);
                         const progress = getProgressValue(task.progress);
                         return (
-                          <div key={task.id} onMouseEnter={event => showTooltip(event, task)} onMouseMove={moveTooltip} onMouseLeave={() => setTooltip(null)} onMouseDown={event => handleMouseDown(event, task, 'move')} style={{ position: 'absolute', left, top: 11, width, height: 36, borderRadius: 7, background: `linear-gradient(90deg, ${color.background} 0%, ${color.background}dd 100%)`, border: `1px solid ${color.border}`, boxShadow: `0 0 14px ${color.background}35`, cursor: dragState ? 'grabbing' : 'grab', overflow: 'hidden', userSelect: 'none' }}>
-                            <div style={{ position: 'absolute', inset: 0, width: `${progress}%`, background: 'rgba(255,255,255,0.18)' }} />
-                            <div onMouseDown={event => handleMouseDown(event, task, 'start')} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, cursor: 'ew-resize', background: 'rgba(255,255,255,0.24)' }} />
-                            <div onMouseDown={event => handleMouseDown(event, task, 'end')} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 6, cursor: 'ew-resize', background: 'rgba(255,255,255,0.24)' }} />
+                          <div key={task.id} onMouseEnter={event => showTooltip(event, task)} onMouseMove={moveTooltip} onMouseLeave={() => setTooltip(null)} onMouseDown={event => handleMouseDown(event, task, 'move')} style={{ position: 'absolute', left, top: 11, width, height: 36, borderRadius: 7, background: `linear-gradient(90deg, ${color.background} 0%, ${color.background}dd 100%)`, border: `1px solid ${color.border}`, boxShadow: `0 0 14px ${color.background}25`, cursor: dragState ? 'grabbing' : 'grab', overflow: 'hidden', userSelect: 'none' }}>
+                            <div style={{ position: 'absolute', inset: 0, width: `${progress}%`, background: 'rgba(255,255,255,0.25)' }} />
+                            <div onMouseDown={event => handleMouseDown(event, task, 'start')} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, cursor: 'ew-resize', background: 'rgba(255,255,255,0.35)' }} />
+                            <div onMouseDown={event => handleMouseDown(event, task, 'end')} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 6, cursor: 'ew-resize', background: 'rgba(255,255,255,0.35)' }} />
                             <div style={{ position: 'relative', zIndex: 1, height: '100%', padding: '4px 8px 3px 10px', minWidth: 0 }}>
-                              <div style={{ color: '#f8fafc', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '14px' }}>{task.name}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dbeafe', opacity: 0.92, marginTop: 3, whiteSpace: 'nowrap' }}>
+                              <div style={{ color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '14px' }}>{task.name}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dbeafe', opacity: 0.95, marginTop: 3, whiteSpace: 'nowrap' }}>
                                 <MoveHorizontal size={10} />
                                 <span>{formatTimeLabel(taskTime.start)} - {formatTimeLabel(taskTime.end)}</span>
                                 <span>{progress}%</span>
@@ -401,12 +401,12 @@ export default function ProductionGantt({ refreshTrigger }) {
 
 function StateMessage({ icon, title, text, danger }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 8, background: 'rgba(15,23,42,0.62)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderRadius: 10, border: `1px solid ${danger ? 'rgba(239,68,68,0.35)' : 'rgba(59,130,246,0.25)'}`, background: 'rgba(15,23,42,0.94)', boxShadow: '0 12px 32px rgba(0,0,0,0.35)', color: danger ? '#fca5a5' : '#bfdbfe' }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 8, background: 'rgba(232,244,252,0.75)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderRadius: 10, border: `1px solid ${danger ? 'rgba(239,68,68,0.35)' : 'rgba(59,130,246,0.25)'}`, background: '#ffffff', boxShadow: '0 12px 32px rgba(0,0,0,0.12)', color: danger ? '#ef4444' : '#1890ff' }}>
         {icon}
         <div>
           <div style={{ fontSize: 13, fontWeight: 700 }}>{title}</div>
-          <div style={{ fontSize: 11, color: danger ? '#fecaca' : '#94a3b8', marginTop: 3 }}>{text}</div>
+          <div style={{ fontSize: 11, color: danger ? '#ef4444' : '#6b8cae', marginTop: 3 }}>{text}</div>
         </div>
       </div>
     </div>
@@ -431,13 +431,13 @@ function TaskTooltip({ tooltip }) {
   ];
 
   return (
-    <div style={{ position: 'fixed', left: x, top: y, zIndex: 10000, width: 310, padding: 12, borderRadius: 10, background: 'rgba(15,23,42,0.98)', border: '1px solid rgba(96,165,250,0.32)', boxShadow: '0 16px 42px rgba(0,0,0,0.48)', pointerEvents: 'none', color: '#cbd5e1' }}>
-      <div style={{ color: '#f8fafc', fontWeight: 800, marginBottom: 8, fontSize: 13 }}>{task.id}</div>
+    <div style={{ position: 'fixed', left: x, top: y, zIndex: 10000, width: 310, padding: 12, borderRadius: 10, background: '#ffffff', border: '1px solid rgba(96,165,250,0.32)', boxShadow: '0 16px 42px rgba(0,0,0,0.15)', pointerEvents: 'none', color: '#2c5282' }}>
+      <div style={{ color: '#1a3a5c', fontWeight: 800, marginBottom: 8, fontSize: 13 }}>{task.id}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '72px minmax(0, 1fr)', gap: '5px 8px', fontSize: 11 }}>
         {items.map(([label, value]) => (
           <div key={label} style={{ display: 'contents' }}>
-            <div style={{ color: '#64748b' }}>{label}</div>
-            <div style={{ color: '#e2e8f0', wordBreak: 'break-all' }}>{value}</div>
+            <div style={{ color: '#6b8cae' }}>{label}</div>
+            <div style={{ color: '#2c5282', wordBreak: 'break-all' }}>{value}</div>
           </div>
         ))}
       </div>
@@ -454,9 +454,9 @@ const baseButton = {
   padding: '0 9px',
   borderRadius: 6,
   fontSize: 11,
-  color: '#cbd5e1',
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(148,163,184,0.18)',
+  color: '#2c5282',
+  background: 'rgba(24,144,255,0.04)',
+  border: '1px solid rgba(24,144,255,0.15)',
   cursor: 'pointer',
 };
 
@@ -464,10 +464,10 @@ const styles = {
   button: baseButton,
   activeButton: {
     ...baseButton,
-    color: '#dbeafe',
-    background: 'rgba(37,99,235,0.34)',
-    border: '1px solid rgba(96,165,250,0.52)',
-    boxShadow: '0 0 12px rgba(37,99,235,0.24)',
+    color: '#1890ff',
+    background: 'rgba(37,99,235,0.1)',
+    border: '1px solid rgba(96,165,250,0.4)',
+    boxShadow: '0 0 12px rgba(37,99,235,0.15)',
   },
   iconButton: {
     ...baseButton,
@@ -478,9 +478,9 @@ const styles = {
     height: 26,
     padding: '0 8px',
     borderRadius: 6,
-    color: '#dbeafe',
-    colorScheme: 'dark',
-    background: 'rgba(15,23,42,0.82)',
+    color: '#2c5282',
+    colorScheme: 'light',
+    background: '#ffffff',
     border: '1px solid rgba(96,165,250,0.35)',
     fontSize: 11,
     outline: 'none',

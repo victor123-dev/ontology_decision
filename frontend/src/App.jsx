@@ -21,6 +21,7 @@ import OrchestrationLog from './components/OrchestrationLog/OrchestrationLog'
 import OrchestrationLogDetail from './components/OrchestrationLog/OrchestrationLogDetail'
 import Solver from './components/Solver/Solver'
 import { AgentButton, AgentPanel } from './components/AgentDialog'
+import EmbedDashboard from './EmbedDashboard'
 
 const { Header, Sider, Content } = Layout
 
@@ -41,10 +42,10 @@ function AppContent() {
 
   return (
     <Layout style={{ minHeight: '100vh', width: '100%' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed} style={{ marginRight: '1px' }}>
+      <Sider trigger={null} collapsible collapsed={collapsed} style={{ marginRight: '1px', background: '#ffffff', boxShadow: '2px 0 8px rgba(0,0,0,0.06)' }}>
         <div className="logo" />
         <Menu
-          theme="dark"
+          theme="light"
           mode="inline"
           selectedKeys={[selectedKey]}
           items={[
@@ -55,7 +56,7 @@ function AppContent() {
               children: [
                 {
                   key: 'alert-dashboard',
-                  icon: <span>⚠️</span>,
+                  // icon: <span>⚠️</span>,
                   label: <Link to="/alert-dashboard">预警看板</Link>,
                 }
               ]
@@ -67,17 +68,17 @@ function AppContent() {
               children: [
                 {
                   key: 'data-source',
-                  icon: <span>📊</span>,
+                  // icon: <span>📊</span>,
                   label: <Link to="/data-source">数据采集</Link>,
                 },
                 {
                   key: 'business-model',
-                  icon: <span>🏗️</span>,
+                  // icon: <span>🏗️</span>,
                   label: <Link to="/business-model">业务模型管理</Link>,
                 },
                 {
                   key: 'business-data',
-                  icon: <span>📝</span>,
+                  // icon: <span>📝</span>,
                   label: <Link to="/business-data">业务数据管理</Link>,
                 },
                 // {
@@ -94,17 +95,17 @@ function AppContent() {
               children: [
                 {
                   key: 'document-import',
-                  icon: <span>📄</span>,
+                  // icon: <span>📄</span>,
                   label: <Link to="/document-import">文档导入</Link>,
                 },
                 {
                   key: 'data-sensing',
-                  icon: <span>🔍</span>,
+                  // icon: <span>🔍</span>,
                   label: <Link to="/data-sensing">数据感知配置</Link>,
                 },
                 {
                   key: 'drive-logic',
-                  icon: <span>⚙️</span>,
+                  // icon: <span>⚙️</span>,
                   label: <Link to="/drive-logic">驱动逻辑配置</Link>,
                 },
                 // {
@@ -121,17 +122,17 @@ function AppContent() {
               children: [
                 {
                   key: 'test-execution',
-                  icon: <span>🧪</span>,
+                  // icon: <span>🧪</span>,
                   label: <Link to="/test-execution">测试执行</Link>,
                 },
                 {
                   key: 'drive-log',
-                  icon: <span>📋</span>,
+                  // icon: <span>📋</span>,
                   label: <Link to="/drive-log">驱动日志</Link>,
                 },
                 {
                   key: 'orchestration-log',
-                  icon: <span>📜</span>,
+                  // icon: <span>📜</span>,
                   label: <Link to="/orchestration-log">编排执行日志</Link>,
                 }
               ]
@@ -143,7 +144,7 @@ function AppContent() {
               children: [
                 {
                   key: 'drive-visualization',
-                  icon: <span>📈</span>,
+                  // icon: <span>📈</span>,
                   label: <Link to="/drive-visualization">驱动可视化</Link>,
                 }
               ]
@@ -182,14 +183,14 @@ function AppContent() {
           </Routes>
         </Content>
       </Layout>
-      <AgentPanel 
+      {/* <AgentPanel 
         visible={agentPanelVisible} 
         onClose={() => setAgentPanelVisible(false)} 
       />
       <AgentButton 
         onClick={() => setAgentPanelVisible(true)}
         isVisible={!agentPanelVisible}
-      />
+      /> */}
     </Layout>
   )
 }
@@ -202,7 +203,10 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
-      <AppContent />
+      <Routes>
+        <Route path="/embed/dashboard" element={<EmbedDashboard />} />
+        <Route path="/*" element={<AppContent />} />
+      </Routes>
     </Router>
   )
 }

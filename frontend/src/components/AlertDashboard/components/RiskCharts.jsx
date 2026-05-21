@@ -46,7 +46,7 @@ export default function RiskCharts({ refreshTrigger }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '12px' }}>
       {/* 风险等级分布 */}
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>风险等级分布</div>
+        <div style={{ fontSize: '11px', color: '#6b8cae', marginBottom: '8px' }}>风险等级分布</div>
         {levelData.length > 0 ? (
           <ResponsiveContainer width="100%" height={120}>
             <PieChart>
@@ -65,18 +65,18 @@ export default function RiskCharts({ refreshTrigger }) {
               </Pie>
               <Tooltip
                 contentStyle={{
-                  background: '#1e293b',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: '#ffffff',
+                  border: '1px solid rgba(24,144,255,0.15)',
                   borderRadius: '4px',
                   fontSize: '11px',
-                  color: '#e2e8f0'
+                  color: '#1a3a5c'
                 }}
-                itemStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#1a3a5c' }}
               />
             </PieChart>
           </ResponsiveContainer>
         ) : (
-          <div style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', padding: '20px' }}>
+          <div style={{ textAlign: 'center', color: '#8aa3c0', fontSize: '11px', padding: '20px' }}>
             暂无数据
           </div>
         )}
@@ -84,34 +84,34 @@ export default function RiskCharts({ refreshTrigger }) {
 
       {/* 风险类别统计 */}
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>风险类别统计</div>
+        <div style={{ fontSize: '11px', color: '#6b8cae', marginBottom: '8px' }}>风险类别统计</div>
         {categoryData.length > 0 ? (
           <ResponsiveContainer width="100%" height={120}>
             <BarChart data={categoryData}>
               <XAxis 
                 dataKey="name" 
-                tick={{ fontSize: 9, fill: '#94a3b8' }}
-                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                tick={{ fontSize: 9, fill: '#6b8cae' }}
+                axisLine={{ stroke: 'rgba(24,144,255,0.15)' }}
               />
               <YAxis 
-                tick={{ fontSize: 9, fill: '#94a3b8' }}
-                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                tick={{ fontSize: 9, fill: '#6b8cae' }}
+                axisLine={{ stroke: 'rgba(24,144,255,0.15)' }}
               />
               <Tooltip
                 contentStyle={{
-                  background: '#1e293b',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: '#ffffff',
+                  border: '1px solid rgba(24,144,255,0.15)',
                   borderRadius: '4px',
                   fontSize: '11px',
-                  color: '#e2e8f0'
+                  color: '#1a3a5c'
                 }}
-                itemStyle={{ color: '#e2e8f0' }}
+                itemStyle={{ color: '#1a3a5c' }}
               />
               <Bar dataKey="value" fill="#3b82f6" radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', padding: '20px' }}>
+          <div style={{ textAlign: 'center', color: '#8aa3c0', fontSize: '11px', padding: '20px' }}>
             暂无数据
           </div>
         )}
@@ -119,7 +119,7 @@ export default function RiskCharts({ refreshTrigger }) {
 
       {/* 受影响供应商TOP5 */}
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>受影响供应商TOP5</div>
+        <div style={{ fontSize: '11px', color: '#6b8cae', marginBottom: '8px' }}>受影响供应商TOP5</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {topSuppliers.map((supplier, idx) => (
             <div
@@ -130,19 +130,19 @@ export default function RiskCharts({ refreshTrigger }) {
                 gap: '8px',
                 padding: '6px 8px',
                 borderRadius: '4px',
-                background: 'rgba(255,255,255,0.03)'
+                background: 'rgba(240,247,255,0.6)'
               }}
             >
               <span style={{
                 width: '18px', height: '18px', borderRadius: '50%',
-                background: idx < 3 ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
-                color: idx < 3 ? '#ef4444' : '#94a3b8',
+                background: idx < 3 ? 'rgba(239,68,68,0.1)' : 'rgba(24,144,255,0.06)',
+                color: idx < 3 ? '#ef4444' : '#6b8cae',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '9px', fontWeight: 'bold'
               }}>
                 {idx + 1}
               </span>
-              <span style={{ flex: 1, color: '#e2e8f0', fontSize: '11px' }}>{supplier.supplier_name}</span>
+              <span style={{ flex: 1, color: '#1a3a5c', fontSize: '11px' }}>{supplier.supplier_name}</span>
               <span style={{
                 padding: '2px 6px', borderRadius: '4px', fontSize: '10px',
                 background: 'rgba(239,68,68,0.15)', color: '#ef4444'
@@ -153,7 +153,7 @@ export default function RiskCharts({ refreshTrigger }) {
           ))}
           
           {topSuppliers.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', padding: '20px' }}>
+            <div style={{ textAlign: 'center', color: '#8aa3c0', fontSize: '11px', padding: '20px' }}>
               暂无数据
             </div>
           )}

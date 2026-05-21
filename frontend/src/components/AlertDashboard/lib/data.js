@@ -46,6 +46,9 @@ export const alertDashboardApi = {
   getRiskStatistics: () => api.get('/risks/statistics'),
   getRiskTrend: (days = 30) => api.get(`/risks/trend?days=${days}`),
   getTopAffectedSuppliers: () => api.get('/risks/top-suppliers'),
+
+  // ==================== 指标树 API ====================
+  getMetricTree: () => api.get('/metric-tree'),
 };
 
 // ==================== 工具函数 ====================
