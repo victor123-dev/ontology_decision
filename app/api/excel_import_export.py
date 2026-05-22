@@ -25,12 +25,13 @@ def export_to_excel(
 
 @router.post("/excel/import")
 def import_from_excel(
+    file_path: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """从doc目录下的固定Excel文件导入业务模型和实例数据"""
+    """从Excel文件导入业务模型和实例数据,支持传入自定义文件路径"""
     try:
         excel_service = get_excel_service()
-        import_result = excel_service.import_from_excel_file(db)
+        import_result = excel_service.import_from_excel_file(db, file_path)
         
         return import_result
     except Exception as e:

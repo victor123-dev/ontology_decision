@@ -64,11 +64,14 @@ class ExcelImportExportService:
                 "file_path": None
             }
     
-    def import_from_excel_file(self, db: Session) -> Dict[str, Any]:
-        """从doc目录下的固定Excel文件导入业务模型和实例数据"""
+    def import_from_excel_file(self, db: Session, file_path: Optional[str] = None) -> Dict[str, Any]:
+        """从Excel文件导入业务模型和实例数据,支持传入自定义文件路径"""
         try:
-            # 定义输入文件路径
-            input_file = os.path.join(os.getcwd(), "docs", "business_model_export.xlsx")
+            # 如果未传入文件路径,使用默认路径
+            if file_path:
+                input_file = file_path
+            else:
+                input_file = os.path.join(os.getcwd(), "docs", "business_model_export.xlsx")
             
             if not os.path.exists(input_file):
                 return {
